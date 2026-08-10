@@ -58,6 +58,11 @@ Shared (MMORPG.Shared.dll) ── NetCmd enum + DTO MemoryPack ── dùng chun
 | `.claude/docs/` | Tài liệu kiến trúc + roadmap |
 | `.claude/docs/guides/PHASE-*.md` | Tài liệu từng bước owner làm theo |
 
+**Code client không dùng `.asmdef`** — nằm hết trong `Assembly-CSharp`. Assembly do asmdef định nghĩa không
+tham chiếu được `Assembly-CSharp-firstpass`, mà DOTween Pro nằm ở đó dưới dạng `.cs` trần. Đừng đề xuất tạo
+asmdef cho `Assets/Game/` trừ khi owner nêu vấn đề thời gian compile. `Packages/com.hungnt.*` thì vẫn có
+asmdef riêng — đó là package độc lập, chuyện khác.
+
 ---
 
 ## Khung gói tin (wire format) — thuộc lòng

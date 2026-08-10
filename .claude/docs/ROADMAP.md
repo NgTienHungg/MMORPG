@@ -19,6 +19,7 @@
 | Nén | LZ4, chỉ khi payload > 4KB | Copy nguyên tắc của vo-lam-genz (`MemoryPackUtility`) |
 | Thể loại | 2D top-down, map tilemap, di chuyển tự do | Sát vo-lam-genz nhất → phần map/AOI/sorting đối chiếu được |
 | Unity | 6000.2.9f1, URP 2D, DI = VContainer | Theo `BaseCode_Test` |
+| Assembly client | **Không dùng asmdef** — code game nằm hết trong `Assembly-CSharp` | Assembly do asmdef định nghĩa không tham chiếu được `Assembly-CSharp-firstpass`, mà DOTween Pro nằm ở đó dưới dạng `.cs` không asmdef → mất API Pro. Đổi lại phải compile lại toàn bộ mỗi lần sửa; cỡ dự án này vẫn dưới vài giây. Tách asmdef sau, chỉ cho phần không đụng DOTween |
 | Repo | **1 repo duy nhất** chứa cả client + server + shared, tới hết Phase 12 | Đổi contract là sửa cả 2 bên — cùng 1 repo thì gói gọn trong 1 commit, `git checkout` commit cũ luôn cho ra cặp client/server khớp nhau. Tách repo (hoặc submodule) buộc phải commit 2 lần mỗi lần đổi contract; quên bước 2 thì 2 bên lệch mà git không báo gì |
 | Tách repo server | **Phase 16**, khi deploy thật | Lúc đó mới có lý do thật: đẩy server lên VPS không cần kéo theo vài GB asset Unity. Tách trước thời điểm đó là chịu chi phí mà chưa nhận được lợi ích |
 

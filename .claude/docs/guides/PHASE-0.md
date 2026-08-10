@@ -123,7 +123,6 @@ Assets/Game/
 ├── Scenes/
 │   └── Bootstrap.unity   ✅ đã có
 └── Scripts/
-    ├── MMORPG.Client.asmdef
     ├── Boot/             GameLifetimeScope, bootstrap
     ├── Network/          transport, codec, dispatcher, service  (Phase 1–2)
     ├── Auth/             (Phase 4)
@@ -131,23 +130,29 @@ Assets/Game/
     └── UI/               (Phase 4+)
 ```
 
-### 4a. Tạo asmdef
-Chuột phải `Assets/Game/Scripts` → Create → **Assembly Definition** → đặt tên `MMORPG.Client`.
-Chọn file vừa tạo, ở Inspector đặt:
-- **Name**: `MMORPG.Client`
-- **Root Namespace**: `MMORPG.Client`
-- **Assembly References** (nút `+` ở mục *Assembly Definition References*): `HungNT.Core`, `HungNT.EventBus`,
-  `HungNT.ObjectPool`, `HungNT.AssetLoad`, `HungNT.UI`, `HungNT.UI.Panel`, `HungNT.UI.Tween`,
-  `VContainer`, `UniTask`, `Unity.TextMeshPro`, `Unity.InputSystem`
-- **Auto Referenced**: bật (mặc định) — để DLL trong `Assets/Plugins` tự được tham chiếu.
+Namespace vẫn theo cấu trúc thư mục: `MMORPG.Client.Boot`, `MMORPG.Client.Network`…
 
-> **Vì sao cần asmdef:** không có nó, mọi script nằm chung `Assembly-CSharp` → sửa 1 dòng là compile lại
-> toàn bộ project. Có asmdef thì Unity chỉ build lại assembly bị đụng. Ở dự án nhiều nghìn file, khác biệt
-> là 30 giây so với 3 giây mỗi lần sửa.
+### 4a. Không dùng Assembly Definition — quyết định có chủ đích
+
+Code game client nằm hết trong `Assembly-CSharp` mặc định của Unity. **Không tạo `.asmdef`.**
+
+**Vì sao:** asmdef đổi lấy tốc độ compile bằng việc phải khai báo tường minh **mọi** dependency, và
+quan trọng hơn — một assembly do asmdef định nghĩa **không thể tham chiếu tới các assembly dựng sẵn**
+(`Assembly-CSharp`, `Assembly-CSharp-firstpass`). Mà DOTween Pro nằm ở `Assets/Plugins/Demigiant/DOTweenPro/`
+dưới dạng **file `.cs` không có asmdef** → chúng rơi vào `Assembly-CSharp-firstpass` → code trong
+`MMORPG.Client.asmdef` sẽ không dùng được `DOTweenAnimation` và các API Pro khác. Đây là loại vướng
+chỉ lộ ra khi đã viết được kha khá code, lúc đó gỡ ra rất phiền.
+
+**Cái giá phải trả:** sửa một dòng là Unity compile lại toàn bộ `Assembly-CSharp`. Với dự án cỡ này
+(vài trăm file) thì vẫn dưới vài giây — chấp nhận được. Khi nào thấy compile chậm rõ rệt thì tách asmdef
+cho những phần **không** đụng DOTween (`Network/` là ứng viên đầu tiên, nó thuần C#).
+
+> `Packages/com.hungnt.*` vẫn có asmdef riêng — đó là package độc lập, chuyện khác. Code trong
+> `Assembly-CSharp` tham chiếu chúng tự động, không cần khai báo gì.
 
 ### ✅ CHECKPOINT D
-Console sạch. `Assets/Game/Scripts/MMORPG.Client.asmdef` tồn tại và Inspector không hiện dòng đỏ
-"reference not found".
+Console sạch. Tạo thử một script trong `Assets/Game/Scripts/` có `using VContainer;` và
+`using HungNT.Core;` → không báo lỗi namespace.
 
 ---
 
@@ -570,7 +575,7 @@ Trả lời được hết thì sang Phase 1:
 1. Vì sao `MMORPG.Shared` phải multi-target `netstandard2.1` **và** `net8.0`?
 2. Nếu bạn thêm 1 DTO mới vào `Server/Shared` mà quên `dotnet build`, chuyện gì xảy ra ở Unity? Bạn sẽ phát hiện lúc nào?
 3. Vì sao contract (enum cmd + DTO) **không** được chép tay sang Unity, dù chép tay nhanh hơn?
-4. asmdef giải quyết vấn đề gì? Nếu bỏ nó đi thì mất gì?
+4. Dự án này cố tình **không** dùng asmdef cho code client. Đánh đổi cụ thể là gì, và điều kiện nào khiến quyết định đó đảo ngược?
 5. `Match Width Or Height = 0.75` nghĩa là canvas ưu tiên bám theo chiều nào? Đổi thành 0 thì UI trên màn 21:9 sẽ ra sao?
 6. Vì sao dựng VContainer LifetimeScope ngay từ Phase 0 thay vì đợi đến khi có nhiều service?
 
