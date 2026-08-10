@@ -1,0 +1,21 @@
+<?xml version="1.0"?>
+<doc>
+    <assembly>
+        <name>MMORPG.Shared</name>
+    </assembly>
+    <members>
+        <member name="T:MMORPG.Shared.HandshakeDto">
+            <summary>
+            DTO thử để kiểm chứng đường ống Shared → Unity đã thông.
+            Phase 1 sẽ thay bằng contract thật.
+            </summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> ProtocolVersion<br/>
+            <b>string</b> ServerName<br/>
+            </code>
+            </remarks>
+        </member>
+    </members>
+</doc>

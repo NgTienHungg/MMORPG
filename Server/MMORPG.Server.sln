@@ -1,0 +1,28 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Shared", "Shared\Shared.csproj", "{15B00792-53C0-4431-823D-1A391B194D07}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GameServer", "GameServer\GameServer.csproj", "{04CB2726-0144-48AB-BF71-AFBB33233329}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DBServer", "DBServer\DBServer.csproj", "{881DD1A2-6C44-456E-8D58-C1E3AE60EAD8}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{15B00792-53C0-4431-823D-1A391B194D07}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{15B00792-53C0-4431-823D-1A391B194D07}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{15B00792-53C0-4431-823D-1A391B194D07}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{15B00792-53C0-4431-823D-1A391B194D07}.Release|Any CPU.Build.0 = Release|Any CPU
+		{04CB2726-0144-48AB-BF71-AFBB33233329}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{04CB2726-0144-48AB-BF71-AFBB33233329}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{04CB2726-0144-48AB-BF71-AFBB33233329}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{04CB2726-0144-48AB-BF71-AFBB33233329}.Release|Any CPU.Build.0 = Release|Any CPU
+		{881DD1A2-6C44-456E-8D58-C1E3AE60EAD8}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{881DD1A2-6C44-456E-8D58-C1E3AE60EAD8}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{881DD1A2-6C44-456E-8D58-C1E3AE60EAD8}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{881DD1A2-6C44-456E-8D58-C1E3AE60EAD8}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal
