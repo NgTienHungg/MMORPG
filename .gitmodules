@@ -1,0 +1,36 @@
+[submodule "Packages/com.hungnt.core"]
+	path = Packages/com.hungnt.core
+	url = https://github.com/HungNT-UPM/com.hungnt.core.git
+	branch = main
+[submodule "Packages/com.hungnt.eventbus"]
+	path = Packages/com.hungnt.eventbus
+	url = https://github.com/HungNT-UPM/com.hungnt.eventbus.git
+	branch = main
+[submodule "Packages/com.hungnt.objectpool"]
+	path = Packages/com.hungnt.objectpool
+	url = https://github.com/HungNT-UPM/com.hungnt.objectpool.git
+	branch = main
+[submodule "Packages/com.hungnt.assetload"]
+	path = Packages/com.hungnt.assetload
+	url = https://github.com/HungNT-UPM/com.hungnt.assetload.git
+	branch = main
+[submodule "Packages/com.hungnt.dataconfig"]
+	path = Packages/com.hungnt.dataconfig
+	url = https://github.com/HungNT-UPM/com.hungnt.dataconfig.git
+	branch = main
+[submodule "Packages/com.hungnt.datasave"]
+	path = Packages/com.hungnt.datasave
+	url = https://github.com/HungNT-UPM/com.hungnt.datasave.git
+	branch = main
+[submodule "Packages/com.hungnt.ui"]
+	path = Packages/com.hungnt.ui
+	url = https://github.com/HungNT-UPM/com.hungnt.ui.git
+	branch = main
+[submodule "Packages/com.hungnt.ui.panel"]
+	path = Packages/com.hungnt.ui.panel
+	url = https://github.com/HungNT-UPM/com.hungnt.ui.panel.git
+	branch = main
+[submodule "Packages/com.hungnt.ui.tween"]
+	path = Packages/com.hungnt.ui.tween
+	url = https://github.com/HungNT-UPM/com.hungnt.ui.tween.git
+	branch = main
