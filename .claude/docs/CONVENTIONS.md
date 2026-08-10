@@ -19,6 +19,7 @@
 | Thứ | Quy ước | Ví dụ |
 |-----|---------|-------|
 | Namespace | `MMORPG.<Tier>.<Module>` | `MMORPG.Client.Network`, `MMORPG.GameServer.World`, `MMORPG.Shared.Dto` |
+
 | Class / Struct | PascalCase | `NetService`, `PlayerEntity` |
 | Interface | `I` + PascalCase | `ITransport`, `IPacketCodec` |
 | Method / Property | PascalCase | `SendAsync`, `IsConnected` |
@@ -28,6 +29,21 @@
 | Const / `static readonly` bất biến | UPPER_SNAKE_CASE | `HEADER_SIZE`, `MAX_PACKET_SIZE` |
 | Event | `On` + PascalCase | `OnConnected`, `OnPlayerMoved` |
 | Enum value | PascalCase | `NetCmd.LoginRequest` |
+
+**Namespace KHÔNG chứa tên thư mục kỹ thuật.** `Assets`, `Game`, `Scripts` là chỗ chứa file, không phải
+tầng kiến trúc — không được xuất hiện trong namespace. File ở `Assets/Game/Scripts/Network/` là
+`MMORPG.Client.Network`, **không** phải `Game.Scripts.Network`.
+
+#### Cấu hình Rider để nó tự sinh đúng
+Rider dựng namespace = `RootNamespace` của csproj + đường dẫn thư mục. Cần 2 việc, làm một lần:
+
+1. **Unity** → `Edit → Project Settings → Editor → Root Namespace` = `MMORPG.Client`.
+   Ghi vào `ProjectSettings/EditorSettings.asset` (đã commit), Unity nhét vào mọi csproj nó sinh ra.
+2. **Rider** → trong cửa sổ Solution, chuột phải thư mục `Game` → `Properties` → **Namespace provider = False**.
+   Làm y hệt cho thư mục `Scripts`. Rider ghi vào `MMORPG.sln.DotSettings` — file này commit được nên chỉ phải làm một lần.
+
+Sau đó file mới tạo trong `Assets/Game/Scripts/Network/` sẽ tự có `namespace MMORPG.Client.Network`.
+Nếu Rider vẫn đề xuất sai, `Alt+Enter` trên tên namespace → *Adjust namespaces* để sửa nhanh.
 
 ### Field nhận inject (DI)
 Type có vai trò service → hậu tố `Service`. Field/parameter nhận inject → **bỏ hậu tố `Service`, không viết tắt**:

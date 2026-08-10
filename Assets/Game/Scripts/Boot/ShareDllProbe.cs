@@ -2,7 +2,7 @@ using MemoryPack;
 using MMORPG.Shared;
 using UnityEngine;
 
-namespace Game.Scripts
+namespace MMORPG.Client.Boot
 {
     /// <summary>
     /// Script tạm để xác nhận Unity nạp được MMORPG.Shared.dll + MemoryPack.

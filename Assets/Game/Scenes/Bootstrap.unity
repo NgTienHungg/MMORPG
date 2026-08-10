@@ -464,7 +464,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fda35242b09143a7951cf5ead988f917, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Game.Scripts.Boot.GameLifetimeScope
+  m_EditorClassIdentifier: Assembly-CSharp::MMORPG.Client.Boot.GameLifetimeScope
   parentReference:
     TypeName: 
   autoRun: 1
@@ -512,7 +512,7 @@ MonoBehaviour:
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 1eb12fe28b9340afa58cf281e7cf4920, type: 3}
   m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Game.Scripts.ShareDllProbe
+  m_EditorClassIdentifier: Assembly-CSharp::MMORPG.Client.Boot.ShareDllProbe
 --- !u!4 &1421612012
 Transform:
   m_ObjectHideFlags: 0

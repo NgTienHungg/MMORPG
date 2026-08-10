@@ -2,7 +2,7 @@ using HungNT;
 using VContainer;
 using VContainer.Unity;
 
-namespace Game.Scripts.Boot
+namespace MMORPG.Client.Boot
 {
     /// <summary>
     /// Container gốc của client. Mọi service dùng chung toàn game đăng ký tại đây.
