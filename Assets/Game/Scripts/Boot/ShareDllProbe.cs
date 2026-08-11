@@ -1,3 +1,4 @@
+using HungNT;
 using MemoryPack;
 using MMORPG.Shared;
 using UnityEngine;
@@ -6,7 +7,7 @@ namespace MMORPG.Client.Boot
 {
     /// <summary>
     /// Script tạm để xác nhận Unity nạp được MMORPG.Shared.dll + MemoryPack.
-    /// Xoá sau khi Phase 0 xong.
+    /// Hết việc từ Phase 2 — NetworkProbe đã chứng minh cả chuỗi. Xoá GameObject rồi xoá file này.
     /// </summary>
     public class ShareDllProbe : MonoBehaviour
     {
@@ -17,7 +18,7 @@ namespace MMORPG.Client.Boot
             byte[] bytes = MemoryPackSerializer.Serialize(dto);
             var back = MemoryPackSerializer.Deserialize<HandshakeDto>(bytes);
 
-            Debug.Log($"[Probe] serialize {bytes.Length} bytes -> deserialize {back.ProtocolVersion}, {back.ServerName}");
+            this.Log($"serialize {bytes.Length} bytes -> deserialize {back.ProtocolVersion}, {back.ServerName}");
         }
     }
 }

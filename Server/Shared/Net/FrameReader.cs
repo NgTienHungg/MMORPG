@@ -1,5 +1,6 @@
 using System;
 using System.Buffers.Binary;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 
 namespace MMORPG.Shared.Net
@@ -40,7 +41,7 @@ namespace MMORPG.Shared.Net
         /// </summary>
         /// <returns>false nghĩa là "chưa đủ, chờ thêm dữ liệu" — không phải lỗi.</returns>
         /// <exception cref="InvalidDataException">Độ dài đọc được vô lý → dòng byte đã hỏng, phải ngắt kết nối.</exception>
-        public bool TryRead(out int cmd, out byte[] payload)
+        public bool TryRead(out int cmd, [MaybeNullWhen(false)] out byte[] payload)
         {
             cmd = 0;
             payload = null;

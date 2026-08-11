@@ -2,21 +2,27 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 using HungNT;
-using MMORPG.Client.Network;
 using MMORPG.Shared.Net;
 
-namespace MMORPG.Scripts.Network
+namespace MMORPG.Client.Network
 {
+    /// <summary>
+    /// Bảng tra lệnh → handler của client. Thay cho switch khổng lồ.
+    ///
+    /// Khác server ở chỗ handler là method INSTANCE: nhóm handler cần nhận inject nên phải do
+    /// container tạo. Vì vậy mỗi nhóm mới đều phải được đăng ký tay trong
+    /// <c>GameLifetimeScope</c> với <c>.As&lt;INetHandlerGroup&gt;()</c> — không có bản quét tự động.
+    /// </summary>
     public class NetDispatcher
     {
-        private Dictionary<NetCmd, Action<NetPacket>> _handlers = new();
+        private readonly Dictionary<NetCmd, Action<NetPacket>> _handlers = new();
 
         public NetDispatcher(IReadOnlyList<INetHandlerGroup> groups)
         {
             foreach (INetHandlerGroup group in groups)
                 RegisterGroup(group);
 
-            this.Log($"[NetDispatcher] Đăng ký {_handlers.Count} handler từ {groups.Count} nhóm.");
+            this.Log($"Đăng ký {_handlers.Count} handler từ {groups.Count} nhóm.");
         }
 
         /// <returns>false nếu không có handler — để tầng trên quyết định log hay bỏ qua.</returns>
@@ -32,7 +38,7 @@ namespace MMORPG.Scripts.Network
             catch (Exception ex)
             {
                 // Một handler hỏng không được làm sập vòng nhận gói.
-                this.LogError($"[NetDispatcher] Handler {cmd} ném lỗi: {ex}");
+                this.LogError($"Handler {cmd} ném lỗi: {ex}");
             }
 
             return true;
@@ -47,23 +53,23 @@ namespace MMORPG.Scripts.Network
             {
                 foreach (NetHandlerAttribute attr in method.GetCustomAttributes<NetHandlerAttribute>())
                 {
+                    string origin = $"{group.GetType().Name}.{method.Name}";
+
                     if (method.ReturnType != typeof(void) || method.GetParameters().Length != 1 || method.GetParameters()[0].ParameterType != typeof(NetPacket))
                     {
-                        this.LogWarning($"[NetDispatcher] BỎ QUA {group.GetType().Name}.{method.Name} — " + "sai chữ ký, phải là: void Ten(NetPacket packet)");
+                        this.LogWarning($"BỎ QUA {origin} — sai chữ ký, phải là: void Ten(NetPacket packet)");
                         continue;
                     }
-
-                    var del = (Action<NetPacket>)Delegate.CreateDelegate(
-                        typeof(Action<NetPacket>), group, method
-                    );
 
                     if (_handlers.ContainsKey(attr.Command))
                     {
-                        this.LogWarning($"[NetDispatcher] TRÙNG {attr.Command}, bỏ qua " + $"{group.GetType().Name}.{method.Name}");
+                        this.LogWarning($"TRÙNG {attr.Command}, bỏ qua {origin}");
                         continue;
                     }
 
-                    _handlers[attr.Command] = del;
+                    _handlers[attr.Command] = (Action<NetPacket>)Delegate.CreateDelegate(
+                        typeof(Action<NetPacket>), group, method
+                    );
                 }
             }
         }

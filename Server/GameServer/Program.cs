@@ -1,15 +1,18 @@
-﻿using System.Net;
+using System.Net;
 using System.Net.Sockets;
 using MMORPG.GameServer;
 using MMORPG.GameServer.Net;
+using MMORPG.ServerCore;
 
-const int PORT = 7778;
+const int PORT = 7777;
+
+// Đăng ký handler TRƯỚC khi mở cổng: mở cổng xong mới quét thì có một khoảng
+// client kết nối được nhưng mọi lệnh đều trả UnknownCommand.
+TcpDispatcher.RegisterAll();
 
 var listener = new TcpListener(IPAddress.Any, PORT);
 listener.Start();
-Console.WriteLine($"[GameServer] Lắng nghe trên 0.0.0.0:{PORT}");
-
-TcpDispatcher.RegisterAll();
+Log.Info($"Lắng nghe trên {$"0.0.0.0:{PORT}".Green()}");
 
 // Ctrl+C để dừng sạch thay vì kill process
 using var cts = new CancellationTokenSource();
@@ -37,5 +40,5 @@ catch (OperationCanceledException)
 finally
 {
     listener.Stop();
-    Console.WriteLine("[GameServer] Đã dừng.");
+    Log.Info("Đã dừng.");
 }

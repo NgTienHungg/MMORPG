@@ -1,4 +1,6 @@
 using System.Reflection;
+using MemoryPack;
+using MMORPG.ServerCore;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
 
@@ -30,26 +32,28 @@ namespace MMORPG.GameServer.Net
             {
                 TcpHandlerAttribute attr = method.GetCustomAttribute<TcpHandlerAttribute>()!;
 
+                string origin = $"{method.DeclaringType?.Name}.{method.Name}";
+
                 if (method.ReturnType != typeof(NetResult) || method.GetParameters().Length != 1 || method.GetParameters()[0].ParameterType != typeof(NetRequest))
                 {
-                    Console.WriteLine($"[Dispatcher] BỎ QUA {method.DeclaringType?.Name}.{method.Name} — " + "sai chữ ký, phải là: static NetResult Ten(NetRequest req)");
+                    Log.Warn($"BỎ QUA {origin.Yellow()} — sai chữ ký, phải là: static NetResult Ten(NetRequest req)");
                     continue;
                 }
 
-                var del = (Func<NetRequest, NetResult>)Delegate.CreateDelegate(
+                if (_handlers.ContainsKey(attr.Command))
+                {
+                    Log.Warn($"TRÙNG {attr.Command.ToString().Yellow()} — đã có handler, bỏ qua {origin}");
+                    continue;
+                }
+
+                _handlers[attr.Command] = (Func<NetRequest, NetResult>)Delegate.CreateDelegate(
                     typeof(Func<NetRequest, NetResult>), method
                 );
 
-                if (!_handlers.TryAdd(attr.Command, del))
-                {
-                    Console.WriteLine($"[Dispatcher] TRÙNG {attr.Command} — " + $"đã có handler, bỏ qua {method.DeclaringType?.Name}.{method.Name}");
-                    continue;
-                }
-
-                Console.WriteLine($"[Dispatcher] {attr.Command} -> {method.DeclaringType?.Name}.{method.Name}");
+                Log.Debug($"{attr.Command.ToString().Cyan()} -> {origin}");
             }
 
-            Console.WriteLine($"[Dispatcher] Đăng ký {_handlers.Count} handler.");
+            Log.Info($"Đăng ký {_handlers.Count.ToString().Green()} handler.");
         }
 
         /// <summary>
@@ -68,14 +72,16 @@ namespace MMORPG.GameServer.Net
             {
                 result = handler(new NetRequest(session, cmd, payload));
             }
-            catch (InvalidDataException ex)
+            // InvalidDataException: khung/nén hỏng (NetPayload ném).
+            // MemoryPackSerializationException: byte đúng khung nhưng không khớp DTO — contract lệch.
+            catch (Exception ex) when (ex is InvalidDataException or MemoryPackSerializationException)
             {
                 SendError(session, cmd, ErrorCode.MalformedPayload, ex.Message);
                 return;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Dispatcher] Handler {cmd} ném lỗi: {ex}");
+                Log.Error(ex, $"Handler {cmd} ném lỗi");
                 SendError(session, cmd, ErrorCode.InternalError, ex.Message);
                 return;
             }
@@ -89,7 +95,7 @@ namespace MMORPG.GameServer.Net
 
         private static void SendError(ClientSession session, NetCmd failedCmd, ErrorCode code, string detail)
         {
-            Console.WriteLine($"[Dispatcher] Lỗi {failedCmd}: {code} — {detail}");
+            Log.Warn($"Lỗi {failedCmd}: {code.ToString().Red()} — {detail}");
 
             var dto = new ErrorResponse { FailedCmd = (int)failedCmd, Code = code, Detail = detail };
             session.SendRaw(NetCmd.Error, NetPayload.Serialize(dto));

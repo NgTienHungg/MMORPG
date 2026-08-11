@@ -2,7 +2,7 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 
-namespace MMORPG.Game.Scripts.Network
+namespace MMORPG.Client.Network
 {
     public enum TransportState
     {

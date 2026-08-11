@@ -7,9 +7,8 @@ using System.Threading.Tasks;
 using Cysharp.Threading.Tasks;
 using HungNT;
 using MMORPG.Shared.Net;
-using UnityEngine;
 
-namespace MMORPG.Game.Scripts.Network
+namespace MMORPG.Client.Network
 {
     /// <summary>
     /// Transport TCP cho client. Đọc và gửi đều chạy ở luồng nền;
@@ -37,6 +36,7 @@ namespace MMORPG.Game.Scripts.Network
             if (State != TransportState.Disconnected)
             {
                 this.LogWarning($"Đang ở trạng thái {State}, bỏ qua yêu cầu connect.");
+                return false;
             }
 
             SetState(TransportState.Connecting);
@@ -96,7 +96,7 @@ namespace MMORPG.Game.Scripts.Network
                 while (!ct.IsCancellationRequested)
                 {
                     int read = await _stream.ReadAsync(buffer, 0, buffer.Length, ct);
-                    if (read == 0) break; // server dong ket noi
+                    if (read == 0) break; // server đóng kết nối
 
                     _frameReader.Feed(buffer, 0, read);
 
@@ -113,7 +113,8 @@ namespace MMORPG.Game.Scripts.Network
             }
             catch (InvalidDataException ex)
             {
-                Debug.LogError($"[TcpTransport] Dòng byte hỏng, buộc ngắt kết nối — {ex.Message}");
+                // InvalidDataException KHÔNG kế thừa IOException nên không bị filter phía trên nuốt mất.
+                this.LogError($"Dòng byte hỏng, buộc ngắt kết nối — {ex.Message}");
             }
             finally
             {
@@ -144,19 +145,14 @@ namespace MMORPG.Game.Scripts.Network
 
         private void Cleanup()
         {
+            // Vòng đọc, vòng gửi và luồng UI đều có thể gọi vào đây cùng lúc — chỉ một lượt được dọn.
             if (Interlocked.Exchange(ref _state, (int)TransportState.Disconnected) == (int)TransportState.Disconnected)
-                return; // đã dọn rồi, tránh dọn 2 lần từ 2 luồng
+                return;
 
-            try
-            {
-                _cts?.Cancel();
-            }
-            catch
-            {
-                /* đã dispose */
-            }
-
-            _sendSignal.Release();
+            // Giành lấy _cts rồi mới đụng: lần connect sau có thể đã kịp gán cái mới.
+            CancellationTokenSource cts = Interlocked.Exchange(ref _cts, null);
+            cts?.Cancel(); // đủ để đánh thức vòng gửi — WaitAsync(ct) huỷ ngay khi token bật
+            cts?.Dispose();
 
             _stream?.Dispose();
             _tcpClient?.Dispose();
@@ -164,10 +160,15 @@ namespace MMORPG.Game.Scripts.Network
             _stream = null;
             _tcpClient = null;
 
+            // Dọn cả hàng đợi lẫn tín hiệu. Bỏ tín hiệu lại thì lần kết nối sau vòng gửi
+            // sẽ tỉnh dậy đúng bằng số gói còn dang dở rồi quay vòng vô ích.
             while (_sendQueue.TryDequeue(out _))
             {
             }
-            
+
+            while (_sendSignal.CurrentCount > 0)
+                _sendSignal.Wait(0);
+
             OnStateChanged?.Invoke(TransportState.Disconnected);
         }
 

@@ -1,6 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using MMORPG.GameServer.Net;
+using MMORPG.ServerCore;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.GameServer
@@ -22,17 +23,24 @@ namespace MMORPG.GameServer
 
         public int Id { get; }
 
+        /// <summary>
+        /// Nhãn phiên để chèn đầu câu log. Có màu nên nhìn console là bám được ngay
+        /// một kết nối cụ thể giữa hàng chục phiên đang chạy song song.
+        /// </summary>
+        public string Tag { get; }
+
         public ClientSession(TcpClient tcpClient)
         {
             _tcpClient = tcpClient;
             _tcpClient.NoDelay = true; // tắt Nagle: game cần độ trễ thấp hơn là gộp gói cho hiệu quả
             _stream = tcpClient.GetStream();
             Id = Interlocked.Increment(ref _nextId);
+            Tag = $"#{Id}".Magenta();
         }
 
         public async Task RunAsync(CancellationToken ct)
         {
-            Console.WriteLine($"[Session {Id}] Kết nối từ {_tcpClient.Client.RemoteEndPoint}");
+            Log.Info($"{Tag} Kết nối từ {$"{_tcpClient.Client.RemoteEndPoint}".Green()}");
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
@@ -44,20 +52,20 @@ namespace MMORPG.GameServer
             }
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
             {
-                Console.WriteLine($"[Session {Id}] Mất kết nối: {ex.GetType().Name}");
+                Log.Info($"{Tag} Mất kết nối: {ex.GetType().Name}");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[Session {Id}] Lỗi: {ex}");
+                Log.Error(ex, $"{Tag} Vòng đọc chết");
             }
             finally
             {
-                linked.Cancel(); // dừng vòng gửi
-                _sendSignal.Release(); // đánh thức nó để nó thấy token đã huỷ
+                // Cancel là đủ để đánh thức vòng gửi: WaitAsync(ct) huỷ ngay khi token bật.
+                linked.Cancel();
                 await Task.WhenAny(sendLoop, Task.Delay(1000, CancellationToken.None));
 
                 _tcpClient.Dispose();
-                Console.WriteLine($"[Session {Id}] Đóng.");
+                Log.Info($"{Tag} Đóng.");
             }
         }
 
@@ -76,7 +84,7 @@ namespace MMORPG.GameServer
                 _frameReader.Feed(buffer, 0, read);
 
                 // MỘT lần đọc có thể chứa nhiều gói → phải vắt cạn bằng vòng while
-                while (_frameReader.TryRead(out int cmd, out byte[] payload))
+                while (_frameReader.TryRead(out int cmd, out byte[]? payload))
                     HandlePacket(cmd, payload);
             }
         }

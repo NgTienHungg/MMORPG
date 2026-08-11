@@ -1,4 +1,5 @@
 using MMORPG.GameServer.Net;
+using MMORPG.ServerCore;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
 
@@ -26,7 +27,7 @@ namespace MMORPG.GameServer.Handlers
         public static NetResult OnEcho(NetRequest req)
         {
             var request = req.GetData<EchoRequest>();
-            Console.WriteLine($"[Session {req.Session.Id}] echo: \"{request.Message}\"");
+            Log.Debug($"{req.Session.Tag} echo: \"{request.Message}\"");
 
             return NetResult.Ok(new EchoResponse
             {

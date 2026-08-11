@@ -168,7 +168,17 @@
         <member name="F:MMORPG.Shared.Net.NetPayload.COMPRESS_THRESHOLD">
             <summary>Dưới ngưỡng này thì không nén — nén gói bé lỗ vốn CPU mà chẳng bớt được byte nào.</summary>
         </member>
+        <member name="M:MMORPG.Shared.Net.NetPayload.Serialize``1(``0)">
+            <exception cref="T:System.ArgumentNullException">
+            Gửi null qua dây luôn là bug: bên nhận không có cách nào phân biệt "cố tình gửi rỗng"
+            với "quên gán DTO". Chặn ngay tại đây thay vì để nó nổ ở handler bên kia.
+            </exception>
+        </member>
+        <member name="M:MMORPG.Shared.Net.NetPayload.Deserialize``1(System.Byte[])">
+            <exception cref="T:System.IO.InvalidDataException">Payload hỏng, hoặc giải ra null (xem <see cref="M:MMORPG.Shared.Net.NetPayload.Serialize``1(``0)"/>).</exception>
+        </member>
         <member name="M:MMORPG.Shared.Net.NetPayload.Unpack(System.Byte[],System.Byte[]@)">
+            <param name="payload">Byte thô lấy từ khung gói tin, tính cả byte flag đứng đầu.</param>
             <param name="rented">Khác null nghĩa là buffer đi mượn — bắt buộc trả lại ArrayPool sau khi dùng.</param>
         </member>
         <member name="T:MMORPG.Shared.Net.PacketFrame">

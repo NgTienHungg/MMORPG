@@ -1,7 +1,7 @@
 using System;
+using HungNT;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
-using UnityEngine;
 
 namespace MMORPG.Client.Network.Handlers
 {
@@ -23,7 +23,7 @@ namespace MMORPG.Client.Network.Handlers
         private void HandleError(NetPacket packet)
         {
             var error = packet.GetData<ErrorResponse>();
-            Debug.LogError($"[Net] Server báo lỗi cmd {(NetCmd)error.FailedCmd}: {error.Code} — {error.Detail}");
+            this.LogError($"Server báo lỗi cmd {(NetCmd)error.FailedCmd}: {error.Code} — {error.Detail}");
         }
     }
 }

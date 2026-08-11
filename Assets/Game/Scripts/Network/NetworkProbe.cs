@@ -1,7 +1,7 @@
 using System;
 using Cysharp.Threading.Tasks;
+using HungNT;
 using MMORPG.Client.Network.Handlers;
-using MMORPG.Game.Scripts.Network;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
 using TMPro;
@@ -40,18 +40,23 @@ namespace MMORPG.Client.Network
 
             _systemHandler.OnPong += OnPong;
             _systemHandler.OnEcho += OnEcho;
-            _net.OnStateChanged += state => SetStatus(state.ToString());
+            _net.OnStateChanged += OnStateChanged;
 
             SetStatus("Chưa kết nối");
         }
 
         private void OnDestroy()
         {
-            if (_systemHandler == null)
+            // Construct chưa chạy nếu container build lỗi — đừng để OnDestroy nổ chồng lên lỗi gốc.
+            if (_net == null)
                 return;
 
             _systemHandler.OnPong -= OnPong;
             _systemHandler.OnEcho -= OnEcho;
+
+            // NetService là singleton, sống lâu hơn scene này. Không gỡ tay thì lần load scene sau
+            // event vẫn gọi vào MonoBehaviour đã destroy.
+            _net.OnStateChanged -= OnStateChanged;
         }
 
         private async UniTaskVoid ConnectAsync()
@@ -70,6 +75,8 @@ namespace MMORPG.Client.Network
 
         private void SendEcho() => _net.Send(NetCmd.Echo, new EchoRequest { Message = _echoInput.text });
 
+        private void OnStateChanged(TransportState state) => SetStatus(state.ToString());
+
         private void OnPong(PingResponse res)
         {
             long rtt = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() - res.ClientTimeMs;
@@ -81,7 +88,7 @@ namespace MMORPG.Client.Network
         private void SetStatus(string text)
         {
             _statusText.text = text;
-            Debug.Log($"[Probe] {text}");
+            this.Log(text);
         }
     }
 }

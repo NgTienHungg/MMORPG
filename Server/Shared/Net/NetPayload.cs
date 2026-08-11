@@ -29,21 +29,27 @@ namespace MMORPG.Shared.Net
         private const int RAW_LENGTH_SIZE = 4;
         private const int COMPRESSED_HEADER_SIZE = FLAG_SIZE + RAW_LENGTH_SIZE;
 
+        /// <exception cref="ArgumentNullException">
+        /// Gửi null qua dây luôn là bug: bên nhận không có cách nào phân biệt "cố tình gửi rỗng"
+        /// với "quên gán DTO". Chặn ngay tại đây thay vì để nó nổ ở handler bên kia.
+        /// </exception>
         public static byte[] Serialize<T>(T value) where T : IMemoryPackable<T>
         {
             if (value is null)
-                return new[] { FLAG_RAW };
+                throw new ArgumentNullException(nameof(value));
 
             byte[] raw = MemoryPackSerializer.Serialize(value);
             return Pack(raw);
         }
 
+        /// <exception cref="InvalidDataException">Payload hỏng, hoặc giải ra null (xem <see cref="Serialize{T}"/>).</exception>
         public static T Deserialize<T>(byte[] payload) where T : IMemoryPackable<T>
         {
-            ReadOnlySpan<byte> raw = Unpack(payload, out byte[] rented);
+            ReadOnlySpan<byte> raw = Unpack(payload, out byte[]? rented);
             try
             {
-                return MemoryPackSerializer.Deserialize<T>(raw);
+                return MemoryPackSerializer.Deserialize<T>(raw)
+                       ?? throw new InvalidDataException($"Payload giải ra null cho {typeof(T).Name}.");
             }
             finally
             {
@@ -94,8 +100,9 @@ namespace MMORPG.Shared.Net
             }
         }
 
+        /// <param name="payload">Byte thô lấy từ khung gói tin, tính cả byte flag đứng đầu.</param>
         /// <param name="rented">Khác null nghĩa là buffer đi mượn — bắt buộc trả lại ArrayPool sau khi dùng.</param>
-        private static ReadOnlySpan<byte> Unpack(byte[] payload, out byte[] rented)
+        private static ReadOnlySpan<byte> Unpack(byte[] payload, out byte[]? rented)
         {
             rented = null;
 

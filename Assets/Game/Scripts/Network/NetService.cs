@@ -2,10 +2,9 @@ using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
 using HungNT;
-using MMORPG.Scripts.Network;
 using MMORPG.Shared.Net;
 
-namespace MMORPG.Game.Scripts.Network
+namespace MMORPG.Client.Network
 {
     /// <summary>
     /// Điểm vào mạng của client. Sở hữu transport, và đảm bảo mọi thứ đi lên tầng trên
@@ -14,14 +13,13 @@ namespace MMORPG.Game.Scripts.Network
     public sealed class NetService : IDisposable
     {
         private readonly ITransport _transport;
+        private readonly NetDispatcher _dispatcher;
         private readonly CancellationTokenSource _cts = new();
 
         /// <summary>Đổi trạng thái kết nối. Đã ở MAIN THREAD.</summary>
         public event Action<TransportState> OnStateChanged;
 
         public TransportState State => _transport.State;
-
-        private readonly NetDispatcher _dispatcher;
 
         public NetService(ITransport transport, NetDispatcher dispatcher)
         {
@@ -43,9 +41,12 @@ namespace MMORPG.Game.Scripts.Network
             _transport.OnPacket -= HandlePacketFromBackground;
             _transport.OnStateChanged -= HandleStateFromBackground;
 
+            // Ngắt kết nối chứ KHÔNG dispose transport: transport là singleton do container tạo,
+            // nên container mới là chỗ dispose nó. Dispose hộ ở đây là dispose hai lần.
+            _transport.Disconnect();
+
             _cts.Cancel();
             _cts.Dispose();
-            _transport.Dispose();
         }
 
         private void HandlePacketFromBackground(int cmd, byte[] payload) => RaiseOnMainThread(cmd, payload).Forget();
@@ -56,7 +57,7 @@ namespace MMORPG.Game.Scripts.Network
 
             var netCmd = (NetCmd)cmd;
             if (!_dispatcher.Dispatch(netCmd, payload))
-                this.LogWarning($"[NetService] Không có handler cho {netCmd} — quên đăng ký nhóm handler?");
+                this.LogWarning($"Không có handler cho {netCmd} — quên đăng ký nhóm handler trong GameLifetimeScope?");
         }
 
         private void HandleStateFromBackground(TransportState state) => RaiseStateOnMainThread(state).Forget();

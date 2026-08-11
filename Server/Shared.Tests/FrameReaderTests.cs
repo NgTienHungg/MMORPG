@@ -16,7 +16,7 @@ namespace MMORPG.Shared.Tests
 
             reader.Feed(frame, 0, frame.Length);
 
-            Assert.True(reader.TryRead(out int cmd, out byte[] payload));
+            Assert.True(reader.TryRead(out int cmd, out byte[]? payload));
             Assert.Equal(7, cmd);
             Assert.Equal("hello", Encoding.UTF8.GetString(payload));
             Assert.False(reader.TryRead(out _, out _));
@@ -36,7 +36,7 @@ namespace MMORPG.Shared.Tests
             }
 
             reader.Feed(frame, frame.Length - 1, 1);
-            Assert.True(reader.TryRead(out int cmd, out byte[] payload));
+            Assert.True(reader.TryRead(out int cmd, out byte[]? payload));
             Assert.Equal("hello", Encoding.UTF8.GetString(payload));
         }
 
@@ -52,8 +52,8 @@ namespace MMORPG.Shared.Tests
 
             reader.Feed(merged, 0, merged.Length);
 
-            Assert.True(reader.TryRead(out int cmd1, out byte[] p1));
-            Assert.True(reader.TryRead(out int cmd2, out byte[] p2));
+            Assert.True(reader.TryRead(out int cmd1, out byte[]? p1));
+            Assert.True(reader.TryRead(out int cmd2, out byte[]? p2));
             Assert.False(reader.TryRead(out _, out _));
 
             Assert.Equal(1, cmd1);
@@ -70,7 +70,7 @@ namespace MMORPG.Shared.Tests
 
             reader.Feed(frame, 0, frame.Length);
 
-            Assert.True(reader.TryRead(out int cmd, out byte[] payload));
+            Assert.True(reader.TryRead(out int cmd, out byte[]? payload));
             Assert.Equal(99, cmd);
             Assert.Empty(payload);
         }
