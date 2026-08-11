@@ -1,0 +1,80 @@
+; Code style cho solution server. Rider / Visual Studio / `dotnet format` đều đọc file này.
+; Mục tiêu: code server đọc y hệt code client Unity — không có cú pháp "lạ mắt" của C# 10+.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = crlf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{csproj,props,targets,sln,json,xml}]
+indent_size = 4
+
+[*.cs]
+
+#### Namespace ####
+# Bắt buộc namespace kiểu khối (có ngoặc nhọn), KHÔNG dùng file-scoped `namespace X;`.
+# C# 10 mặc định ưu tiên file-scoped, nhưng client Unity không có cú pháp đó
+# nên viết khác nhau giữa hai bên chỉ tổ gây vướng mắt khi đọc chéo.
+csharp_style_namespace_declarations = block_scoped:warning
+
+# IDE0160 = "chuyển sang block-scoped" · IDE0161 = "chuyển sang file-scoped"
+dotnet_diagnostic.IDE0160.severity = warning
+dotnet_diagnostic.IDE0161.severity = none
+
+# Key riêng của ReSharper/Rider — đặt luôn cho chắc, vì template file mới của Rider
+# đọc key này chứ không phải key Roslyn ở trên.
+resharper_csharp_namespace_body = block_scoped
+
+#### Dấu ngoặc: Allman ####
+csharp_new_line_before_open_brace = all
+csharp_new_line_before_else = true
+csharp_new_line_before_catch = true
+csharp_new_line_before_finally = true
+csharp_new_line_before_members_in_object_initializers = true
+csharp_new_line_before_members_in_anonymous_types = true
+csharp_new_line_between_query_expression_clauses = true
+
+#### using ####
+csharp_using_directive_placement = outside_namespace:warning
+dotnet_sort_system_directives_first = true
+dotnet_separate_import_directive_groups = false
+
+#### Naming — theo CONVENTIONS.md ####
+# private field: _camelCase
+dotnet_naming_rule.private_field_underscore.symbols = private_field
+dotnet_naming_rule.private_field_underscore.style = underscore_camel_case
+dotnet_naming_rule.private_field_underscore.severity = warning
+
+dotnet_naming_symbols.private_field.applicable_kinds = field
+dotnet_naming_symbols.private_field.applicable_accessibilities = private
+dotnet_naming_symbols.private_field.required_modifiers =
+
+dotnet_naming_style.underscore_camel_case.required_prefix = _
+dotnet_naming_style.underscore_camel_case.capitalization = camel_case
+
+# const: UPPER_SNAKE_CASE
+dotnet_naming_rule.const_upper_snake.symbols = const_symbol
+dotnet_naming_rule.const_upper_snake.style = upper_snake_case
+dotnet_naming_rule.const_upper_snake.severity = warning
+
+dotnet_naming_symbols.const_symbol.applicable_kinds = field
+dotnet_naming_symbols.const_symbol.applicable_accessibilities = *
+dotnet_naming_symbols.const_symbol.required_modifiers = const
+
+dotnet_naming_style.upper_snake_case.capitalization = all_upper
+dotnet_naming_style.upper_snake_case.word_separator = _
+
+# interface: I + PascalCase
+dotnet_naming_rule.interface_prefix_i.symbols = interface_symbol
+dotnet_naming_rule.interface_prefix_i.style = prefix_i_pascal
+dotnet_naming_rule.interface_prefix_i.severity = warning
+
+dotnet_naming_symbols.interface_symbol.applicable_kinds = interface
+dotnet_naming_symbols.interface_symbol.applicable_accessibilities = *
+
+dotnet_naming_style.prefix_i_pascal.required_prefix = I
+dotnet_naming_style.prefix_i_pascal.capitalization = pascal_case

@@ -17,5 +17,62 @@
             </code>
             </remarks>
         </member>
+        <member name="T:MMORPG.Shared.Net.FrameReader">
+             <summary>
+             Gom dòng byte đọc từ socket thành từng gói hoàn chỉnh.
+            
+             Mỗi lần đọc được byte từ mạng thì <see cref="M:MMORPG.Shared.Net.FrameReader.Feed(System.Byte[],System.Int32,System.Int32)"/> vào đây, rồi gọi <see cref="M:MMORPG.Shared.Net.FrameReader.TryRead(System.Int32@,System.Byte[]@)"/>
+             trong vòng lặp cho tới khi trả về false — một lần đọc mạng có thể chứa 0, 1 hoặc nhiều gói,
+             và gói cuối thường bị cắt dở.
+            
+             KHÔNG thread-safe: mỗi kết nối một instance, chỉ dùng trong đúng luồng đọc của kết nối đó.
+             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.FrameReader._count">
+            <summary>Số byte hợp lệ đang giữ, tính từ đầu <see cref="F:MMORPG.Shared.Net.FrameReader._buffer"/>.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.Net.FrameReader.Feed(System.Byte[],System.Int32,System.Int32)">
+            <summary>Nạp thêm byte vừa đọc được từ socket.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.Net.FrameReader.TryRead(System.Int32@,System.Byte[]@)">
+            <summary>
+            Lấy ra một gói hoàn chỉnh nếu có đủ byte.
+            </summary>
+            <returns>false nghĩa là "chưa đủ, chờ thêm dữ liệu" — không phải lỗi.</returns>
+            <exception cref="T:System.IO.InvalidDataException">Độ dài đọc được vô lý → dòng byte đã hỏng, phải ngắt kết nối.</exception>
+        </member>
+        <member name="T:MMORPG.Shared.Net.PacketFrame">
+             <summary>
+             Định nghĩa khung gói tin trên dây. Client và server dùng chung file này,
+             nên không có cách nào để hai bên hiểu khác nhau về định dạng.
+            
+             <code>
+             ┌─────────────┬─────────────┬────────────────────────┐
+             │ int32 len   │ int32 cmd   │ payload (len - 4 byte) │
+             └─────────────┴─────────────┴────────────────────────┘
+               len = 4 + payload.Length          little-endian
+             </code>
+             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.PacketFrame.LENGTH_FIELD_SIZE">
+            <summary>Số byte của trường độ dài đứng đầu khung.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.PacketFrame.CMD_FIELD_SIZE">
+            <summary>Số byte của mã lệnh.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.PacketFrame.HEADER_SIZE">
+            <summary>Tổng phần header: độ dài + mã lệnh.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.PacketFrame.MAX_PACKET_SIZE">
+            <summary>
+            Chặn trên cho 1 gói. Gói lớn hơn mức này coi như dữ liệu hỏng hoặc bị tấn công —
+            không cấp phát buffer theo số đọc được từ mạng mà chưa kiểm tra.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.Net.PacketFrame.Encode(System.Int32,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Đóng khung một gói hoàn chỉnh, sẵn sàng ghi thẳng lên socket.
+            </summary>
+        </member>
     </members>
 </doc>

@@ -1,4 +1,5 @@
 using HungNT;
+using MMORPG.Game.Scripts.Network;
 using VContainer;
 using VContainer.Unity;
 
@@ -13,6 +14,10 @@ namespace MMORPG.Client.Boot
         protected override void Configure(IContainerBuilder builder)
         {
             builder.InstallCore(); // com.hungnt.core
+
+            builder.Register<ITransport, TcpTransport>(Lifetime.Singleton);
+            builder.Register<NetService>(Lifetime.Singleton);
+            builder.RegisterComponentInHierarchy<NetworkProbe>();
         }
     }
 }
