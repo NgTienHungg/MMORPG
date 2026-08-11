@@ -18,7 +18,7 @@
 
 | Thứ | Quy ước | Ví dụ |
 |-----|---------|-------|
-| Namespace | `MMORPG.<Tier>.<Module>` | `MMORPG.Client.Network`, `MMORPG.GameServer.World`, `MMORPG.Shared.Dto` |
+| Namespace | `MMORPG.<Tier>.<Module>` | `MMORPG.Client.Network`, `MMORPG.GameServer.World`, `MMORPG.ServerCore`, `MMORPG.Shared.Dto` |
 
 | Class / Struct | PascalCase | `NetService`, `PlayerEntity` |
 | Interface | `I` + PascalCase | `ITransport`, `IPacketCodec` |
@@ -107,14 +107,62 @@ private readonly IEventBusService _eventBus;  // ✅  không phải _bus
 4. Request/Response đi theo cặp, đặt cạnh nhau trong cùng file.
 5. Handler **không** chứa business logic — chỉ giải mã, gọi service, đóng gói kết quả.
 
-## 7. Error handling
+## 7. Log
+
+Cấm `Debug.Log` / `Console.WriteLine` trần. Mỗi bên có đúng một cổng log:
+
+| Bên | API | Nằm ở |
+|-----|-----|-------|
+| Client | `this.Log()` · `this.LogWarning()` · `this.LogError()` | `HungNT.DebugEx` (`com.hungnt.core`) |
+| Server | `Log.Debug()` · `Log.Info()` · `Log.Warn()` · `Log.Error()` | `MMORPG.ServerCore.Log` |
+
+**Không viết tên class vào nội dung log** — cả hai bên đều tự chèn `[TênClass]`:
+client lấy runtime từ `GetType().Name`, server lấy lúc biên dịch từ `[CallerFilePath]`.
+
+```csharp
+this.LogWarning($"Không có handler cho {cmd}");    // ✅
+this.LogWarning($"[NetService] Không có handler"); // ❌ in ra 2 lần tên class
+```
+
+Vì sao hai API khác nhau: client có `this` để bám vào nên dùng extension; server handler đều là
+class **static**, không có `this`, nên phải là API static.
+
+### Mức log
+
+| Mức | Dùng cho | Ví dụ |
+|-----|----------|-------|
+| `Debug` | Chi tiết theo từng gói / từng entity, tắt khi chạy thật | `Echo -> SystemHandler.OnEcho` |
+| `Info` | Mốc vòng đời | server lên, client kết nối / rớt |
+| `Warn` | Sai nhưng chạy tiếp được | handler trùng cmd, payload hỏng của một client |
+| `Error` | Hỏng thật, cần người xem | handler ném exception |
+
+`Log.Error(ex, "...")` in nguyên stack trace. **Đừng chỉ log `ex.Message`** — mất chỗ ném là mất tất.
+Server đặt `Log.MinLevel = LogLevel.Info` khi chạy thật để bớt nhiễu.
+
+`DebugEx` bên client gắn `[Conditional("DEBUG")]` nên **cả lời gọi lẫn tham số đều bị xoá** trong
+build release. Được cái không tốn CPU, nhưng đừng nhét việc có tác dụng phụ vào trong đối số:
+`this.Log(Consume())` sẽ làm `Consume()` biến mất khi build thật.
+
+### Màu
+
+Tô màu **mẩu chữ quan trọng** bên trong câu, không tô cả câu:
+
+```csharp
+Log.Info($"{session.Tag} Kết nối từ {endPoint.Green()}");   // server: ANSI
+this.Log($"Nhận {count.ToString().Bold()} gói");            // client: rich text Unity
+```
+
+`Log` cố tình chỉ tô `LEVEL` và `[Tag]`, chừa phần nội dung — nếu tô cả câu thì mã reset của
+mẩu bên trong sẽ cắt màu của phần còn lại. Màu tự tắt khi output bị đẩy ra file hoặc có biến `NO_COLOR`.
+
+## 8. Error handling
 
 - **Không bao giờ** `catch (Exception) { }`. Tối thiểu phải log.
 - Lỗi nghiệp vụ (sai mật khẩu, không đủ tiền) → **không** ném exception, trả `ErrorCode` trong response.
 - Lỗi hệ thống (mất kết nối DB, packet hỏng) → log ở mức Error + ngắt kết nối nếu cần.
 - 1 enum `ErrorCode` duy nhất trong `Shared`, dùng chung 2 bên.
 
-## 8. Git
+## 9. Git
 
 - Commit format: `type(scope): mô tả ngắn`
   `feat` / `fix` / `refactor` / `docs` / `chore` / `test`
@@ -126,7 +174,7 @@ private readonly IEventBusService _eventBus;  // ✅  không phải _bus
   git submodule foreach --quiet 'echo "== $name"; git status --short'
   ```
 
-## 9. Test
+## 10. Test
 
 - Logic thuần (codec, damage formula, validate) → unit test được thì phải có test.
 - Không cố unit-test MonoBehaviour hoặc socket thật — test qua interface (`ITransport` mock).

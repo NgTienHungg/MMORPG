@@ -43,6 +43,7 @@ Unity Client (Assets/Game)
                             └──────────────────┘
 
 Shared (MMORPG.Shared.dll) ── NetCmd enum + DTO MemoryPack ── dùng chung cả 3 bên
+ServerCore                 ── Log + màu console ─────────── GameServer & DBServer
 ```
 
 ### Cấu trúc thư mục
@@ -52,7 +53,8 @@ Shared (MMORPG.Shared.dll) ── NetCmd enum + DTO MemoryPack ── dùng chun
 | `Assets/Game/` | Toàn bộ code + asset game client |
 | `Packages/com.hungnt.*` | Submodule package riêng của owner (core, eventbus, objectpool, assetload, dataconfig, datasave, ui, ui.panel, ui.tween) |
 | `Assets/Plugins/Shared/` | `MMORPG.Shared.dll` build ra từ `Server/Shared` — **không sửa tay** |
-| `Server/Shared/` | Contract dùng chung: `NetCmd`, DTO, codec |
+| `Server/Shared/` | Contract dùng chung: `NetCmd`, DTO, codec — **cũng build ra DLL cho Unity** nên chỉ chứa thứ client cần |
+| `Server/ServerCore/` | Hạ tầng chỉ server dùng (`Log`, `AnsiExtensions`). Đối ứng của `com.hungnt.core` bên client |
 | `Server/GameServer/` | Game server .NET 8 |
 | `Server/DBServer/` | DB server .NET 8 |
 | `.claude/docs/` | Tài liệu kiến trúc + roadmap |
@@ -91,11 +93,38 @@ Cùng scheme với vo-lam-genz. Chi tiết + code: [`guides/PHASE-1.md`](.claude
 2. Thêm DTO request/response vào `Server/Shared/Dto/<Feature>/` — `[MemoryPackable] public partial class`.
 3. Build `Server/Shared` → DLL tự copy sang `Assets/Plugins/Shared/` (post-build target).
 4. **Server**: `[TcpHandler(NetCmd.X)] public static NetResult Handle(NetRequest req)` trong `Handlers/<Feature>Handler.cs`.
-5. **Client**: `[NetHandler(NetCmd.X)] public static void OnX(NetPacket p)` trong `Network/Handlers/<Feature>NetHandler.cs`
+5. **Client**: `[NetHandler(NetCmd.X)] private void OnX(NetPacket p)` trong `Network/Handlers/<Feature>NetHandler.cs`
    → bắn event → Presenter → UI. Handler đã ở main thread sẵn.
-6. UI chỉ đọc state **sau khi** server confirm.
+6. **Client — bắt buộc, dễ quên nhất:** nếu đó là **nhóm handler mới**, đăng ký vào `GameLifetimeScope`:
+   ```csharp
+   builder.Register<XNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+   ```
+   Server quét cả assembly nên handler mới tự chạy; **client thì không** — handler client là method instance,
+   phải có container tạo ra thì mới tồn tại. Quên dòng này thì lệnh rơi vào hư không mà **không có lỗi biên dịch**.
+7. UI chỉ đọc state **sau khi** server confirm.
 
 Không đụng vào switch/if-else nào cả — dispatch table tự tìm handler qua attribute.
+
+### DI phía client — quy tắc sống còn
+
+`GameLifetimeScope.Configure` là chỗ **duy nhất** biết client có những gì. Mỗi khi thêm một class nhận
+inject qua constructor, phải đăng ký nó ở đây, kể cả khi nó chỉ là dependency của một service khác.
+
+Thiếu một dòng đăng ký thì lỗi **không** chỉ vào chỗ thiếu, mà đổ dây chuyền:
+
+```
+VContainerException: Failed to resolve NetworkProbe
+  : Failed to resolve NetService
+  : No such registration of type: NetDispatcher   ← thủ phạm nằm ở DÒNG CUỐI
+NullReferenceException at NetworkProbe.Awake()    ← chỉ là hệ quả, đừng đi sửa chỗ này
+```
+
+Đọc lỗi VContainer thì đọc **dòng cuối cùng** của chuỗi `Failed to resolve`. `NullReferenceException`
+ngay sau đó là do container chết nên field inject còn null — sửa dòng cuối là hết cả hai.
+
+Muốn VContainer inject vào MonoBehaviour có sẵn trong scene thì phải
+`builder.RegisterComponentInHierarchy<T>()`; không có dòng đó, `[Inject]` không bao giờ chạy và
+field vẫn null mà chẳng có exception nào cả.
 
 ---
 
@@ -105,7 +134,7 @@ Chi tiết đầy đủ: [`.claude/docs/CONVENTIONS.md`](.claude/docs/CONVENTION
 
 | Thứ | Quy ước | Ví dụ |
 |-----|---------|-------|
-| Namespace | `MMORPG.Client.*`, `MMORPG.GameServer.*`, `MMORPG.DBServer.*`, `MMORPG.Shared.*` | |
+| Namespace | `MMORPG.Client.*`, `MMORPG.GameServer.*`, `MMORPG.DBServer.*`, `MMORPG.ServerCore.*`, `MMORPG.Shared.*` | |
 | Class / Method / Property | PascalCase | `NetService`, `SendAsync` |
 | Interface | `I` + PascalCase | `ITransport`, `INetService` |
 | Private field | `_camelCase` | `_transport`, `_eventBus` |
@@ -120,6 +149,38 @@ Chi tiết đầy đủ: [`.claude/docs/CONVENTIONS.md`](.claude/docs/CONVENTION
 Comment khi logic **không tự giải thích** (vì sao chọn cấu trúc này, race condition, edge case, workaround).
 Giải thích **tại sao**, không mô tả lại từng dòng. Không comment kiểu "trước đây… giờ là…" — code phải đọc như
 thể luôn được viết như vậy.
+
+### Log — không dùng `Debug.Log` / `Console.WriteLine` trần
+
+| Bên | Dùng | Ví dụ |
+|-----|------|-------|
+| Client | `DebugEx` của `com.hungnt.core` (`using HungNT;`) | `this.Log(...)` · `this.LogWarning(...)` · `this.LogError(...)` |
+| Server | `Log` của `MMORPG.ServerCore` | `Log.Debug/Info/Warn/Error(...)` · `Log.Error(ex, "...")` |
+
+**Không lặp lại tên class trong nội dung log.** Cả hai bên đều tự chèn `[TênClass]` — client lấy từ
+`GetType().Name`, server lấy từ `[CallerFilePath]` lúc biên dịch.
+
+```csharp
+this.LogWarning($"Không có handler cho {cmd}");   // ✅  → [NetService] Không có handler cho Ping
+this.LogWarning($"[NetService] Không có...");     // ❌  → [NetService] [NetService] Không có...
+```
+
+`this.Log(...)` chạy được cả trong class thường lẫn MonoBehaviour (extension trên `object`).
+Server handler đều là class **static** nên không dùng được kiểu extension — vì vậy server có API static `Log.Info(...)`.
+
+**Tô màu** để thông tin quan trọng nổi trên console:
+
+```csharp
+// Server — ANSI, qua MMORPG.ServerCore.AnsiExtensions
+Log.Info($"{session.Tag} Kết nối từ {endPoint.Green()}");
+Log.Warn($"Lỗi {cmd}: {code.ToString().Red()}");
+
+// Client — rich text của Unity, qua HungNT.StringExtensions
+this.Log($"Nhận {count.ToString().Bold()} gói");
+```
+
+`Log` chỉ tô màu phần `LEVEL` và `[Tag]`, cố tình chừa phần nội dung ra để màu bạn đặt bên trong
+không bị mã reset của tầng ngoài ăn mất. Màu tự tắt khi output bị đẩy ra file hoặc có biến `NO_COLOR`.
 
 ### Commit (chỉ commit khi owner yêu cầu)
 `type(scope): mô tả ngắn` — `feat` / `fix` / `refactor` / `docs` / `chore`.
@@ -174,6 +235,8 @@ Luôn đối chiếu `VOLAMGENZ-REFERENCE.md` trước khi bắt chước bất 
 
 - Chép tay `NetCmd` / DTO sang Unity thay vì dùng DLL từ `Server/Shared`.
 - `switch (cmd)` khổng lồ thay cho dispatch table.
+- `Debug.Log` / `Console.WriteLine` trần thay cho `DebugEx` / `MMORPG.ServerCore.Log`.
+- Thêm nhóm handler client mà quên đăng ký vào `GameLifetimeScope` (không có lỗi biên dịch, lệnh im lặng rơi mất).
 - God class: một file > ~400 dòng là tín hiệu phải tách.
 - Sửa state game ở client trước khi server xác nhận.
 - `catch (Exception) { }` nuốt lỗi.

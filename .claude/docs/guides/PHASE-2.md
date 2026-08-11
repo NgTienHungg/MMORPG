@@ -10,6 +10,12 @@
 > **Đây là phase quan trọng nhất của cả dự án.** Mọi feature từ Phase 4 trở đi đều đi đúng đường ống dựng ở đây.
 > Làm ẩu chỗ này thì 12 phase sau phải chịu hậu quả.
 
+> **Ghi chú về log:** các đoạn code bên dưới dùng `Console.WriteLine` vì lúc viết phase này
+> `MMORPG.ServerCore` chưa tồn tại. Code hiện tại trong repo đã chuyển hết sang `Log.Info(...)` —
+> xem [`CONVENTIONS.md` §7](../CONVENTIONS.md#7-log). Khi làm theo tài liệu này, cứ dùng `Log.*`
+> thay cho mọi `Console.WriteLine` bạn thấy, và **bỏ phần `[TênClass]`** trong nội dung
+> (logger tự chèn).
+
 ---
 
 ## Vấn đề đang có sau Phase 1
@@ -707,10 +713,10 @@ dotnet build && dotnet run --project GameServer
 ```
 Log khởi động phải có:
 ```
-[Dispatcher] Ping -> SystemHandler.OnPing
-[Dispatcher] Echo -> SystemHandler.OnEcho
-[Dispatcher] Đăng ký 2 handler.
-[GameServer] Lắng nghe trên 0.0.0.0:7777
+01:27:50.999 DEBUG [TcpDispatcher] Ping -> SystemHandler.OnPing
+01:27:51.031 DEBUG [TcpDispatcher] Echo -> SystemHandler.OnEcho
+01:27:51.032 INFO  [TcpDispatcher] Đăng ký 2 handler.
+01:27:51.038 INFO  [Program] Lắng nghe trên 0.0.0.0:7777
 ```
 
 Nếu ra `Đăng ký 0 handler` → xem mục Troubleshooting, dòng "0 handler".
@@ -943,14 +949,52 @@ namespace MMORPG.Client.Boot
             builder.Register<SystemNetHandler>(Lifetime.Singleton)
                    .AsSelf()
                    .As<INetHandlerGroup>();
+
+            // Ép VContainer inject vào NetworkProbe có sẵn trong scene.
+            builder.RegisterComponentInHierarchy<NetworkProbe>();
         }
     }
 }
 ```
 
+**Đủ 5 dòng đăng ký. Thiếu dòng nào cũng hỏng, mỗi dòng hỏng một kiểu khác nhau:**
+
+| Dòng | Thiếu thì sao |
+|------|---------------|
+| `Register<ITransport, TcpTransport>` | `Failed to resolve NetService : No such registration of type: ITransport` |
+| `Register<NetDispatcher>` | `Failed to resolve NetService : No such registration of type: NetDispatcher` |
+| `Register<NetService>` | `Failed to resolve NetworkProbe : No such registration of type: NetService` |
+| `.As<INetHandlerGroup>()` | Chạy được, nhưng `Đăng ký 0 handler từ 0 nhóm` — mọi gói về đều rơi mất |
+| `.AsSelf()` | `Failed to resolve NetworkProbe : No such registration of type: SystemNetHandler` |
+| `RegisterComponentInHierarchy<NetworkProbe>()` | **Im lặng hoàn toàn.** `Construct` không bao giờ chạy, `_net` null, `Awake` ném `NullReferenceException` mà không có exception nào của VContainer đi kèm |
+
 > **`.AsSelf().As<INetHandlerGroup>()`** — `As<INetHandlerGroup>` để `NetDispatcher` gom được qua
 > `IReadOnlyList<INetHandlerGroup>`; `AsSelf` để UI inject được đúng kiểu cụ thể mà subscribe event.
-> Thiếu `AsSelf` → UI không resolve được `SystemNetHandler`.
+> Cả hai trên **một** `Register` chứ không phải hai lần `Register` riêng: một registration = một instance,
+> nên UI subscribe đúng cái instance mà dispatcher gọi. Tách làm hai thì event bắn vào hư không.
+
+> **`RegisterComponentInHierarchy<T>()` là thứ khiến `[Inject]` chạy.** Nó cài một build-callback ép
+> container `Resolve<NetworkProbe>()` ngay lúc dựng container, tức là trong `LifetimeScope.Awake()`.
+> `LifetimeScope` có `[DefaultExecutionOrder(-5000)]` nên luôn chạy trước `Awake()` của mọi
+> MonoBehaviour khác — nhờ vậy dùng field inject ngay trong `Awake()` là an toàn.
+
+### Đọc lỗi VContainer
+
+Thiếu một dòng đăng ký thì lỗi **không** chỉ vào chỗ thiếu, mà đổ dây chuyền và kèm một
+`NullReferenceException` gây nhiễu:
+
+```
+VContainerException: Failed to resolve MMORPG.Client.Network.NetworkProbe
+  : Failed to resolve MMORPG.Client.Network.NetService
+  : No such registration of type: MMORPG.Client.Network.NetDispatcher   ← thủ phạm
+    at VContainer.Unity.LifetimeScope.Awake ()
+
+NullReferenceException at NetworkProbe.Awake () NetworkProbe.cs:41       ← chỉ là hệ quả
+```
+
+**Đọc dòng cuối cùng của chuỗi `Failed to resolve`** — đó là cái thiếu. `NullReferenceException` ngay
+sau đó chỉ là vì container chết giữa chừng nên field inject còn null; sửa dòng cuối là hết cả hai.
+Đi sửa chỗ `NullReferenceException` là đi nhầm đường.
 
 > **Vì sao client đăng ký tay còn server quét tự động:** server handler là hàm static thuần, quét cả assembly
 > là an toàn và tiện. Client handler cần nhận inject nên phải là instance do container tạo — mà container
@@ -1057,12 +1101,12 @@ Trong scene: thêm `EchoButton` (chữ `Echo`) và một `TMP_InputField` tên `
 1. Chạy server, Play Unity, bấm **Connect**.
 2. Bấm **Ping** → UI hiện `RTT: 0 ms · lệch giờ server: ...`
 3. Gõ `xin chào` vào ô input, bấm **Echo**
-   → server log `[Session 1] echo: "xin chào"`
+   → server log `DEBUG [SystemHandler] #1 echo: "xin chào"`
    → UI hiện `Server vọng lại: "xin chào"`
 4. **Test đường lỗi:** tạm sửa `SendEcho` thành `_net.Send((NetCmd)77, new EchoRequest { ... })`
    → Console Unity phải hiện:
    ```
-   [Net] Server báo lỗi cmd 77: UnknownCommand — Không có handler cho 77
+   [SystemNetHandler] Server báo lỗi cmd 77: UnknownCommand — Không có handler cho 77
    ```
    Sửa lại như cũ sau khi thử xong.
 
@@ -1113,10 +1157,14 @@ cũng đang sửa cùng lúc.
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |-------------|-------------|-------|
-| `[Dispatcher] Đăng ký 0 handler` | Class handler chưa bao giờ được nạp — .NET nạp assembly lười (lazy) | Handler nằm cùng assembly `MMORPG.GameServer` nên vẫn quét được. Nếu tách assembly riêng thì phải chạm vào nó một lần, vd `_ = typeof(SystemHandler);` trước `RegisterAll()` |
-| `[Dispatcher] BỎ QUA ... sai chữ ký` | Method không `static`, hoặc trả `void`, hoặc tham số sai kiểu | Đúng chữ ký: `static NetResult Ten(NetRequest req)` |
+| `[TcpDispatcher] Đăng ký 0 handler` | Class handler chưa bao giờ được nạp — .NET nạp assembly lười (lazy) | Handler nằm cùng assembly `MMORPG.GameServer` nên vẫn quét được. Nếu tách assembly riêng thì phải chạm vào nó một lần, vd `_ = typeof(SystemHandler);` trước `RegisterAll()` |
+| `[TcpDispatcher] BỎ QUA ... sai chữ ký` | Method không `static`, hoặc trả `void`, hoặc tham số sai kiểu | Đúng chữ ký: `static NetResult Ten(NetRequest req)` |
 | `[NetDispatcher] Đăng ký 0 handler từ 0 nhóm` | Quên `.As<INetHandlerGroup>()` trong `GameLifetimeScope` | Thêm lại, chú ý cả `.AsSelf()` |
 | `VContainerException: ... SystemNetHandler is not registered` | Chỉ đăng ký `.As<INetHandlerGroup>()` mà thiếu `.AsSelf()` | Thêm `.AsSelf()` |
+| `VContainerException: ... No such registration of type: <X>` | Thiếu một dòng `builder.Register<X>` trong `GameLifetimeScope` | Đọc **dòng cuối** của chuỗi `Failed to resolve` — đó là type thiếu. Xem bảng 6 dòng ở Bước 6 |
+| `NullReferenceException` trong `Awake()` **ngay sau** một `VContainerException` | Hệ quả, không phải nguyên nhân: container chết nên field inject còn null | Sửa `VContainerException` ở trên, NRE tự hết. Đừng thêm null-check vào `Awake` |
+| `Construct` không chạy, không có exception nào cả | Quên `builder.RegisterComponentInHierarchy<NetworkProbe>()` | Thêm dòng đó. Không có nó thì `[Inject]` không bao giờ được gọi và Unity cũng chẳng báo gì |
+| Kết nối được nhưng bấm nút nào cũng `NullReferenceException` ở `Awake` | Còn ô `[SerializeField]` chưa kéo trong Inspector | Kiểm tra đủ 5 ô của `NetworkProbe`; ô trống là `None` trong Inspector |
 | `InvalidDataException: Flag payload lạ` | Một bên gửi bằng `PacketFrame` trần (không qua `NetPayload`), bên kia giải bằng `NetPayload` | Mọi thứ đi qua mạng đều phải qua `NetService.Send<T>` / `NetResult.Ok`, đừng gọi `transport.Send` trực tiếp |
 | Server nhận đúng nhưng `GetData<T>()` ném lỗi | Client gửi DTO kiểu A, server đọc kiểu B | Cặp request/response phải khớp; xem lại `SystemHandler` |
 | Unity báo `MMORPG.Shared.Dto` không tồn tại sau khi thêm DTO | Quên `dotnet build` | Build lại `Server/`, chờ Unity import DLL |

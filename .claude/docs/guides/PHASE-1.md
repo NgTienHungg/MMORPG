@@ -8,6 +8,12 @@
 > **Phase này CHƯA có:** enum lệnh, DTO, dispatch table. Đó là Phase 2. Ở đây `cmd` chỉ là một `int` trần,
 > payload chỉ là mảng byte trần. Cố tình như vậy để bạn tập trung vào đúng một bài học: **đóng khung gói tin**.
 
+> **Ghi chú về log:** các đoạn code bên dưới dùng `Console.WriteLine` vì lúc viết phase này
+> `MMORPG.ServerCore` chưa tồn tại. Code hiện tại trong repo đã chuyển hết sang `Log.Info(...)` —
+> xem [`CONVENTIONS.md` §7](../CONVENTIONS.md#7-log). Khi làm theo tài liệu này, cứ dùng `Log.*`
+> thay cho mọi `Console.WriteLine` bạn thấy, và **bỏ phần `[TênClass]`** trong nội dung
+> (logger tự chèn).
+
 ---
 
 ## Luồng sẽ dựng
