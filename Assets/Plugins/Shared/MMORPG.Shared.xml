@@ -4,6 +4,61 @@
         <name>MMORPG.Shared</name>
     </assembly>
     <members>
+        <member name="T:MMORPG.Shared.Dto.PingRequest">
+            <summary>Client gửi mốc thời gian của chính nó để tự tính RTT khi nhận lại.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> ClientTimeMs<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.PingResponse">
+            <summary>Server echo lại mốc của client, kèm thời gian server để sau này dùng đồng bộ đồng hồ.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> ClientTimeMs<br/>
+            <b>long</b> ServerTimeMs<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.ErrorResponse">
+            <summary>Server báo một request bị lỗi.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> FailedCmd<br/>
+            <b>MMORPG.Shared.Net.ErrorCode</b> Code<br/>
+            <b>string</b> Detail<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.ErrorResponse.FailedCmd">
+            <summary>Lệnh nào gây lỗi.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.ErrorResponse.Detail">
+            <summary>Mô tả cho dev. KHÔNG hiển thị thẳng cho người chơi.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.EchoRequest">
+            <summary>DTO thử của Phase 2. Xoá khi Phase 4 xong.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Message<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.EchoResponse">
+            <summary>DTO thử của Phase 2. Xoá khi Phase 4 xong.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Message<br/>
+            <b>long</b> ServerTimeMs<br/>
+            </code>
+            </remarks>
+        </member>
         <member name="T:MMORPG.Shared.HandshakeDto">
             <summary>
             DTO thử để kiểm chứng đường ống Shared → Unity đã thông.
@@ -16,6 +71,24 @@
             <b>string</b> ServerName<br/>
             </code>
             </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Net.ErrorCode">
+            <summary>
+            Mã lỗi nghiệp vụ. Lỗi nghiệp vụ KHÔNG ném exception — trả mã này về cho client.
+            Exception chỉ dành cho lỗi hệ thống (packet hỏng, mất DB).
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.UnknownCommand">
+            <summary>Server không có handler cho lệnh này.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.MalformedPayload">
+            <summary>Payload không giải mã được — sai kiểu DTO hoặc contract lệch.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.InternalError">
+            <summary>Handler ném exception ngoài dự kiến.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.NotAuthenticated">
+            <summary>Chưa đăng nhập mà gọi lệnh cần đăng nhập.</summary>
         </member>
         <member name="T:MMORPG.Shared.Net.FrameReader">
              <summary>
@@ -40,6 +113,63 @@
             </summary>
             <returns>false nghĩa là "chưa đủ, chờ thêm dữ liệu" — không phải lỗi.</returns>
             <exception cref="T:System.IO.InvalidDataException">Độ dài đọc được vô lý → dòng byte đã hỏng, phải ngắt kết nối.</exception>
+        </member>
+        <member name="T:MMORPG.Shared.Net.NetCmd">
+             <summary>
+             Mã lệnh trên dây. Client và server dùng chung enum này (qua MMORPG.Shared.dll)
+             nên không tồn tại khả năng lệch số.
+            
+             Quy hoạch dải — xem ROADMAP.md §2:
+               1–99     hệ thống
+               100–199  auth
+               200–299  character
+               300–399  world / movement
+               400–499  inventory
+               500–599  combat
+               600–699  chat
+               1000+    nội bộ GameServer ↔ DBServer (client không bao giờ thấy)
+            
+             Thêm lệnh mới: luôn thêm vào CUỐI dải của feature. Không chèn giữa, không tái dùng số đã xoá.
+             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.None">
+            <summary>Giá trị vô hiệu. Dùng làm "không có response".</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.Ping">
+            <summary>
+            Đo độ trễ. Request: <see cref="T:MMORPG.Shared.Dto.PingRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.PingResponse"/>
+            Client chủ động gửi.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.Error">
+            <summary>
+            Server báo lỗi cho một request. Chỉ server gửi.
+            Payload: <see cref="T:MMORPG.Shared.Dto.ErrorResponse"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.Echo">
+            <summary>
+            Lệnh thử của Phase 2. Request/Response: <see cref="T:MMORPG.Shared.Dto.EchoRequest"/> / <see cref="T:MMORPG.Shared.Dto.EchoResponse"/>
+            Xoá khi Phase 4 xong.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.Net.NetPayload">
+             <summary>
+             Chuyển DTO ↔ mảng byte của payload, kèm nén tuỳ chọn.
+            
+             <code>
+             ┌──────────┬─────────────────────────┬───────────────────┐
+             │ flag 1B  │ rawLen 4B (chỉ khi nén) │ MemoryPack bytes  │
+             └──────────┴─────────────────────────┴───────────────────┘
+               0x00 = nguyên bản · 0x01 = LZ4
+             </code>
+             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetPayload.COMPRESS_THRESHOLD">
+            <summary>Dưới ngưỡng này thì không nén — nén gói bé lỗ vốn CPU mà chẳng bớt được byte nào.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.Net.NetPayload.Unpack(System.Byte[],System.Byte[]@)">
+            <param name="rented">Khác null nghĩa là buffer đi mượn — bắt buộc trả lại ArrayPool sau khi dùng.</param>
         </member>
         <member name="T:MMORPG.Shared.Net.PacketFrame">
              <summary>

@@ -1,6 +1,9 @@
 using System;
 using System.Threading;
 using Cysharp.Threading.Tasks;
+using HungNT;
+using MMORPG.Scripts.Network;
+using MMORPG.Shared.Net;
 
 namespace MMORPG.Game.Scripts.Network
 {
@@ -13,24 +16,25 @@ namespace MMORPG.Game.Scripts.Network
         private readonly ITransport _transport;
         private readonly CancellationTokenSource _cts = new();
 
-        /// <summary>Nhận gói tin. Đã ở MAIN THREAD — đụng Unity API thoải mái.</summary>
-        public event Action<int, byte[]> OnPacket;
-
         /// <summary>Đổi trạng thái kết nối. Đã ở MAIN THREAD.</summary>
         public event Action<TransportState> OnStateChanged;
 
         public TransportState State => _transport.State;
 
-        public NetService(ITransport transport)
+        private readonly NetDispatcher _dispatcher;
+
+        public NetService(ITransport transport, NetDispatcher dispatcher)
         {
             _transport = transport;
+            _dispatcher = dispatcher;
             _transport.OnPacket += HandlePacketFromBackground;
             _transport.OnStateChanged += HandleStateFromBackground;
         }
 
         public UniTask<bool> ConnectAsync(string host, int port) => _transport.ConnectAsync(host, port, _cts.Token);
 
-        public void Send(int cmd, ReadOnlySpan<byte> payload) => _transport.Send(cmd, payload);
+        /// <summary>Gửi DTO. Đây là API duy nhất tầng game nên dùng để gửi.</summary>
+        public void Send<T>(NetCmd cmd, T dto) where T : MemoryPack.IMemoryPackable<T> => _transport.Send((int)cmd, NetPayload.Serialize(dto));
 
         public void Disconnect() => _transport.Disconnect();
 
@@ -44,17 +48,18 @@ namespace MMORPG.Game.Scripts.Network
             _transport.Dispose();
         }
 
-        private void HandlePacketFromBackground(int cmd, byte[] payload) =>
-            RaiseOnMainThread(cmd, payload).Forget();
+        private void HandlePacketFromBackground(int cmd, byte[] payload) => RaiseOnMainThread(cmd, payload).Forget();
 
         private async UniTaskVoid RaiseOnMainThread(int cmd, byte[] payload)
         {
             await UniTask.SwitchToMainThread();
-            OnPacket?.Invoke(cmd, payload);
+
+            var netCmd = (NetCmd)cmd;
+            if (!_dispatcher.Dispatch(netCmd, payload))
+                this.LogWarning($"[NetService] Không có handler cho {netCmd} — quên đăng ký nhóm handler?");
         }
 
-        private void HandleStateFromBackground(TransportState state) =>
-            RaiseStateOnMainThread(state).Forget();
+        private void HandleStateFromBackground(TransportState state) => RaiseStateOnMainThread(state).Forget();
 
         private async UniTaskVoid RaiseStateOnMainThread(TransportState state)
         {

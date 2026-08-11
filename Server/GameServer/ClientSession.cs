@@ -1,5 +1,6 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using MMORPG.GameServer.Net;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.GameServer
@@ -82,16 +83,14 @@ namespace MMORPG.GameServer
 
         private void HandlePacket(int cmd, byte[] payload)
         {
-            Console.WriteLine($"[Session {Id}] nhận cmd {cmd}, {payload.Length} byte");
-
-            // Phase 1: chỉ có Ping(1) → Pong(2), echo nguyên payload để client tính RTT.
-            // Phase 2 sẽ thay chỗ này bằng dispatch table.
-            const int CMD_PING = 1;
-            const int CMD_PONG = 2;
-
-            if (cmd == CMD_PING)
-                Send(CMD_PONG, payload);
+            TcpDispatcher.Dispatch(this, (NetCmd)cmd, payload);
         }
+
+        /// <summary>Gửi payload đã đóng gói sẵn. Dispatcher dùng hàm này.</summary>
+        public void SendRaw(NetCmd cmd, byte[] payload) => Send((int)cmd, payload);
+
+        /// <summary>Gửi DTO. Dùng khi server CHỦ ĐỘNG đẩy tin (không phải trả lời request).</summary>
+        public void SendData<T>(NetCmd cmd, T dto) where T : MemoryPack.IMemoryPackable<T> => Send((int)cmd, NetPayload.Serialize(dto));
 
         /// <summary>
         /// Gửi gói tin. Gọi được từ bất kỳ luồng nào — gói được xếp hàng, một vòng gửi riêng lo ghi socket.
@@ -101,7 +100,6 @@ namespace MMORPG.GameServer
             _sendQueue.Enqueue(PacketFrame.Encode(cmd, payload));
             _sendSignal.Release();
         }
-
 
         private async Task SendLoopAsync(CancellationToken ct)
         {
