@@ -93,7 +93,17 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 | `500–599` | **Combat / Monster** | 11 |
 | `600–699` | **Chat** | 12 |
 | `700–999` | *(trống — feature sau)* | |
-| `1000+` | **DbCmd** — protocol nội bộ GameServer ↔ DBServer, **client không bao giờ thấy** | 3 |
+
+**`DbCmd`** — protocol nội bộ GameServer ↔ DBServer, **client không bao giờ thấy**. Enum riêng, dải riêng:
+
+| Dải | Nhóm | Phase |
+|-----|------|-------|
+| `1000–1099` | **Hệ thống**: ping, server_meta | 3 |
+| `1100–1199` | **Account** | 4 |
+| `1200–1299` | **Character** | 5 |
+| `1300–1399` | **Inventory** | 10 |
+| `1400–1499` | **Combat / Monster** | 11 |
+| `1500+` | *(trống — feature sau)* | |
 
 **Quy tắc:** thêm lệnh mới → luôn thêm vào **cuối dải của feature**, không chèn giữa. Không tái sử dụng số đã xoá.
 
@@ -116,12 +126,12 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 
 | Phase | Trạng thái | Doc chi tiết |
 |-------|-----------|--------------|
-| 0 — Nền móng | ⏳ đang làm | [`guides/PHASE-0.md`](guides/PHASE-0.md) ✅ |
-| 1 — Transport | ⬜ chưa | [`guides/PHASE-1.md`](guides/PHASE-1.md) ✅ |
-| 2 — Contract & Dispatch | ⬜ chưa | [`guides/PHASE-2.md`](guides/PHASE-2.md) ✅ |
-| 3 — DBServer & DAL | ⬜ chưa | ⬜ chưa viết |
-| 4 — Auth | ⬜ chưa | ⬜ chưa viết |
-| 5 — Character & EnterWorld | ⬜ chưa | ⬜ chưa viết |
+| 0 — Nền móng | ✅ xong | [`guides/PHASE-0.md`](guides/PHASE-0.md) ✅ |
+| 1 — Transport | ✅ xong | [`guides/PHASE-1.md`](guides/PHASE-1.md) ✅ |
+| 2 — Contract & Dispatch | ⏳ đang làm | [`guides/PHASE-2.md`](guides/PHASE-2.md) ✅ |
+| 3 — DBServer & DAL | ⬜ chưa | [`guides/PHASE-3.md`](guides/PHASE-3.md) ✅ |
+| 4 — Auth | ⬜ chưa | [`guides/PHASE-4.md`](guides/PHASE-4.md) ✅ |
+| 5 — Character & EnterWorld | ⬜ chưa | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ |
 | 6 — Game loop & movement | ⬜ chưa | ⬜ chưa viết |
 | 7 — Multi-player sync | ⬜ chưa | ⬜ chưa viết |
 | 8 — Map & AOI | ⬜ chưa | ⬜ chưa viết |
