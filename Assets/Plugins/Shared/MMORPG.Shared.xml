@@ -4,6 +4,123 @@
         <name>MMORPG.Shared</name>
     </assembly>
     <members>
+        <member name="T:MMORPG.Shared.Db.DbCmd">
+             <summary>
+             Mã lệnh của protocol nội bộ GameServer ↔ DBServer.
+            
+             Dải 1000+ theo ROADMAP.md §2. Client KHÔNG BAO GIỜ thấy enum này — nó nằm trong
+             MMORPG.Shared.dll mà Unity cũng nạp, nhưng không có đường nào để client gửi một DbCmd
+             tới GameServer và được xử lý: hai dispatcher là hai bảng tra hoàn toàn tách biệt.
+             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Db.DbCmd.Ping">
+            <summary>
+            Kiểm tra DBServer còn sống và query được không.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.DbPingRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.DbPingResponse"/>
+            GameServer chủ động gửi.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Db.DbCmd.ServerMetaGet">
+            <summary>
+            Đọc một dòng trong bảng <c>server_meta</c>.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.ServerMetaGetRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.ServerMetaGetResponse"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Db.DbCmd.ServerMetaSet">
+            <summary>
+            Ghi (thêm mới hoặc đè) một dòng trong bảng <c>server_meta</c>.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.ServerMetaSetRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.DbOkResponse"/>
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.Db.DbFrame">
+             <summary>
+             Đường nội bộ dùng lại nguyên <see cref="T:MMORPG.Shared.Net.PacketFrame"/> và <see cref="T:MMORPG.Shared.Net.FrameReader"/> của đường client —
+             chỉ quy ước thêm rằng payload bắt đầu bằng một request id.
+            
+             <code>
+             ┌───────────┬───────────┬──────────────┬─────────────────────────┐
+             │ int32 len │ int32 cmd │ int32 reqId  │ payload NetPayload      │
+             └───────────┴───────────┴──────────────┴─────────────────────────┘
+              └── PacketFrame lo phần này ──┘└── DbFrame lo phần này ──┘
+             </code>
+            
+             Đây là ví dụ của việc xếp tầng protocol: tầng khung (đếm byte) không cần biết
+             tầng trên đang nói chuyện kiểu gì, nên hai protocol khác nhau vẫn dùng chung một bộ đọc khung.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.Db.DbFrame.Encode(MMORPG.Shared.Db.DbCmd,System.Int32,System.ReadOnlySpan{System.Byte})">
+            <summary>Đóng khung hoàn chỉnh, ghi thẳng lên socket được.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.Db.DbFrame.Decode(System.Byte[],System.Int32@)">
+            <summary>Tách request id ra khỏi payload mà <see cref="M:MMORPG.Shared.Net.FrameReader.TryRead(System.Int32@,System.Byte[]@)"/> vừa trả về.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.DbEmptyRequest">
+            <summary>Dùng cho mọi DbCmd không có tham số.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.DbOkResponse">
+            <summary>Dùng cho mọi DbCmd chỉ cần biết thành công hay không.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>bool</b> Success<br/>
+            <b>string</b> Detail<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Db.DbOkResponse.Detail">
+            <summary>Chỉ để dev đọc log. Không bao giờ đẩy chuỗi này tới client.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.DbPingRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> SentAtMs<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.DbPingResponse">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> SentAtMs<br/>
+            <b>int</b> SchemaVersion<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Db.DbPingResponse.SchemaVersion">
+            <summary>Số bản ghi trong <c>schema_version</c> — chứng minh DB thật sự query được, không chỉ socket sống.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.ServerMetaGetRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Key<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.ServerMetaGetResponse">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>bool</b> Found<br/>
+            <b>string</b> Value<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.ServerMetaSetRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Key<br/>
+            <b>string</b> Value<br/>
+            </code>
+            </remarks>
+        </member>
         <member name="T:MMORPG.Shared.Dto.PingRequest">
             <summary>Client gửi mốc thời gian của chính nó để tự tính RTT khi nhận lại.</summary>
             <remarks>
@@ -59,6 +176,22 @@
             </code>
             </remarks>
         </member>
+        <member name="T:MMORPG.Shared.Dto.ServerInfoRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.ServerInfoResponse">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> ServerName<br/>
+            <b>int</b> OnlineCount<br/>
+            </code>
+            </remarks>
+        </member>
         <member name="T:MMORPG.Shared.HandshakeDto">
             <summary>
             DTO thử để kiểm chứng đường ống Shared → Unity đã thông.
@@ -89,6 +222,9 @@
         </member>
         <member name="F:MMORPG.Shared.Net.ErrorCode.NotAuthenticated">
             <summary>Chưa đăng nhập mà gọi lệnh cần đăng nhập.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.ServiceUnavailable">
+            <summary>Một dịch vụ phía sau (DBServer) không phản hồi. Client nên cho người chơi thử lại.</summary>
         </member>
         <member name="T:MMORPG.Shared.Net.FrameReader">
              <summary>

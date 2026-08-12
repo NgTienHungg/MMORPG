@@ -19,5 +19,8 @@ namespace MMORPG.Shared.Net
 
         /// <summary>Chưa đăng nhập mà gọi lệnh cần đăng nhập.</summary>
         NotAuthenticated = 4,
+
+        /// <summary>Một dịch vụ phía sau (DBServer) không phản hồi. Client nên cho người chơi thử lại.</summary>
+        ServiceUnavailable = 5,
     }
 }

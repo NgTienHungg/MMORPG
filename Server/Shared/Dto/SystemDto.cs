@@ -44,4 +44,16 @@ namespace MMORPG.Shared.Dto
         public string Message { get; set; } = string.Empty;
         public long ServerTimeMs { get; set; }
     }
+
+    [MemoryPackable]
+    public partial class ServerInfoRequest
+    {
+    }
+
+    [MemoryPackable]
+    public partial class ServerInfoResponse
+    {
+        public string ServerName { get; set; } = string.Empty;
+        public int OnlineCount { get; set; }
+    }
 }

@@ -12,6 +12,7 @@ namespace MMORPG.Client.Network.Handlers
     {
         public event Action<PingResponse> OnPong;
         public event Action<EchoResponse> OnEcho;
+        public event Action<ServerInfoResponse> OnServerInfo;
 
         [NetHandler(NetCmd.Ping)]
         private void HandlePing(NetPacket packet) => OnPong?.Invoke(packet.GetData<PingResponse>());
@@ -25,5 +26,8 @@ namespace MMORPG.Client.Network.Handlers
             var error = packet.GetData<ErrorResponse>();
             this.LogError($"Server báo lỗi cmd {(NetCmd)error.FailedCmd}: {error.Code} — {error.Detail}");
         }
+
+        [NetHandler(NetCmd.ServerInfo)]
+        private void HandleServerInfo(NetPacket packet) => OnServerInfo?.Invoke(packet.GetData<ServerInfoResponse>());
     }
 }

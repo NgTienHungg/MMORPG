@@ -1,13 +1,23 @@
 using System.Net;
 using System.Net.Sockets;
+using System.Text;
 using MMORPG.GameServer;
+using MMORPG.GameServer.Db;
+using MMORPG.GameServer.Handlers;
 using MMORPG.GameServer.Net;
 using MMORPG.ServerCore;
 
-const int PORT = 7777;
+Console.OutputEncoding = Encoding.UTF8;
 
-// Đăng ký handler TRƯỚC khi mở cổng: mở cổng xong mới quét thì có một khoảng
-// client kết nối được nhưng mọi lệnh đều trả UnknownCommand.
+// 7777 nằm trong dải cổng Windows đã dành riêng cho Hyper-V/WSL trên máy này
+// (`netsh int ipv4 show excludedportrange protocol=tcp`) — bind vào đó là SocketException 10013.
+const int PORT = 7778;
+const int DB_PORT = 7779;
+
+await using var db = new DbClient("127.0.0.1", DB_PORT);
+db.Start();
+
+SystemHandler.Db = db;
 TcpDispatcher.RegisterAll();
 
 var listener = new TcpListener(IPAddress.Any, PORT);

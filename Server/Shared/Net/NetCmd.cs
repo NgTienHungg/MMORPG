@@ -39,6 +39,8 @@ namespace MMORPG.Shared.Net
         /// Xoá khi Phase 4 xong.
         /// </summary>
         Echo = 3,
+
+        ServerInfo = 4,
         #endregion
     }
 }

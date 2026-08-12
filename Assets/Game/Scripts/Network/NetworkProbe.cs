@@ -14,7 +14,7 @@ namespace MMORPG.Client.Network
     public class NetworkProbe : MonoBehaviour
     {
         [SerializeField] private string _host = "127.0.0.1";
-        [SerializeField] private int _port = 7777;
+        [SerializeField] private int _port = 7778;
 
         [SerializeField] private Button _connectButton;
         [SerializeField] private Button _pingButton;

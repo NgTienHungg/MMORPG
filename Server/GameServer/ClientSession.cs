@@ -41,6 +41,7 @@ namespace MMORPG.GameServer
         public async Task RunAsync(CancellationToken ct)
         {
             Log.Info($"{Tag} Kết nối từ {$"{_tcpClient.Client.RemoteEndPoint}".Green()}");
+            SessionRegistry.Add(this);
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
 
@@ -64,6 +65,7 @@ namespace MMORPG.GameServer
                 linked.Cancel();
                 await Task.WhenAny(sendLoop, Task.Delay(1000, CancellationToken.None));
 
+                SessionRegistry.Remove(this);
                 _tcpClient.Dispose();
                 Log.Info($"{Tag} Đóng.");
             }
@@ -85,13 +87,8 @@ namespace MMORPG.GameServer
 
                 // MỘT lần đọc có thể chứa nhiều gói → phải vắt cạn bằng vòng while
                 while (_frameReader.TryRead(out int cmd, out byte[]? payload))
-                    HandlePacket(cmd, payload);
+                    await TcpDispatcher.DispatchAsync(this, (NetCmd)cmd, payload);
             }
-        }
-
-        private void HandlePacket(int cmd, byte[] payload)
-        {
-            TcpDispatcher.Dispatch(this, (NetCmd)cmd, payload);
         }
 
         /// <summary>Gửi payload đã đóng gói sẵn. Dispatcher dùng hàm này.</summary>

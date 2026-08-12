@@ -1,5 +1,4 @@
 using System.Reflection;
-using MemoryPack;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
@@ -12,7 +11,7 @@ namespace MMORPG.GameServer.Net
     /// </summary>
     public static class TcpDispatcher
     {
-        private static readonly Dictionary<NetCmd, Func<NetRequest, NetResult>> _handlers = new();
+        private static readonly Dictionary<NetCmd, Func<NetRequest, Task<NetResult>>> _handlers = new();
 
         /// <summary>
         /// Quét mọi assembly đã nạp, tìm static method có <see cref="TcpHandlerAttribute"/> và đăng ký.
@@ -34,23 +33,16 @@ namespace MMORPG.GameServer.Net
 
                 string origin = $"{method.DeclaringType?.Name}.{method.Name}";
 
-                if (method.ReturnType != typeof(NetResult) || method.GetParameters().Length != 1 || method.GetParameters()[0].ParameterType != typeof(NetRequest))
+                if (method.ReturnType != typeof(Task<NetResult>) ||
+                    method.GetParameters().Length != 1 ||
+                    method.GetParameters()[0].ParameterType != typeof(NetRequest))
                 {
-                    Log.Warn($"BỎ QUA {origin.Yellow()} — sai chữ ký, phải là: static NetResult Ten(NetRequest req)");
+                    Log.Warn($"BỎ QUA {origin.Yellow()} — sai chữ ký, phải là: static Task<NetResult> Ten(NetRequest req)");
                     continue;
                 }
 
-                if (_handlers.ContainsKey(attr.Command))
-                {
-                    Log.Warn($"TRÙNG {attr.Command.ToString().Yellow()} — đã có handler, bỏ qua {origin}");
-                    continue;
-                }
-
-                _handlers[attr.Command] = (Func<NetRequest, NetResult>)Delegate.CreateDelegate(
-                    typeof(Func<NetRequest, NetResult>), method
-                );
-
-                Log.Debug($"{attr.Command.ToString().Cyan()} -> {origin}");
+                _handlers[attr.Command] = (Func<NetRequest, Task<NetResult>>)Delegate.CreateDelegate(
+                    typeof(Func<NetRequest, Task<NetResult>>), method);
             }
 
             Log.Info($"Đăng ký {_handlers.Count.ToString().Green()} handler.");
@@ -59,9 +51,9 @@ namespace MMORPG.GameServer.Net
         /// <summary>
         /// Tìm handler, chạy, và gửi phản hồi (nếu có). Mọi lỗi đều biến thành gói Error gửi về client.
         /// </summary>
-        public static void Dispatch(ClientSession session, NetCmd cmd, byte[] payload)
+        public static async Task DispatchAsync(ClientSession session, NetCmd cmd, byte[] payload)
         {
-            if (!_handlers.TryGetValue(cmd, out Func<NetRequest, NetResult>? handler))
+            if (!_handlers.TryGetValue(cmd, out Func<NetRequest, Task<NetResult>>? handler))
             {
                 SendError(session, cmd, ErrorCode.UnknownCommand, $"Không có handler cho {cmd}");
                 return;
@@ -70,13 +62,19 @@ namespace MMORPG.GameServer.Net
             NetResult result;
             try
             {
-                result = handler(new NetRequest(session, cmd, payload));
+                result = await handler(new NetRequest(session, cmd, payload));
             }
-            // InvalidDataException: khung/nén hỏng (NetPayload ném).
-            // MemoryPackSerializationException: byte đúng khung nhưng không khớp DTO — contract lệch.
-            catch (Exception ex) when (ex is InvalidDataException or MemoryPackSerializationException)
+            catch (InvalidDataException ex)
             {
                 SendError(session, cmd, ErrorCode.MalformedPayload, ex.Message);
+                return;
+            }
+            catch (Db.DbUnavailableException ex)
+            {
+                // DB chết là lỗi hệ thống, nhưng client vẫn phải nhận được câu trả lời tử tế
+                // thay vì ngồi chờ vô hạn.
+                Log.Warn($"{cmd} không gọi được DB: {ex.Message.Red()}");
+                SendError(session, cmd, ErrorCode.ServiceUnavailable, "Máy chủ dữ liệu tạm thời không phản hồi.");
                 return;
             }
             catch (Exception ex)
@@ -86,8 +84,9 @@ namespace MMORPG.GameServer.Net
                 return;
             }
 
+            // NetResult.None (fire-and-forget) có Payload null — gửi đi là ném NullReference ở PacketFrame.
             if (result.Payload == null)
-                return; // handler chủ động không trả gì
+                return;
 
             NetCmd responseCmd = result.Cmd == NetCmd.None ? cmd : result.Cmd;
             session.SendRaw(responseCmd, result.Payload);
