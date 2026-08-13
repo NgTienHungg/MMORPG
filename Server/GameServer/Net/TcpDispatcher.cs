@@ -11,6 +11,8 @@ namespace MMORPG.GameServer.Net
     /// </summary>
     public static class TcpDispatcher
     {
+        private readonly record struct HandlerEntry(Func<NetRequest, Task<NetResult>> Invoke, SessionState MinState);!
+
         private static readonly Dictionary<NetCmd, Func<NetRequest, Task<NetResult>>> _handlers = new();
 
         /// <summary>

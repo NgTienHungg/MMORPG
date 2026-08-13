@@ -11,23 +11,34 @@ namespace MMORPG.Shared.Db
     {
         None = 0,
 
-        /// <summary>
-        /// Kiểm tra DBServer còn sống và query được không.
-        /// Request: <see cref="Dto.Db.DbPingRequest"/> · Response: <see cref="Dto.Db.DbPingResponse"/>
-        /// GameServer chủ động gửi.
-        /// </summary>
+        #region Hệ thống (1000–1099)
+
         Ping = 1000,
-
-        /// <summary>
-        /// Đọc một dòng trong bảng <c>server_meta</c>.
-        /// Request: <see cref="Dto.Db.ServerMetaGetRequest"/> · Response: <see cref="Dto.Db.ServerMetaGetResponse"/>
-        /// </summary>
         ServerMetaGet = 1001,
+        ServerMetaSet = 1002,
+
+        #endregion
+
+        #region Account (1100–1199)
 
         /// <summary>
-        /// Ghi (thêm mới hoặc đè) một dòng trong bảng <c>server_meta</c>.
-        /// Request: <see cref="Dto.Db.ServerMetaSetRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
+        /// Tìm tài khoản theo tên đăng nhập.
+        /// Request: <see cref="Dto.Db.AccountGetRequest"/> · Response: <see cref="Dto.Db.AccountGetResponse"/>
         /// </summary>
-        ServerMetaSet = 1002,
+        AccountGetByName = 1100,
+
+        /// <summary>
+        /// Tạo tài khoản mới. Trùng tên thì trả <c>Created = false</c>, KHÔNG ném lỗi.
+        /// Request: <see cref="Dto.Db.AccountCreateRequest"/> · Response: <see cref="Dto.Db.AccountCreateResponse"/>
+        /// </summary>
+        AccountCreate = 1101,
+
+        /// <summary>
+        /// Ghi mốc đăng nhập gần nhất. Fire-and-forget về mặt nghiệp vụ nhưng vẫn có response.
+        /// Request: <see cref="Dto.Db.AccountTouchLoginRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
+        /// </summary>
+        AccountTouchLogin = 1102,
+
+        #endregion
     }
 }

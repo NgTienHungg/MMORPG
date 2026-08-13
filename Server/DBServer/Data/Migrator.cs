@@ -24,6 +24,21 @@ namespace MMORPG.DBServer.Data
                     ('server_name', 'local-dev'),
                     ('created_at',  datetime('now'));
                 """),
+            (2, """
+                CREATE TABLE account (
+                    id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                    username      TEXT    NOT NULL,
+                    password_hash BLOB    NOT NULL,
+                    salt          BLOB    NOT NULL,
+                    iterations    INTEGER NOT NULL,
+                    is_banned     INTEGER NOT NULL DEFAULT 0,
+                    created_at    TEXT    NOT NULL,
+                    last_login_at TEXT
+                );
+
+                -- Ràng buộc UNIQUE ở DB, không phải ở code. Xem giải thích ở AccountRepository.CreateAsync.
+                CREATE UNIQUE INDEX idx_account_username ON account (username);
+                """),
         };
 
         public static async Task MigrateAsync(Database database, CancellationToken ct = default)

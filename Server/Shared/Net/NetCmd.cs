@@ -1,3 +1,5 @@
+using MMORPG.Shared.Dto;
+
 namespace MMORPG.Shared.Net
 {
     /// <summary>
@@ -22,6 +24,7 @@ namespace MMORPG.Shared.Net
         None = 0,
 
         #region Hệ thống (1–99)
+
         /// <summary>
         /// Đo độ trễ. Request: <see cref="Dto.PingRequest"/> · Response: <see cref="Dto.PingResponse"/>
         /// Client chủ động gửi.
@@ -41,6 +44,37 @@ namespace MMORPG.Shared.Net
         Echo = 3,
 
         ServerInfo = 4,
+
+        /// <summary>
+        /// Server chủ động đá client ra. Chỉ server gửi, client không bao giờ gửi lệnh này.
+        /// Payload: <see cref="KickedNotice"/>
+        /// </summary>
+        Kicked = 5,
+
+        #endregion
+
+        #region Auth (100–199)
+
+        /// <summary>
+        /// Tạo tài khoản mới.
+        /// Request: <see cref="RegisterRequest"/> · Response: <see cref="AuthResponse"/>
+        /// Client chủ động gửi.
+        /// </summary>
+        Register = 100,
+
+        /// <summary>
+        /// Đăng nhập.
+        /// Request: <see cref="LoginRequest"/> · Response: <see cref="AuthResponse"/>
+        /// Client chủ động gửi.
+        /// </summary>
+        Login = 101,
+
+        /// <summary>
+        /// Đăng xuất chủ động (về màn hình login mà không cắt TCP).
+        /// Request: <see cref="Dto.EmptyRequest"/> · Response: <see cref="AuthResponse"/>
+        /// </summary>
+        Logout = 102,
+
         #endregion
     }
 }

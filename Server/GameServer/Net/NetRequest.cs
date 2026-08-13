@@ -56,6 +56,10 @@ namespace MMORPG.GameServer.Net
     public sealed class TcpHandlerAttribute : Attribute
     {
         public NetCmd Command { get; }
+
+        /// <summary>Trạng thái tối thiểu để được gọi lệnh này. Mặc định: không cần đăng nhập.</summary>
+        public SessionState MinState { get; set; } = SessionState.Connected;
+
         public TcpHandlerAttribute(NetCmd command) => Command = command;
     }
 }

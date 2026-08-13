@@ -18,6 +18,7 @@ await database.InitAsync();
 await Migrator.MigrateAsync(database);
 
 ServerMetaDbHandler.Repository = new ServerMetaRepository(database);
+AccountDbHandler.Repository = new AccountRepository(database);
 DbDispatcher.RegisterAll();
 
 // CHỈ loopback. DBServer không bao giờ được phơi ra ngoài máy — nó không có

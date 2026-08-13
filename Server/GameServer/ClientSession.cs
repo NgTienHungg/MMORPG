@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
+using MemoryPack;
 using MMORPG.GameServer.Net;
 using MMORPG.ServerCore;
+using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.GameServer
@@ -28,6 +30,14 @@ namespace MMORPG.GameServer
         /// một kết nối cụ thể giữa hàng chục phiên đang chạy song song.
         /// </summary>
         public string Tag { get; }
+
+        /// <summary>Trạng thái hiện tại. Chỉ AuthService và WorldService được đổi.</summary>
+        public SessionState State { get; private set; } = SessionState.Connected;
+
+        /// <summary>0 khi chưa đăng nhập. Đây là NGUỒN DUY NHẤT cho biết session này là ai.</summary>
+        public long AccountId { get; private set; }
+
+        public string Username { get; private set; } = string.Empty;
 
         public ClientSession(TcpClient tcpClient)
         {
@@ -95,7 +105,7 @@ namespace MMORPG.GameServer
         public void SendRaw(NetCmd cmd, byte[] payload) => Send((int)cmd, payload);
 
         /// <summary>Gửi DTO. Dùng khi server CHỦ ĐỘNG đẩy tin (không phải trả lời request).</summary>
-        public void SendData<T>(NetCmd cmd, T dto) where T : MemoryPack.IMemoryPackable<T> => Send((int)cmd, NetPayload.Serialize(dto));
+        public void SendData<T>(NetCmd cmd, T dto) where T : IMemoryPackable<T> => Send((int)cmd, NetPayload.Serialize(dto));
 
         /// <summary>
         /// Gửi gói tin. Gọi được từ bất kỳ luồng nào — gói được xếp hàng, một vòng gửi riêng lo ghi socket.
@@ -125,6 +135,36 @@ namespace MMORPG.GameServer
             {
                 // kết nối đã chết, vòng đọc sẽ xử lý phần dọn dẹp
             }
+        }
+
+        public void MarkAuthenticated(long accountId, string username)
+        {
+            AccountId = accountId;
+            Username = username;
+            State = SessionState.Authenticated;
+        }
+
+        public void MarkLoggedOut()
+        {
+            AccountId = 0;
+            Username = string.Empty;
+            State = SessionState.Connected;
+        }
+
+        public void Kick(string reason)
+        {
+            Log.Warn($"{Tag} Kick ra: {reason.Yellow()}");
+            SendData(NetCmd.Kicked, new KickedNotice { Reason = reason });
+
+            // Cho vòng gửi kịp đẩy gói Kicked đi rồi mới cắt. Cắt ngay thì client
+            // chỉ thấy mất kết nối trần và không biết vì sao.
+            _ = CloseAfterFlushAsync();
+        }
+
+        private async Task CloseAfterFlushAsync()
+        {
+            await Task.Delay(100);
+            _tcpClient.Close();
         }
     }
 }
