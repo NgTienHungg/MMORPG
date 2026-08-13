@@ -19,6 +19,7 @@ namespace MMORPG.Client.Network
         [SerializeField] private Button _connectButton;
         [SerializeField] private Button _pingButton;
         [SerializeField] private Button _echoButton;
+        [SerializeField] private Button _serverInfoButton;
         [SerializeField] private TMP_InputField _echoInput;
         [SerializeField] private TextMeshProUGUI _statusText;
 
@@ -37,9 +38,11 @@ namespace MMORPG.Client.Network
             _connectButton.onClick.AddListener(() => ConnectAsync().Forget());
             _pingButton.onClick.AddListener(SendPing);
             _echoButton.onClick.AddListener(SendEcho);
+            _serverInfoButton.onClick.AddListener(GetServerInfo);
 
             _systemHandler.OnPong += OnPong;
             _systemHandler.OnEcho += OnEcho;
+            _systemHandler.OnServerInfo += OnServerInfo;
             _net.OnStateChanged += OnStateChanged;
 
             SetStatus("Chưa kết nối");
@@ -75,6 +78,8 @@ namespace MMORPG.Client.Network
 
         private void SendEcho() => _net.Send(NetCmd.Echo, new EchoRequest { Message = _echoInput.text });
 
+        private void GetServerInfo() => _net.Send(NetCmd.ServerInfo, new ServerInfoRequest());
+
         private void OnStateChanged(TransportState state) => SetStatus(state.ToString());
 
         private void OnPong(PingResponse res)
@@ -84,6 +89,8 @@ namespace MMORPG.Client.Network
         }
 
         private void OnEcho(EchoResponse res) => SetStatus($"Server vọng lại: \"{res.Message}\"");
+
+        private void OnServerInfo(ServerInfoResponse res) => SetStatus($"Server name: {res.ServerName}");
 
         private void SetStatus(string text)
         {
