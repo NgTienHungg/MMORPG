@@ -26,11 +26,13 @@ namespace MMORPG.DBServer.Net
             {
                 DbHandlerAttribute attr = method.GetCustomAttribute<DbHandlerAttribute>()!;
 
+                string origin = $"{method.DeclaringType?.Name}.{method.Name}";
+
                 if (method.ReturnType != typeof(Task<DbResult>) ||
                     method.GetParameters().Length != 1 ||
                     method.GetParameters()[0].ParameterType != typeof(DbRequest))
                 {
-                    Log.Warn($"BỎ QUA {method.DeclaringType?.Name}.{method.Name} — " +
+                    Log.Warn($"BỎ QUA {origin.Yellow()} — " +
                              "sai chữ ký, phải là: static Task<DbResult> Ten(DbRequest req)");
                     continue;
                 }
@@ -40,14 +42,14 @@ namespace MMORPG.DBServer.Net
 
                 if (!_handlers.TryAdd(attr.Command, del))
                 {
-                    Log.Warn($"TRÙNG {attr.Command}, bỏ qua {method.Name}");
+                    Log.Warn($"TRÙNG {attr.Command.ToString().Yellow()} — đã có handler, bỏ qua {origin}");
                     continue;
                 }
 
-                // Log.Debug($"{attr.Command} -> {method.DeclaringType?.Name}.{method.Name}");
+                // Log.Debug($"{attr.Command.ToString().Cyan()} -> {origin}");
             }
 
-            Log.Info($"Đăng ký {_handlers.Count} handler.");
+            Log.Info($"Đăng ký {_handlers.Count.ToString().Green()} handler.");
         }
 
         /// <summary>
@@ -58,7 +60,7 @@ namespace MMORPG.DBServer.Net
         {
             if (!_handlers.TryGetValue(cmd, out Func<DbRequest, Task<DbResult>>? handler))
             {
-                Log.Warn($"Không có handler cho {cmd}");
+                Log.Warn($"Không có handler cho {cmd.ToString().Red()}");
                 return DbResult.Ok(new DbOkResponse { Success = false, Detail = $"Không có handler cho {cmd}" });
             }
 
@@ -68,7 +70,9 @@ namespace MMORPG.DBServer.Net
             }
             catch (Exception ex)
             {
-                Log.Error($"Handler {cmd} ném lỗi: {ex}");
+                // Log.Error(ex, ...) chứ không nội suy {ex} vào chuỗi: quá tải này in nguyên
+                // stack trace xuống dòng dưới, còn nội suy tay thì dễ chỉ còn mỗi ex.Message.
+                Log.Error(ex, $"Handler {cmd.ToString().Cyan()} ném lỗi");
                 return DbResult.Ok(new DbOkResponse { Success = false, Detail = ex.Message });
             }
         }

@@ -74,10 +74,10 @@ namespace MMORPG.DBServer.Data
                 }
 
                 await tx.CommitAsync(ct);
-                Log.Info($"Áp dụng migration {version}.");
+                Log.Info($"Áp dụng migration {version.ToString().Green()}.");
             }
 
-            Log.Info($"Schema đang ở phiên bản {Math.Max(current, LatestVersion)}.");
+            Log.Info($"Schema đang ở phiên bản {Math.Max(current, LatestVersion).ToString().Green()}.");
         }
 
         public static int LatestVersion => _migrations.Length == 0 ? 0 : _migrations[^1].Version;

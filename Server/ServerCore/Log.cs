@@ -76,8 +76,8 @@ namespace MMORPG.ServerCore
         {
             LogLevel.Debug => "DEBUG".Gray(),
             LogLevel.Info => "INFO ".Cyan(),
-            LogLevel.Warn => "WARN ".Yellow().Bold(),
-            LogLevel.Error => "ERROR".Red().Bold(),
+            LogLevel.Warn => "WARN ".Yellow(),
+            LogLevel.Error => "ERROR".Red(),
             _ => "     ",
         };
 

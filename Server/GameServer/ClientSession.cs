@@ -35,7 +35,7 @@ namespace MMORPG.GameServer
             _tcpClient.NoDelay = true; // tắt Nagle: game cần độ trễ thấp hơn là gộp gói cho hiệu quả
             _stream = tcpClient.GetStream();
             Id = Interlocked.Increment(ref _nextId);
-            Tag = $"#{Id}".Magenta();
+            Tag = $"#{Id.ToString().Magenta()}";
         }
 
         public async Task RunAsync(CancellationToken ct)

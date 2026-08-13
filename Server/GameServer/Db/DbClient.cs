@@ -18,6 +18,10 @@ namespace MMORPG.GameServer.Db
         /// <summary>Chờ lâu hơn mức này thì coi như DBServer đã chết. Query bình thường tính bằng mili giây.</summary>
         private const int TIMEOUT_MS = 5000;
 
+        /// <summary>
+        /// Nghỉ giữa hai lần thử nối lại. Chu kỳ thật dài hơn con số này: trên Windows, connect vào
+        /// cổng không ai nghe phải ~2 giây mới bị từ chối, nên nhịp quan sát được là ~3 giây.
+        /// </summary>
         private const int RECONNECT_DELAY_MS = 1000;
 
         private readonly string _host;
@@ -51,6 +55,9 @@ namespace MMORPG.GameServer.Db
             where TRequest : IMemoryPackable<TRequest>
             where TResponse : IMemoryPackable<TResponse>
         {
+            // Nội dung exception để TRẦN, không tô màu. Nơi bắt nó (TcpDispatcher) bọc cả
+            // ex.Message trong một màu khác; mã reset của màu bên trong sẽ cắt ngang màu bên
+            // ngoài và phần đuôi câu mất màu. Quy tắc: tô màu ở chỗ LOG, không ở chỗ THROW.
             if (!IsConnected)
                 throw new DbUnavailableException($"Chưa nối được DBServer khi gọi {cmd}.");
 
@@ -90,9 +97,11 @@ namespace MMORPG.GameServer.Db
         {
             while (!ct.IsCancellationRequested)
             {
+                TcpClient? client = null;
+
                 try
                 {
-                    var client = new TcpClient { NoDelay = true };
+                    client = new TcpClient { NoDelay = true };
                     await client.ConnectAsync(_host, _port, ct);
                     _tcpClient = client;
                     Log.Info($"Đã nối DBServer {$"{_host}:{_port}".Green()}");
@@ -102,8 +111,10 @@ namespace MMORPG.GameServer.Db
 
                     await ReadLoopAsync(client, linked.Token);
 
+                    // Cancel là đủ để đánh thức vòng gửi — WaitAsync(ct) huỷ ngay khi token bật.
+                    // Đừng Release() thêm ở đây: tín hiệu thừa không ai tiêu thụ sẽ sống sang
+                    // lần kết nối sau và làm vòng gửi mới tỉnh dậy một lượt vô ích.
                     linked.Cancel();
-                    _sendSignal.Release();
                     await Task.WhenAny(sendLoop, Task.Delay(1000, CancellationToken.None));
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -116,9 +127,13 @@ namespace MMORPG.GameServer.Db
                 }
                 finally
                 {
-                    _tcpClient?.Dispose();
+                    // Dispose biến cục bộ chứ KHÔNG phải _tcpClient: khi chính ConnectAsync ném thì
+                    // _tcpClient còn null, và cái socket vừa mở sẽ rò cho tới lúc GC chạy finalizer.
+                    client?.Dispose();
                     _tcpClient = null;
+
                     FailAllPending();
+                    DrainSendQueue();
                 }
 
                 if (!ct.IsCancellationRequested)
@@ -149,7 +164,7 @@ namespace MMORPG.GameServer.Db
                     else
                         // Response về sau khi bên gửi đã bỏ cuộc vì timeout. Không phải lỗi,
                         // nhưng thấy nhiều dòng này nghĩa là DB đang chậm hơn TIMEOUT_MS.
-                        Log.Warn($"Response lạc: reqId {requestId.ToString().Yellow()} không còn ai chờ.");
+                        Log.Warn($"Response lạc: reqId {requestId.ToString().Magenta()} không còn ai chờ.");
                 }
             }
         }
@@ -189,10 +204,27 @@ namespace MMORPG.GameServer.Db
             }
         }
 
+        /// <summary>
+        /// Vét hàng đợi gửi và tín hiệu đi kèm. Frame còn sót lại là của những request vừa bị
+        /// <see cref="FailAllPending"/> đánh trượt — gửi chúng ở lần kết nối sau chỉ đẻ ra một loạt
+        /// "Response lạc" vì không còn ai chờ nữa.
+        /// </summary>
+        private void DrainSendQueue()
+        {
+            while (_sendQueue.TryDequeue(out _))
+            {
+            }
+
+            // Wait(0) không bao giờ chặn: nó chỉ lấy bớt count khi count đang > 0.
+            while (_sendSignal.CurrentCount > 0)
+                _sendSignal.Wait(0);
+        }
+
         public async ValueTask DisposeAsync()
         {
+            // Cancel đủ để dừng cả vòng nối lẫn vòng gửi; Release() ở đây chỉ để lại
+            // một tín hiệu thừa trên semaphore sắp bị vứt đi.
             _cts.Cancel();
-            _sendSignal.Release();
 
             if (_connectionLoop != null)
                 await Task.WhenAny(_connectionLoop, Task.Delay(2000, CancellationToken.None));

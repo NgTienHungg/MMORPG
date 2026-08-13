@@ -148,9 +148,36 @@ build release. Được cái không tốn CPU, nhưng đừng nhét việc có t
 Tô màu **mẩu chữ quan trọng** bên trong câu, không tô cả câu:
 
 ```csharp
-Log.Info($"{session.Tag} Kết nối từ {endPoint.Green()}");   // server: ANSI
-this.Log($"Nhận {count.ToString().Bold()} gói");            // client: rich text Unity
+Log.Info($"{session.Tag} Kết nối từ {endPoint.Green()}");  // server: ANSI
+this.Log($"Nhận {count.ToString().Bold()} gói");           // client: rich text Unity
 ```
+
+Bên server dùng **lối tắt theo tên màu** (`.Green()`, `.Red()`, `.Cyan()`…). Dạng đầy đủ
+`.Color(Color.Green)` vẫn còn, nhưng chỉ cần đến khi màu là **biến** — ví dụ chọn màu theo mức máu.
+
+Các hàm này nhận `string`, nên số phải `.ToString()` trước. Cố tình không có overload cho `int`:
+một cách viết thì grep ra hết được, hai cách thì lần nào cũng phải nhớ đang dùng cái nào.
+
+**Dùng đúng màu cho đúng loại thông tin** — mục đích là đọc console theo phản xạ, không phải cho vui mắt:
+
+| Màu | Dùng cho | Ví dụ |
+|-----|----------|-------|
+| `Green` | Địa chỉ, đường dẫn, số đếm thành công | `0.0.0.0:7778`, đường dẫn file DB, `Đăng ký 3 handler` |
+| `Magenta` | Định danh: id phiên (qua `Tag`), request id | `#7`, `reqId 42` |
+| `Cyan` | Tên lệnh: `NetCmd` / `DbCmd` | `ServerMetaGet` |
+| `Yellow` | Thứ bị bỏ qua lúc khởi động | handler sai chữ ký, `DbCmd` trùng |
+| `Red` | Mã lỗi, tên exception | `ServiceUnavailable`, `SocketException` |
+
+Mỗi phiên phải có một `Tag` tính sẵn trong constructor (`ClientSession`, `DbSession`) rồi chèn đầu mọi dòng
+log của phiên đó. Đừng nội suy `#{Id}` rải rác — sẽ có chỗ quên tô màu và mắt không bám được một phiên nữa.
+
+> **Không tô nội dung exception.** Nơi bắt exception thường bọc cả `ex.Message` trong một màu; nếu bên trong
+> `Message` đã có sẵn một mẩu màu thì mã reset của nó **cắt ngang** màu bên ngoài và phần đuôi câu mất màu:
+> ```
+> \e[91mChưa nối được DBServer khi gọi \e[96mServerMetaGet\e[0m.\e[0m
+>                                                          ↑ từ đây hết đỏ
+> ```
+> Quy tắc: **tô ở chỗ log, không ở chỗ throw.**
 
 `Log` cố tình chỉ tô `LEVEL` và `[Tag]`, chừa phần nội dung — nếu tô cả câu thì mã reset của
 mẩu bên trong sẽ cắt màu của phần còn lại. Màu tự tắt khi output bị đẩy ra file hoặc có biến `NO_COLOR`.

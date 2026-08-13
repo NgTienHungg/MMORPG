@@ -73,7 +73,7 @@ namespace MMORPG.GameServer.Net
             {
                 // DB chết là lỗi hệ thống, nhưng client vẫn phải nhận được câu trả lời tử tế
                 // thay vì ngồi chờ vô hạn.
-                Log.Warn($"{cmd} không gọi được DB: {ex.Message.Red()}");
+                Log.Warn($"CMD {cmd.ToString().Cyan()} không gọi được DB: {ex.Message.Red()}");
                 SendError(session, cmd, ErrorCode.ServiceUnavailable, "Máy chủ dữ liệu tạm thời không phản hồi.");
                 return;
             }

@@ -21,17 +21,24 @@ namespace MMORPG.DBServer
 
         public int Id { get; }
 
+        /// <summary>
+        /// Nhãn phiên chèn đầu câu log, đối ứng của <c>ClientSession.Tag</c> bên GameServer.
+        /// Tính một lần trong constructor để mọi dòng log của phiên này có cùng một nhãn có màu.
+        /// </summary>
+        public string Tag { get; }
+
         public DbSession(TcpClient tcpClient)
         {
             _tcpClient = tcpClient;
             _tcpClient.NoDelay = true;
             _stream = tcpClient.GetStream();
             Id = Interlocked.Increment(ref _nextId);
+            Tag = $"#{Id.ToString().Magenta()}";
         }
 
         public async Task RunAsync(CancellationToken ct)
         {
-            Log.Info($"#{Id} GameServer kết nối từ {_tcpClient.Client.RemoteEndPoint}");
+            Log.Info($"{Tag} GameServer kết nối từ {$"{_tcpClient.Client.RemoteEndPoint}".Green()}");
 
             using var linked = CancellationTokenSource.CreateLinkedTokenSource(ct);
             Task sendLoop = SendLoopAsync(linked.Token);
@@ -58,7 +65,10 @@ namespace MMORPG.DBServer
             }
             catch (Exception ex) when (ex is IOException or SocketException or ObjectDisposedException)
             {
-                Log.Error($"#{Id} Mất kết nối: {ex.GetType().Name}");
+                // Info chứ không Error: GameServer tắt bằng Ctrl+C cũng rơi vào đây, và một dòng
+                // ERROR đỏ cho một lần tắt máy bình thường chỉ làm loãng những lỗi thật.
+                // Cùng mức với ClientSession bên GameServer.
+                Log.Info($"{Tag} Mất kết nối: {ex.GetType().Name.Red()}");
             }
             catch (OperationCanceledException)
             {
@@ -70,7 +80,7 @@ namespace MMORPG.DBServer
                 await Task.WhenAny(sendLoop, Task.Delay(1000, CancellationToken.None));
 
                 _tcpClient.Dispose();
-                Log.Info($"#{Id} Đóng.");
+                Log.Info($"{Tag} Đóng.");
             }
         }
 
@@ -87,7 +97,7 @@ namespace MMORPG.DBServer
             catch (Exception ex)
             {
                 // Task này không ai await — exception lọt ra ngoài đây là biến mất không dấu vết.
-                Log.Error(ex, $"#{Id} Lỗi xử lý {cmd}");
+                Log.Error(ex, $"{Tag} Lỗi xử lý {cmd.ToString().Cyan()}");
             }
         }
 
