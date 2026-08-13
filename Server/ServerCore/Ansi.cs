@@ -48,22 +48,55 @@ namespace MMORPG.ServerCore
         internal const string RESET = ESC + "0m";
 
         public static string Color(this string content, Color color)
-            => Log.UseColor ? $"{ESC}{(int)color}m{content}{RESET}" : content;
+        {
+            return Log.UseColor ? $"{ESC}{(int)color}m{content}{RESET}" : content;
+        }
 
         public static string Bold(this string content)
-            => Log.UseColor ? $"{ESC}1m{content}{RESET}" : content;
+        {
+            return Log.UseColor ? $"{ESC}1m{content}{RESET}" : content;
+        }
 
         public static string Dim(this string content)
-            => Log.UseColor ? $"{ESC}2m{content}{RESET}" : content;
+        {
+            return Log.UseColor ? $"{ESC}2m{content}{RESET}" : content;
+        }
 
         // Lối tắt cho 7 màu hay dùng. Chỉ là vỏ bọc của Color(...) ở trên — thêm màu mới thì
         // thêm vào enum, còn thêm lối tắt ở đây chỉ khi màu đó thực sự được dùng nhiều.
-        public static string Gray(this string content) => content.Color(ServerCore.Color.Gray);
-        public static string Red(this string content) => content.Color(ServerCore.Color.Red);
-        public static string Green(this string content) => content.Color(ServerCore.Color.Green);
-        public static string Yellow(this string content) => content.Color(ServerCore.Color.Yellow);
-        public static string Blue(this string content) => content.Color(ServerCore.Color.Blue);
-        public static string Magenta(this string content) => content.Color(ServerCore.Color.Magenta);
-        public static string Cyan(this string content) => content.Color(ServerCore.Color.Cyan);
+        public static string Gray(this string content)
+        {
+            return content.Color(ServerCore.Color.Gray);
+        }
+
+        public static string Red(this string content)
+        {
+            return content.Color(ServerCore.Color.Red);
+        }
+
+        public static string Green(this string content)
+        {
+            return content.Color(ServerCore.Color.Green);
+        }
+
+        public static string Yellow(this string content)
+        {
+            return content.Color(ServerCore.Color.Yellow);
+        }
+
+        public static string Blue(this string content)
+        {
+            return content.Color(ServerCore.Color.Blue);
+        }
+
+        public static string Magenta(this string content)
+        {
+            return content.Color(ServerCore.Color.Magenta);
+        }
+
+        public static string Cyan(this string content)
+        {
+            return content.Color(ServerCore.Color.Cyan);
+        }
     }
 }

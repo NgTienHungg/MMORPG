@@ -13,23 +13,22 @@
              tới GameServer và được xử lý: hai dispatcher là hai bảng tra hoàn toàn tách biệt.
              </summary>
         </member>
-        <member name="F:MMORPG.Shared.Db.DbCmd.Ping">
+        <member name="F:MMORPG.Shared.Db.DbCmd.AccountGetByName">
             <summary>
-            Kiểm tra DBServer còn sống và query được không.
-            Request: <see cref="T:MMORPG.Shared.Dto.Db.DbPingRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.DbPingResponse"/>
-            GameServer chủ động gửi.
+            Tìm tài khoản theo tên đăng nhập.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.AccountGetRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.AccountGetResponse"/>
             </summary>
         </member>
-        <member name="F:MMORPG.Shared.Db.DbCmd.ServerMetaGet">
+        <member name="F:MMORPG.Shared.Db.DbCmd.AccountCreate">
             <summary>
-            Đọc một dòng trong bảng <c>server_meta</c>.
-            Request: <see cref="T:MMORPG.Shared.Dto.Db.ServerMetaGetRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.ServerMetaGetResponse"/>
+            Tạo tài khoản mới. Trùng tên thì trả <c>Created = false</c>, KHÔNG ném lỗi.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.AccountCreateRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.AccountCreateResponse"/>
             </summary>
         </member>
-        <member name="F:MMORPG.Shared.Db.DbCmd.ServerMetaSet">
+        <member name="F:MMORPG.Shared.Db.DbCmd.AccountTouchLogin">
             <summary>
-            Ghi (thêm mới hoặc đè) một dòng trong bảng <c>server_meta</c>.
-            Request: <see cref="T:MMORPG.Shared.Dto.Db.ServerMetaSetRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.DbOkResponse"/>
+            Ghi mốc đăng nhập gần nhất. Fire-and-forget về mặt nghiệp vụ nhưng vẫn có response.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.AccountTouchLoginRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.DbOkResponse"/>
             </summary>
         </member>
         <member name="T:MMORPG.Shared.Db.DbFrame">
@@ -53,6 +52,119 @@
         </member>
         <member name="M:MMORPG.Shared.Db.DbFrame.Decode(System.Byte[],System.Int32@)">
             <summary>Tách request id ra khỏi payload mà <see cref="M:MMORPG.Shared.Net.FrameReader.TryRead(System.Int32@,System.Byte[]@)"/> vừa trả về.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.RegisterRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Username<br/>
+            <b>string</b> Password<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.LoginRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Username<br/>
+            <b>string</b> Password<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.AuthResponse">
+             <summary>
+             Dùng chung cho Register / Login / Logout.
+            
+             KHÔNG chứa AccountId. Client không cần biết id của mình để làm gì cả —
+             mọi lệnh sau đó server đều tự tra từ session. Không gửi đi thứ không ai cần
+             là cách rẻ nhất để không ai lạm dụng nó.
+             </summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>bool</b> Success<br/>
+            <b>MMORPG.Shared.Net.ErrorCode</b> Error<br/>
+            <b>string</b> Username<br/>
+            <b>string</b> SessionToken<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.AuthResponse.Error">
+            <summary><see cref="F:MMORPG.Shared.Net.ErrorCode.None"/> khi thành công.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.AuthResponse.Username">
+            <summary>Tên hiển thị, server trả về đúng như đã lưu (đã chuẩn hoá chữ thường).</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.AuthResponse.SessionToken">
+            <summary>
+            Token phiên, dùng cho nối lại sau khi rớt mạng (Phase 7 sẽ dùng thật).
+            Rỗng khi đăng nhập thất bại.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.KickedNotice">
+            <summary>Server báo lý do đá client ra.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Reason<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.KickedNotice.Reason">
+            <summary>Chuỗi tiếng Việt hiển thị thẳng cho người chơi.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.AccountGetRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Username<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.AccountGetResponse">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>bool</b> Found<br/>
+            <b>long</b> AccountId<br/>
+            <b>string</b> Username<br/>
+            <b>byte[]</b> PasswordHash<br/>
+            <b>byte[]</b> Salt<br/>
+            <b>int</b> Iterations<br/>
+            <b>bool</b> IsBanned<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.AccountCreateRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>string</b> Username<br/>
+            <b>byte[]</b> PasswordHash<br/>
+            <b>byte[]</b> Salt<br/>
+            <b>int</b> Iterations<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.AccountCreateResponse">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>bool</b> Created<br/>
+            <b>long</b> AccountId<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Db.AccountCreateResponse.Created">
+            <summary>false nghĩa là tên đã tồn tại — đây là kết quả bình thường, không phải lỗi.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.AccountTouchLoginRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> AccountId<br/>
+            </code>
+            </remarks>
         </member>
         <member name="T:MMORPG.Shared.Dto.Db.DbEmptyRequest">
             <summary>Dùng cho mọi DbCmd không có tham số.</summary>
@@ -121,6 +233,13 @@
             </code>
             </remarks>
         </member>
+        <member name="T:MMORPG.Shared.Dto.EmptyRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            </code>
+            </remarks>
+        </member>
         <member name="T:MMORPG.Shared.Dto.PingRequest">
             <summary>Client gửi mốc thời gian của chính nó để tự tính RTT khi nhận lại.</summary>
             <remarks>
@@ -176,13 +295,6 @@
             </code>
             </remarks>
         </member>
-        <member name="T:MMORPG.Shared.Dto.ServerInfoRequest">
-            <remarks>
-            MemoryPack GenerateType: Object<br/>
-            <code>
-            </code>
-            </remarks>
-        </member>
         <member name="T:MMORPG.Shared.Dto.ServerInfoResponse">
             <remarks>
             MemoryPack GenerateType: Object<br/>
@@ -225,6 +337,21 @@
         </member>
         <member name="F:MMORPG.Shared.Net.ErrorCode.ServiceUnavailable">
             <summary>Một dịch vụ phía sau (DBServer) không phản hồi. Client nên cho người chơi thử lại.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.InvalidInput">
+            <summary>Dữ liệu client gửi lên sai định dạng (tên quá ngắn, ký tự lạ...).</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.AccountExists">
+            <summary>Tên đăng nhập đã có người dùng.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.InvalidCredentials">
+            <summary>Sai tài khoản HOẶC sai mật khẩu — cố tình không phân biệt.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.TooManyAttempts">
+            <summary>Thử sai quá nhiều lần, phải chờ.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.AlreadyAuthenticated">
+            <summary>Gọi lệnh cần đăng nhập nhưng session đã đăng nhập rồi (vd: Login hai lần).</summary>
         </member>
         <member name="T:MMORPG.Shared.Net.FrameReader">
              <summary>
@@ -287,6 +414,32 @@
             <summary>
             Lệnh thử của Phase 2. Request/Response: <see cref="T:MMORPG.Shared.Dto.EchoRequest"/> / <see cref="T:MMORPG.Shared.Dto.EchoResponse"/>
             Xoá khi Phase 4 xong.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.Kicked">
+            <summary>
+            Server chủ động đá client ra. Chỉ server gửi, client không bao giờ gửi lệnh này.
+            Payload: <see cref="T:MMORPG.Shared.Dto.KickedNotice"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.Register">
+            <summary>
+            Tạo tài khoản mới.
+            Request: <see cref="T:MMORPG.Shared.Dto.RegisterRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.AuthResponse"/>
+            Client chủ động gửi.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.Login">
+            <summary>
+            Đăng nhập.
+            Request: <see cref="T:MMORPG.Shared.Dto.LoginRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.AuthResponse"/>
+            Client chủ động gửi.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.Logout">
+            <summary>
+            Đăng xuất chủ động (về màn hình login mà không cắt TCP).
+            Request: <see cref="T:MMORPG.Shared.Dto.EmptyRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.AuthResponse"/>
             </summary>
         </member>
         <member name="T:MMORPG.Shared.Net.NetPayload">

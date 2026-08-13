@@ -34,8 +34,8 @@ namespace MMORPG.GameServer.Db
         private readonly CancellationTokenSource _cts = new();
 
         private int _nextRequestId;
-        private volatile TcpClient? _tcpClient;
-        private Task? _connectionLoop;
+        private volatile TcpClient _tcpClient;
+        private Task _connectionLoop;
 
         public bool IsConnected => _tcpClient?.Connected == true;
 
@@ -45,7 +45,10 @@ namespace MMORPG.GameServer.Db
             _port = port;
         }
 
-        public void Start() => _connectionLoop = ConnectionLoopAsync(_cts.Token);
+        public void Start()
+        {
+            _connectionLoop = ConnectionLoopAsync(_cts.Token);
+        }
 
         /// <summary>
         /// Gửi một request và chờ response tương ứng.
@@ -97,7 +100,7 @@ namespace MMORPG.GameServer.Db
         {
             while (!ct.IsCancellationRequested)
             {
-                TcpClient? client = null;
+                TcpClient client = null;
 
                 try
                 {
@@ -155,11 +158,11 @@ namespace MMORPG.GameServer.Db
 
                 frameReader.Feed(buffer, 0, read);
 
-                while (frameReader.TryRead(out int _, out byte[]? framePayload))
+                while (frameReader.TryRead(out int _, out byte[] framePayload))
                 {
                     byte[] payload = DbFrame.Decode(framePayload, out int requestId);
 
-                    if (_pending.TryRemove(requestId, out TaskCompletionSource<byte[]>? tcs))
+                    if (_pending.TryRemove(requestId, out TaskCompletionSource<byte[]> tcs))
                         tcs.TrySetResult(payload);
                     else
                         // Response về sau khi bên gửi đã bỏ cuộc vì timeout. Không phải lỗi,
@@ -179,7 +182,7 @@ namespace MMORPG.GameServer.Db
                 {
                     await _sendSignal.WaitAsync(ct);
 
-                    while (_sendQueue.TryDequeue(out byte[]? frame))
+                    while (_sendQueue.TryDequeue(out byte[] frame))
                         await stream.WriteAsync(frame, 0, frame.Length, ct);
                 }
             }
@@ -199,7 +202,7 @@ namespace MMORPG.GameServer.Db
         {
             foreach (int key in _pending.Keys)
             {
-                if (_pending.TryRemove(key, out TaskCompletionSource<byte[]>? tcs))
+                if (_pending.TryRemove(key, out TaskCompletionSource<byte[]> tcs))
                     tcs.TrySetException(new DbUnavailableException("Mất kết nối DBServer."));
             }
         }

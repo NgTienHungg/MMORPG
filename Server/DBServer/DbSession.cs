@@ -55,7 +55,7 @@ namespace MMORPG.DBServer
 
                     _frameReader.Feed(buffer, 0, read);
 
-                    while (_frameReader.TryRead(out int cmd, out byte[]? framePayload))
+                    while (_frameReader.TryRead(out int cmd, out byte[] framePayload))
                     {
                         // KHÔNG await ở đây. Query chậm của session A không được chặn
                         // việc đọc request của session B — đó là toàn bộ lý do có request id.
@@ -109,7 +109,7 @@ namespace MMORPG.DBServer
                 {
                     await _sendSignal.WaitAsync(ct);
 
-                    while (_sendQueue.TryDequeue(out byte[]? frame))
+                    while (_sendQueue.TryDequeue(out byte[] frame))
                         await _stream.WriteAsync(frame, 0, frame.Length, ct);
                 }
             }

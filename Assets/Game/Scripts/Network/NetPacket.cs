@@ -16,7 +16,10 @@ namespace MMORPG.Client.Network
             _payload = payload;
         }
 
-        public T GetData<T>() where T : IMemoryPackable<T> => NetPayload.Deserialize<T>(_payload);
+        public T GetData<T>() where T : IMemoryPackable<T>
+        {
+            return NetPayload.Deserialize<T>(_payload);
+        }
     }
 
     /// <summary>
@@ -28,7 +31,11 @@ namespace MMORPG.Client.Network
     public sealed class NetHandlerAttribute : Attribute
     {
         public NetCmd Command { get; }
-        public NetHandlerAttribute(NetCmd command) => Command = command;
+
+        public NetHandlerAttribute(NetCmd command)
+        {
+            Command = command;
+        }
     }
 
     /// <summary>Marker để container gom mọi nhóm handler lại cho dispatcher.</summary>

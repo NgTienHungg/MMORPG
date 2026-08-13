@@ -11,9 +11,12 @@ namespace MMORPG.DBServer.Repositories
     {
         private readonly Database _database;
 
-        public ServerMetaRepository(Database database) => _database = database;
+        public ServerMetaRepository(Database database)
+        {
+            _database = database;
+        }
 
-        public async Task<string?> GetAsync(string key, CancellationToken ct = default)
+        public async Task<string> GetAsync(string key, CancellationToken ct = default)
         {
             await using SqliteConnection connection = await _database.OpenAsync(ct);
             await using SqliteCommand cmd = connection.CreateCommand();
@@ -23,7 +26,7 @@ namespace MMORPG.DBServer.Repositories
             cmd.CommandText = "SELECT value FROM server_meta WHERE key = $key;";
             cmd.Parameters.AddWithValue("$key", key);
 
-            object? value = await cmd.ExecuteScalarAsync(ct);
+            object value = await cmd.ExecuteScalarAsync(ct);
             return value as string;
         }
 

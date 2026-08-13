@@ -9,10 +9,9 @@ namespace MMORPG.DBServer.Handlers
     {
         /// <summary>
         /// Handler là static (để dispatcher quét được) nhưng repository thì không —
-        /// gán một lần lúc khởi động là đủ cho một process chỉ có một database.
-        /// Khi nào cần nhiều nguồn dữ liệu thì đổi sang DI thật.
+        /// gán một lần trong <c>Program.cs</c> là đủ cho một process chỉ có một database.
         /// </summary>
-        public static ServerMetaRepository Repository { get; set; } = null!;
+        public static ServerMetaRepository Repository { get; set; }
 
         [DbHandler(DbCmd.Ping)]
         public static async Task<DbResult> OnPing(DbRequest req)
@@ -30,7 +29,7 @@ namespace MMORPG.DBServer.Handlers
         public static async Task<DbResult> OnGet(DbRequest req)
         {
             var request = req.GetData<ServerMetaGetRequest>();
-            string? value = await Repository.GetAsync(request.Key);
+            string value = await Repository.GetAsync(request.Key);
 
             return DbResult.Ok(new ServerMetaGetResponse
             {

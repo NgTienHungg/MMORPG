@@ -48,11 +48,15 @@ namespace MMORPG.GameServer.Auth
         /// Băm giả để tiêu tốn đúng lượng thời gian như một lần kiểm thật.
         /// Dùng khi tài khoản KHÔNG tồn tại — xem <c>AuthService.LoginAsync</c>.
         /// </summary>
-        public static void BurnEquivalentTime() =>
+        public static void BurnEquivalentTime()
+        {
             Derive("dummy", new byte[SALT_SIZE], DEFAULT_ITERATIONS);
+        }
 
-        private static byte[] Derive(string password, byte[] salt, int iterations) =>
-            Rfc2898DeriveBytes.Pbkdf2(
+        private static byte[] Derive(string password, byte[] salt, int iterations)
+        {
+            return Rfc2898DeriveBytes.Pbkdf2(
                 Encoding.UTF8.GetBytes(password), salt, iterations, HashAlgorithmName.SHA256, HASH_SIZE);
+        }
     }
 }

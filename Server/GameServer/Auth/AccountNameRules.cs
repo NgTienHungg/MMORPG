@@ -17,16 +17,22 @@ namespace MMORPG.GameServer.Auth
 
         /// <summary>Chuẩn hoá về dạng lưu trong DB. Gọi TRƯỚC mọi so sánh và mọi query.</summary>
         public static string Normalize(string username)
-            => (username ?? string.Empty).Trim().ToLowerInvariant();
+        {
+            return (username ?? string.Empty).Trim().ToLowerInvariant();
+        }
 
         public static bool IsValidUsername(string normalized)
-            => normalized.Length >= USERNAME_MIN &&
-               normalized.Length <= USERNAME_MAX &&
-               _usernamePattern.IsMatch(normalized);
+        {
+            return normalized.Length >= USERNAME_MIN &&
+                   normalized.Length <= USERNAME_MAX &&
+                   _usernamePattern.IsMatch(normalized);
+        }
 
         public static bool IsValidPassword(string password)
-            => !string.IsNullOrEmpty(password) &&
-               password.Length >= PASSWORD_MIN &&
-               password.Length <= PASSWORD_MAX;
+        {
+            return !string.IsNullOrEmpty(password) &&
+                   password.Length >= PASSWORD_MIN &&
+                   password.Length <= PASSWORD_MAX;
+        }
     }
 }

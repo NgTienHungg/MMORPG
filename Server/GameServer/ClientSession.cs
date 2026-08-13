@@ -96,16 +96,22 @@ namespace MMORPG.GameServer
                 _frameReader.Feed(buffer, 0, read);
 
                 // MỘT lần đọc có thể chứa nhiều gói → phải vắt cạn bằng vòng while
-                while (_frameReader.TryRead(out int cmd, out byte[]? payload))
+                while (_frameReader.TryRead(out int cmd, out byte[] payload))
                     await TcpDispatcher.DispatchAsync(this, (NetCmd)cmd, payload);
             }
         }
 
         /// <summary>Gửi payload đã đóng gói sẵn. Dispatcher dùng hàm này.</summary>
-        public void SendRaw(NetCmd cmd, byte[] payload) => Send((int)cmd, payload);
+        public void SendRaw(NetCmd cmd, byte[] payload)
+        {
+            Send((int)cmd, payload);
+        }
 
         /// <summary>Gửi DTO. Dùng khi server CHỦ ĐỘNG đẩy tin (không phải trả lời request).</summary>
-        public void SendData<T>(NetCmd cmd, T dto) where T : IMemoryPackable<T> => Send((int)cmd, NetPayload.Serialize(dto));
+        public void SendData<T>(NetCmd cmd, T dto) where T : IMemoryPackable<T>
+        {
+            Send((int)cmd, NetPayload.Serialize(dto));
+        }
 
         /// <summary>
         /// Gửi gói tin. Gọi được từ bất kỳ luồng nào — gói được xếp hàng, một vòng gửi riêng lo ghi socket.
@@ -124,7 +130,7 @@ namespace MMORPG.GameServer
                 {
                     await _sendSignal.WaitAsync(ct);
 
-                    while (_sendQueue.TryDequeue(out byte[]? frame))
+                    while (_sendQueue.TryDequeue(out byte[] frame))
                         await _stream.WriteAsync(frame, 0, frame.Length, ct);
                 }
             }

@@ -10,8 +10,8 @@ namespace MMORPG.GameServer.Handlers
 {
     public static class SystemHandler
     {
-        /// <summary>Gán một lần trong <c>Program.cs</c>, giống <c>ServerMetaDbHandler.Repository</c>.</summary>
-        public static DbClient Db { get; set; } = null!;
+        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
+        public static DbClient DbClient { get; set; }
 
         [TcpHandler(NetCmd.Ping)]
         public static Task<NetResult> OnPing(NetRequest req)
@@ -42,12 +42,12 @@ namespace MMORPG.GameServer.Handlers
         [TcpHandler(NetCmd.ServerInfo)]
         public static async Task<NetResult> OnServerInfo(NetRequest req)
         {
-            var db = await Db.CallAsync<ServerMetaGetRequest, ServerMetaGetResponse>(
+            var serverMeta = await DbClient.CallAsync<ServerMetaGetRequest, ServerMetaGetResponse>(
                 DbCmd.ServerMetaGet, new ServerMetaGetRequest { Key = "server_name" });
 
             return NetResult.Ok(new ServerInfoResponse
             {
-                ServerName = db.Found ? db.Value : "(chưa đặt tên)",
+                ServerName = serverMeta.Found ? serverMeta.Value : "(chưa đặt tên)",
                 OnlineCount = SessionRegistry.Count,
             });
         }

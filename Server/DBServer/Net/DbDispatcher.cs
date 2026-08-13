@@ -24,7 +24,9 @@ namespace MMORPG.DBServer.Net
 
             foreach (MethodInfo method in methods)
             {
-                DbHandlerAttribute attr = method.GetCustomAttribute<DbHandlerAttribute>()!;
+                DbHandlerAttribute attr = method.GetCustomAttribute<DbHandlerAttribute>();
+                if (attr == null)
+                    continue;
 
                 string origin = $"{method.DeclaringType?.Name}.{method.Name}";
 
@@ -58,7 +60,7 @@ namespace MMORPG.DBServer.Net
         /// </summary>
         public static async Task<DbResult> DispatchAsync(DbCmd cmd, byte[] payload)
         {
-            if (!_handlers.TryGetValue(cmd, out Func<DbRequest, Task<DbResult>>? handler))
+            if (!_handlers.TryGetValue(cmd, out Func<DbRequest, Task<DbResult>> handler))
             {
                 Log.Warn($"Không có handler cho {cmd.ToString().Red()}");
                 return DbResult.Ok(new DbOkResponse { Success = false, Detail = $"Không có handler cho {cmd}" });

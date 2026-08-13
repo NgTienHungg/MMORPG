@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using MMORPG.GameServer;
+using MMORPG.GameServer.Auth;
 using MMORPG.GameServer.Db;
 using MMORPG.GameServer.Handlers;
 using MMORPG.GameServer.Net;
@@ -14,10 +15,11 @@ Console.OutputEncoding = Encoding.UTF8;
 const int PORT = 7778;
 const int DB_PORT = 7779;
 
-await using var db = new DbClient("127.0.0.1", DB_PORT);
-db.Start();
+await using var dbClient = new DbClient("127.0.0.1", DB_PORT);
+dbClient.Start();
 
-SystemHandler.Db = db;
+SystemHandler.DbClient = dbClient;
+AuthHandler.AuthService = new AuthService(dbClient, new LoginRateLimiter());
 TcpDispatcher.RegisterAll();
 
 var listener = new TcpListener(IPAddress.Any, PORT);

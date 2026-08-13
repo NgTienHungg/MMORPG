@@ -72,14 +72,17 @@ namespace MMORPG.ServerCore
         /// Chỉ LEVEL và [Tag] được tô màu; phần nội dung để nguyên để màu do
         /// <see cref="AnsiExtensions"/> đặt bên trong câu không bị mã reset cắt ngang.
         /// </summary>
-        private static string LevelLabel(LogLevel level) => level switch
+        private static string LevelLabel(LogLevel level)
         {
-            LogLevel.Debug => "DEBUG".Gray(),
-            LogLevel.Info => "INFO ".Cyan(),
-            LogLevel.Warn => "WARN ".Yellow(),
-            LogLevel.Error => "ERROR".Red(),
-            _ => "     ",
-        };
+            return level switch
+            {
+                LogLevel.Debug => "DEBUG".Gray(),
+                LogLevel.Info => "INFO ".Cyan(),
+                LogLevel.Warn => "WARN ".Yellow(),
+                LogLevel.Error => "ERROR".Red(),
+                _ => "     ",
+            };
+        }
 
         private static bool DetectColorSupport()
         {

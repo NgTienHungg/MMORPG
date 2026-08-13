@@ -2,6 +2,11 @@ using MemoryPack;
 
 namespace MMORPG.Shared.Dto
 {
+    [MemoryPackable]
+    public partial class EmptyRequest
+    {
+    }
+
     /// <summary>Client gửi mốc thời gian của chính nó để tự tính RTT khi nhận lại.</summary>
     [MemoryPackable]
     public partial class PingRequest
@@ -43,11 +48,6 @@ namespace MMORPG.Shared.Dto
     {
         public string Message { get; set; } = string.Empty;
         public long ServerTimeMs { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class ServerInfoRequest
-    {
     }
 
     [MemoryPackable]

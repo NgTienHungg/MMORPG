@@ -1,6 +1,8 @@
 using HungNT;
+using MMORPG.Client.Auth;
 using MMORPG.Client.Network;
 using MMORPG.Client.Network.Handlers;
+using UnityEngine;
 using VContainer;
 using VContainer.Unity;
 
@@ -12,9 +14,15 @@ namespace MMORPG.Client.Boot
     /// </summary>
     public class GameLifetimeScope : LifetimeScope
     {
+        [SerializeField] private string _serverHost = "127.0.0.1";
+        [SerializeField] private int _serverPort = 7778;
+
         protected override void Configure(IContainerBuilder builder)
         {
             builder.InstallCore(); // com.hungnt.core
+
+            // Địa chỉ server chỉ khai báo ở ĐÂY — ai cần thì inject NetworkSettings.
+            builder.RegisterInstance(new NetworkSettings(_serverHost, _serverPort));
 
             builder.Register<ITransport, TcpTransport>(Lifetime.Singleton);
             builder.Register<NetDispatcher>(Lifetime.Singleton);
@@ -26,6 +34,10 @@ namespace MMORPG.Client.Boot
 
             // Ép VContainer inject vào NetworkProbe có sẵn trong scene (chạy ngay lúc build container).
             builder.RegisterComponentInHierarchy<NetworkProbe>();
+
+            builder.Register<AuthApi>(Lifetime.Singleton);
+            builder.Register<AuthNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+            builder.RegisterComponentInHierarchy<LoginPresenter>();
         }
     }
 }

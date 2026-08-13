@@ -24,13 +24,18 @@ namespace MMORPG.GameServer.Auth
             return token;
         }
 
-        public static bool Validate(long accountId, string token) =>
-            _byAccount.TryGetValue(accountId, out string? known) &&
-            !string.IsNullOrEmpty(token) &&
-            CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.ASCII.GetBytes(known),
-                System.Text.Encoding.ASCII.GetBytes(token));
+        public static bool Validate(long accountId, string token)
+        {
+            return _byAccount.TryGetValue(accountId, out string known) &&
+                   !string.IsNullOrEmpty(token) &&
+                   CryptographicOperations.FixedTimeEquals(
+                       System.Text.Encoding.ASCII.GetBytes(known),
+                       System.Text.Encoding.ASCII.GetBytes(token));
+        }
 
-        public static void Revoke(long accountId) => _byAccount.TryRemove(accountId, out _);
+        public static void Revoke(long accountId)
+        {
+            _byAccount.TryRemove(accountId, out _);
+        }
     }
 }

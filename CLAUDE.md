@@ -138,9 +138,10 @@ Chi tiết đầy đủ: [`.claude/docs/CONVENTIONS.md`](.claude/docs/CONVENTION
 | Class / Method / Property | PascalCase | `NetService`, `SendAsync` |
 | Interface | `I` + PascalCase | `ITransport`, `INetService` |
 | Private field | `_camelCase` | `_transport`, `_eventBus` |
-| Field nhận inject | bỏ hậu tố `Service`, **không viết tắt** | `_eventBus` chứ không `_bus` |
+| Field nhận inject | tên type đầy đủ dạng camelCase, **không cắt cụt** | `_netService` chứ không `_net`, `_dbClient` chứ không `_db` |
 | Const | UPPER_SNAKE_CASE | `HEADER_SIZE` |
 | Brace | Allman (mở ngoặc xuống dòng) | |
+| Thân method / constructor | **luôn `{ }` đầy đủ, không expression-bodied** — kể cả thân 1 dòng; chỉ property getter thuần được dùng `=>` | `void Send() { _net.Send(); }` chứ không `void Send() => _net.Send();` |
 | Indent | 4 space | |
 
 **Mọi định danh trong code là tiếng Anh.** Tiếng Việt chỉ dùng cho: comment, XML doc, và chuỗi hiển thị cho người chơi.

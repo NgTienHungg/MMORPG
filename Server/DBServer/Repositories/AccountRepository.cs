@@ -10,7 +10,10 @@ namespace MMORPG.DBServer.Repositories
 
         private readonly Database _database;
 
-        public AccountRepository(Database database) => _database = database;
+        public AccountRepository(Database database)
+        {
+            _database = database;
+        }
 
         public async Task<AccountGetResponse> GetByUsernameAsync(string username, CancellationToken ct = default)
         {
@@ -18,7 +21,7 @@ namespace MMORPG.DBServer.Repositories
             await using SqliteCommand cmd = connection.CreateCommand();
 
             cmd.CommandText = """
-                              SELECT id, username, password_hash, salt, interations, is_banned
+                              SELECT id, username, password_hash, salt, iterations, is_banned
                               FROM account WHERE username = $username;
                               """;
             cmd.Parameters.AddWithValue("$username", username);
@@ -70,7 +73,7 @@ namespace MMORPG.DBServer.Repositories
             }
         }
 
-        public async Task TouchLoginAycn(long accountId, CancellationToken ct = default)
+        public async Task TouchLoginAsync(long accountId, CancellationToken ct = default)
         {
             await using SqliteConnection connection = await _database.OpenAsync(ct);
             await using SqliteCommand cmd = connection.CreateCommand();

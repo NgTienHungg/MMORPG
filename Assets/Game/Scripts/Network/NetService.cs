@@ -21,6 +21,8 @@ namespace MMORPG.Client.Network
 
         public TransportState State => _transport.State;
 
+        public bool IsConnected => State == TransportState.Connected;
+
         public NetService(ITransport transport, NetDispatcher dispatcher)
         {
             _transport = transport;
@@ -29,12 +31,22 @@ namespace MMORPG.Client.Network
             _transport.OnStateChanged += HandleStateFromBackground;
         }
 
-        public UniTask<bool> ConnectAsync(string host, int port) => _transport.ConnectAsync(host, port, _cts.Token);
+        public UniTask<bool> ConnectAsync(string host, int port)
+        {
+            this.Log($"Connect async to {host}:{port}");
+            return _transport.ConnectAsync(host, port, _cts.Token);
+        }
 
         /// <summary>Gửi DTO. Đây là API duy nhất tầng game nên dùng để gửi.</summary>
-        public void Send<T>(NetCmd cmd, T dto) where T : MemoryPack.IMemoryPackable<T> => _transport.Send((int)cmd, NetPayload.Serialize(dto));
+        public void Send<T>(NetCmd cmd, T dto) where T : MemoryPack.IMemoryPackable<T>
+        {
+            _transport.Send((int)cmd, NetPayload.Serialize(dto));
+        }
 
-        public void Disconnect() => _transport.Disconnect();
+        public void Disconnect()
+        {
+            _transport.Disconnect();
+        }
 
         public void Dispose()
         {
@@ -49,18 +61,25 @@ namespace MMORPG.Client.Network
             _cts.Dispose();
         }
 
-        private void HandlePacketFromBackground(int cmd, byte[] payload) => RaiseOnMainThread(cmd, payload).Forget();
+        private void HandlePacketFromBackground(int cmd, byte[] payload)
+        {
+            RaiseOnMainThread(cmd, payload).Forget();
+        }
 
         private async UniTaskVoid RaiseOnMainThread(int cmd, byte[] payload)
         {
             await UniTask.SwitchToMainThread();
 
             var netCmd = (NetCmd)cmd;
+
             if (!_dispatcher.Dispatch(netCmd, payload))
                 this.LogWarning($"Không có handler cho {netCmd} — quên đăng ký nhóm handler trong GameLifetimeScope?");
         }
 
-        private void HandleStateFromBackground(TransportState state) => RaiseStateOnMainThread(state).Forget();
+        private void HandleStateFromBackground(TransportState state)
+        {
+            RaiseStateOnMainThread(state).Forget();
+        }
 
         private async UniTaskVoid RaiseStateOnMainThread(TransportState state)
         {

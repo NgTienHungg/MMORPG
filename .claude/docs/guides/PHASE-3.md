@@ -672,7 +672,7 @@ namespace MMORPG.DBServer.Handlers
         /// gán một lần lúc khởi động là đủ cho một process chỉ có một database.
         /// Khi nào cần nhiều nguồn dữ liệu thì đổi sang DI thật.
         /// </summary>
-        public static ServerMetaRepository Repository { get; set; } = null!;
+        public static ServerMetaRepository Repository { get; set; }
 
         [DbHandler(DbCmd.Ping)]
         public static async Task<DbResult> OnPing(DbRequest req)
@@ -1367,7 +1367,7 @@ namespace MMORPG.GameServer.Handlers
     public static class SystemHandler
     {
         /// <summary>Gán một lần trong <c>Program.cs</c>, giống <c>ServerMetaDbHandler.Repository</c>.</summary>
-        public static DbClient Db { get; set; } = null!;
+        public static DbClient Db { get; set; }
 
         [TcpHandler(NetCmd.Ping)]
         public static Task<NetResult> OnPing(NetRequest req)

@@ -46,12 +46,21 @@ Sau đó file mới tạo trong `Assets/Game/Scripts/Network/` sẽ tự có `na
 Nếu Rider vẫn đề xuất sai, `Alt+Enter` trên tên namespace → *Adjust namespaces* để sửa nhanh.
 
 ### Field nhận inject (DI)
-Type có vai trò service → hậu tố `Service`. Field/parameter nhận inject → **bỏ hậu tố `Service`, không viết tắt**:
+Field/parameter trỏ tới một dependency đặt theo **tên type đầy đủ** dạng camelCase (bỏ tiền tố `I`):
 
 ```csharp
-private readonly INetService     _net;        // ✅  không phải _netService, không phải _n
-private readonly IEventBusService _eventBus;  // ✅  không phải _bus
+private readonly NetService _netService;   // ✅  đọc _netService.Send() là biết ngay đang nhờ service nào
+private readonly DbClient   _dbClient;     // ✅  không phải _db
 ```
+
+Lý do: tên cụt lúc khai báo thì vẫn hiểu, nhưng đến dòng thứ 80 chỉ còn thấy `_net.Send(...)` —
+người đọc phải nhảy ngược lên đầu file mới biết `_net` là cái gì. Tên theo type thì từng dòng
+tự đứng được một mình.
+
+Được rút gọn **chỉ khi** phần giữ lại vẫn là khái niệm trọn vẹn, tự giải thích trong ngữ cảnh
+(`LoginRateLimiter` → `_rateLimiter`); không bao giờ rút tới mẩu cụt (`_net`, `_db`, `_auth`, `_ui`, `res`).
+Biến local cũng theo tinh thần đó — và tên phải nói đúng **nội dung** nó chứa: `var db = ...` cho một biến
+đang giữ *response* của ServerMetaGet là sai hai lần (vừa cụt vừa lạc nghĩa) — đặt `serverMeta`.
 
 ### Hậu tố theo vai trò
 
@@ -79,6 +88,11 @@ private readonly IEventBusService _eventBus;  // ✅  không phải _bus
 
 - Indent **4 space**, không tab.
 - Brace **Allman** — mở ngoặc xuống dòng riêng (khác default của C#).
+- **Method / constructor luôn có thân `{ }` đầy đủ, không expression-bodied** (`void Ten() => ...;`),
+  kể cả khi thân chỉ một dòng. Lý do: thân một dòng hôm nay thành năm dòng ngày mai — có sẵn `{ }`
+  thì thêm log / guard / breakpoint không phải đổi hình dạng hàm, diff cũng gọn.
+  Expression-bodied chỉ chấp nhận cho **property getter thuần** (`public int Count => _list.Count;`).
+  Switch expression và lambda không liên quan quy tắc này — chúng nằm *trong* thân `{ }`.
 - Dòng ~100–120 ký tự.
 - `using` gom nhóm: `System` → `UnityEngine` → thư viện ngoài → namespace dự án.
 - Thứ tự trong class: field → property → constructor → public method → protected → private.
@@ -126,6 +140,20 @@ this.LogWarning($"[NetService] Không có handler"); // ❌ in ra 2 lần tên c
 
 Vì sao hai API khác nhau: client có `this` để bám vào nên dùng extension; server handler đều là
 class **static**, không có `this`, nên phải là API static.
+
+### Phủ log cho luồng nghiệp vụ
+
+Log ở **điểm xử lý logic then chốt**, không log theo gói tin: client log lệnh nghiệp vụ **gửi gì đi**
+(`AuthApi.Login` in username/password), service log **quyết định gì và vì sao** — kể cả lý do từ chối thật,
+thứ mà response về client phải giấu — DB handler log **đọc/ghi gì**. Test một tính năng mà console
+không kể lại được chuyện vừa xảy ra nghĩa là thiếu log.
+
+**KHÔNG log trong hot path** (dispatcher, transport): từ Phase 6 gói di chuyển/AOI chạy liên tục,
+mỗi gói một dòng log là console thành thác nước và tốn CPU vô ích. Cần soi wire thì thêm tạm rồi gỡ.
+
+Đang giai đoạn dev, in thẳng mật khẩu tài khoản test ra console là chấp nhận được (chốt 2026-08-14) —
+tiện đối chiếu nhập-gì-gửi-nấy. Token phiên vẫn chỉ nên in độ dài. Tới phase hardening (TLS)
+phải rà lại toàn bộ log secret trước khi có người chơi thật.
 
 ### Mức log
 
@@ -188,6 +216,11 @@ mẩu bên trong sẽ cắt màu của phần còn lại. Màu tự tắt khi ou
 - Lỗi nghiệp vụ (sai mật khẩu, không đủ tiền) → **không** ném exception, trả `ErrorCode` trong response.
 - Lỗi hệ thống (mất kết nối DB, packet hỏng) → log ở mức Error + ngắt kết nối nếu cần.
 - 1 enum `ErrorCode` duy nhất trong `Shared`, dùng chung 2 bên.
+- **Nullable reference types TẮT ở GameServer + DBServer** (`<Nullable>disable</Nullable>` trong csproj,
+  đồng bộ với Unity client vốn tắt mặc định) — vì vậy trong 2 project đó **không viết** `string?`,
+  `= null!`, `[NotNullWhen]`; property gán-một-lần từ `Program.cs` chỉ cần `{ get; set; }` trần.
+  Quên gán → `NullReferenceException` lúc chạy trỏ đúng chỗ, chấp nhận được. Nghi ngờ null thì
+  kiểm bằng `if (x == null)` thường. Riêng `Shared`/`ServerCore` (thư viện) giữ nullable bật.
 
 ## 9. Git
 
@@ -201,7 +234,19 @@ mẩu bên trong sẽ cắt màu của phần còn lại. Màu tự tắt khi ou
   git submodule foreach --quiet 'echo "== $name"; git status --short'
   ```
 
-## 10. Test
+## 10. Unity UI event
+
+- `AddListener` phải có `RemoveListener` **đối xứng** trong `OnDestroy` — nghĩa là listener phải là
+  **method có tên**, không phải lambda: lambda mỗi lần viết là một delegate mới, `RemoveListener`
+  không bao giờ khớp, listener cũ bám mãi vào Button nếu Button sống lâu hơn component.
+- Ngoại lệ duy nhất: widget dạng item được `Bind` lại nhiều lần (slot danh sách) — dùng
+  `RemoveAllListeners()` ngay trước `AddListener`, kèm chú thích tại chỗ.
+- Gỡ listener UI đặt **trước** guard null của dependency inject trong `OnDestroy` — UI là serialized
+  field nên luôn tồn tại, kể cả khi container build lỗi và các field inject còn null.
+- Mọi request khoá UI chờ response phải có **timeout** mở khoá lại (xem `LoginPresenter.ArmResponseTimeout`,
+  Phase 4) — một response không tới không được phép treo UI vĩnh viễn.
+
+## 11. Test
 
 - Logic thuần (codec, damage formula, validate) → unit test được thì phải có test.
 - Không cố unit-test MonoBehaviour hoặc socket thật — test qua interface (`ITransport` mock).

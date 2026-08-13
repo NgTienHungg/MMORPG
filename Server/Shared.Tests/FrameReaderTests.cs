@@ -5,8 +5,10 @@ namespace MMORPG.Shared.Tests
 {
     public class FrameReaderTests
     {
-        private static byte[] Frame(int cmd, string text) =>
-            PacketFrame.Encode(cmd, Encoding.UTF8.GetBytes(text));
+        private static byte[] Frame(int cmd, string text)
+        {
+            return PacketFrame.Encode(cmd, Encoding.UTF8.GetBytes(text));
+        }
 
         [Fact]
         public void DocDuocGoiNguyenVen()

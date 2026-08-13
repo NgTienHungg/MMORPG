@@ -11,9 +11,9 @@ namespace MMORPG.GameServer.Net
     /// </summary>
     public static class TcpDispatcher
     {
-        private readonly record struct HandlerEntry(Func<NetRequest, Task<NetResult>> Invoke, SessionState MinState);!
+        private readonly record struct HandlerEntry(Func<NetRequest, Task<NetResult>> Invoke, SessionState MinState);
 
-        private static readonly Dictionary<NetCmd, Func<NetRequest, Task<NetResult>>> _handlers = new();
+        private static readonly Dictionary<NetCmd, HandlerEntry> _handlers = new();
 
         /// <summary>
         /// Quét mọi assembly đã nạp, tìm static method có <see cref="TcpHandlerAttribute"/> và đăng ký.
@@ -31,20 +31,24 @@ namespace MMORPG.GameServer.Net
 
             foreach (MethodInfo method in methods)
             {
-                TcpHandlerAttribute attr = method.GetCustomAttribute<TcpHandlerAttribute>()!;
+                TcpHandlerAttribute attr = method.GetCustomAttribute<TcpHandlerAttribute>();
+                if (attr == null)
+                    continue;
 
                 string origin = $"{method.DeclaringType?.Name}.{method.Name}";
 
-                if (method.ReturnType != typeof(Task<NetResult>) ||
-                    method.GetParameters().Length != 1 ||
-                    method.GetParameters()[0].ParameterType != typeof(NetRequest))
+                if (method.ReturnType != typeof(Task<NetResult>) || method.GetParameters().Length != 1 || method.GetParameters()[0].ParameterType != typeof(NetRequest))
                 {
                     Log.Warn($"BỎ QUA {origin.Yellow()} — sai chữ ký, phải là: static Task<NetResult> Ten(NetRequest req)");
                     continue;
                 }
 
-                _handlers[attr.Command] = (Func<NetRequest, Task<NetResult>>)Delegate.CreateDelegate(
-                    typeof(Func<NetRequest, Task<NetResult>>), method);
+                _handlers[attr.Command] = new HandlerEntry(
+                    (Func<NetRequest, Task<NetResult>>)Delegate.CreateDelegate(
+                        typeof(Func<NetRequest, Task<NetResult>>), method
+                    ),
+                    attr.MinState
+                );
             }
 
             Log.Info($"Đăng ký {_handlers.Count.ToString().Green()} handler.");
@@ -55,16 +59,22 @@ namespace MMORPG.GameServer.Net
         /// </summary>
         public static async Task DispatchAsync(ClientSession session, NetCmd cmd, byte[] payload)
         {
-            if (!_handlers.TryGetValue(cmd, out Func<NetRequest, Task<NetResult>>? handler))
+            if (!_handlers.TryGetValue(cmd, out HandlerEntry entry))
             {
                 SendError(session, cmd, ErrorCode.UnknownCommand, $"Không có handler cho {cmd}");
+                return;
+            }
+
+            if (session.State < entry.MinState)
+            {
+                SendError(session, cmd, ErrorCode.NotAuthenticated, $"{cmd} cần trạng thái {entry.MinState}, session đang ở {session.State}");
                 return;
             }
 
             NetResult result;
             try
             {
-                result = await handler(new NetRequest(session, cmd, payload));
+                result = await entry.Invoke(new NetRequest(session, cmd, payload));
             }
             catch (InvalidDataException ex)
             {

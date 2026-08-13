@@ -384,7 +384,10 @@ namespace MMORPG.DBServer.Repositories
 
         private readonly Database _database;
 
-        public CharacterRepository(Database database) => _database = database;
+        public CharacterRepository(Database database)
+        {
+            _database = database;
+        }
 
         public async Task<CharacterRow[]> ListByAccountAsync(long accountId, CancellationToken ct = default)
         {
@@ -514,18 +517,21 @@ namespace MMORPG.DBServer.Repositories
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        private static CharacterRow Read(SqliteDataReader reader) => new()
+        private static CharacterRow Read(SqliteDataReader reader)
         {
-            CharacterId = reader.GetInt64(0),
-            AccountId = reader.GetInt64(1),
-            Name = reader.GetString(2),
-            ClassId = reader.GetInt32(3),
-            Level = reader.GetInt32(4),
-            Exp = reader.GetInt64(5),
-            MapId = reader.GetInt32(6),
-            X = reader.GetFloat(7),
-            Y = reader.GetFloat(8),
-        };
+            return new CharacterRow
+            {
+                CharacterId = reader.GetInt64(0),
+                AccountId = reader.GetInt64(1),
+                Name = reader.GetString(2),
+                ClassId = reader.GetInt32(3),
+                Level = reader.GetInt32(4),
+                Exp = reader.GetInt64(5),
+                MapId = reader.GetInt32(6),
+                X = reader.GetFloat(7),
+                Y = reader.GetFloat(8),
+            };
+        }
     }
 }
 ```
@@ -542,7 +548,8 @@ namespace MMORPG.DBServer.Handlers
 {
     public static class CharacterDbHandler
     {
-        public static CharacterRepository Repository { get; set; } = null!;
+        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
+        public static CharacterRepository Repository { get; set; }
 
         [DbHandler(DbCmd.CharacterListByAccount)]
         public static async Task<DbResult> OnList(DbRequest req)
@@ -556,8 +563,10 @@ namespace MMORPG.DBServer.Handlers
         }
 
         [DbHandler(DbCmd.CharacterCreate)]
-        public static async Task<DbResult> OnCreate(DbRequest req) =>
-            DbResult.Ok(await Repository.CreateAsync(req.GetData<CharacterCreateDbRequest>()));
+        public static async Task<DbResult> OnCreate(DbRequest req)
+        {
+            return DbResult.Ok(await Repository.CreateAsync(req.GetData<CharacterCreateDbRequest>()));
+        }
 
         [DbHandler(DbCmd.CharacterLoad)]
         public static async Task<DbResult> OnLoad(DbRequest req)
@@ -751,10 +760,15 @@ namespace MMORPG.GameServer.World
         /// không có bước này thì "Hùng" gõ bằng hai kiểu bàn phím khác nhau ra hai chuỗi byte khác nhau
         /// và cả hai đều tạo được nhân vật.
         /// </summary>
-        public static string ToKey(string name) =>
-            name.Normalize(NormalizationForm.FormC).Trim().ToLowerInvariant();
+        public static string ToKey(string name)
+        {
+            return name.Normalize(NormalizationForm.FormC).Trim().ToLowerInvariant();
+        }
 
-        public static bool IsValidClass(int classId) => Array.IndexOf(VALID_CLASS_IDS, classId) >= 0;
+        public static bool IsValidClass(int classId)
+        {
+            return Array.IndexOf(VALID_CLASS_IDS, classId) >= 0;
+        }
     }
 }
 ```
@@ -777,18 +791,18 @@ namespace MMORPG.GameServer.World
 {
     public sealed class CharacterService
     {
-        private readonly DbClient _db;
-        private readonly WorldService _world;
+        private readonly DbClient _dbClient;
+        private readonly WorldService _worldService;
 
-        public CharacterService(DbClient db, WorldService world)
+        public CharacterService(DbClient dbClient, WorldService worldService)
         {
-            _db = db;
-            _world = world;
+            _dbClient = dbClient;
+            _worldService = worldService;
         }
 
         public async Task<CharacterListResponse> ListAsync(ClientSession session)
         {
-            var result = await _db.CallAsync<CharacterListRequest, CharacterListResult>(
+            var result = await _dbClient.CallAsync<CharacterListRequest, CharacterListResult>(
                 DbCmd.CharacterListByAccount, new CharacterListRequest { AccountId = session.AccountId });
 
             return new CharacterListResponse
@@ -806,7 +820,7 @@ namespace MMORPG.GameServer.World
             if (!CharacterNameRules.IsValidName(name) || !CharacterNameRules.IsValidClass(request.ClassId))
                 return new CharacterCreateResponse { Success = false, Error = ErrorCode.InvalidInput };
 
-            var result = await _db.CallAsync<CharacterCreateDbRequest, CharacterCreateDbResponse>(
+            var result = await _dbClient.CallAsync<CharacterCreateDbRequest, CharacterCreateDbResponse>(
                 DbCmd.CharacterCreate,
                 new CharacterCreateDbRequest
                 {
@@ -847,7 +861,7 @@ namespace MMORPG.GameServer.World
         public async Task<CharacterDeleteResponse> DeleteAsync(ClientSession session,
                                                                CharacterDeleteRequest request)
         {
-            var load = await _db.CallAsync<CharacterLoadRequest, CharacterLoadResponse>(
+            var load = await _dbClient.CallAsync<CharacterLoadRequest, CharacterLoadResponse>(
                 DbCmd.CharacterLoad,
                 new CharacterLoadRequest { CharacterId = request.CharacterId, AccountId = session.AccountId });
 
@@ -859,10 +873,10 @@ namespace MMORPG.GameServer.World
             if (!string.Equals(load.Character.Name, request.ConfirmName, StringComparison.Ordinal))
                 return new CharacterDeleteResponse { Success = false, Error = ErrorCode.InvalidInput };
 
-            if (_world.TryGetByCharacter(request.CharacterId, out _))
+            if (_worldService.TryGetByCharacter(request.CharacterId, out _))
                 return new CharacterDeleteResponse { Success = false, Error = ErrorCode.CharacterInUse };
 
-            var result = await _db.CallAsync<CharacterDeleteDbRequest, DbOkResponse>(
+            var result = await _dbClient.CallAsync<CharacterDeleteDbRequest, DbOkResponse>(
                 DbCmd.CharacterDelete,
                 new CharacterDeleteDbRequest { CharacterId = request.CharacterId, AccountId = session.AccountId });
 
@@ -879,7 +893,7 @@ namespace MMORPG.GameServer.World
             // ❗ Dòng quan trọng nhất Phase 5.
             // AccountId lấy từ SESSION — thứ server tự gán ở Phase 4 — chứ không phải từ gói tin.
             // Client gửi lên id nhân vật của người khác thì query trả về 0 dòng.
-            var load = await _db.CallAsync<CharacterLoadRequest, CharacterLoadResponse>(
+            var load = await _dbClient.CallAsync<CharacterLoadRequest, CharacterLoadResponse>(
                 DbCmd.CharacterLoad,
                 new CharacterLoadRequest { CharacterId = request.CharacterId, AccountId = session.AccountId });
 
@@ -891,10 +905,10 @@ namespace MMORPG.GameServer.World
                 return new EnterWorldResponse { Success = false, Error = ErrorCode.NotFound };
             }
 
-            if (_world.TryGetByCharacter(request.CharacterId, out _))
+            if (_worldService.TryGetByCharacter(request.CharacterId, out _))
                 return new EnterWorldResponse { Success = false, Error = ErrorCode.CharacterInUse };
 
-            PlayerEntity entity = _world.Spawn(load.Character, session);
+            PlayerEntity entity = _worldService.Spawn(load.Character, session);
             session.MarkInWorld(entity);
 
             return new EnterWorldResponse
@@ -923,11 +937,11 @@ namespace MMORPG.GameServer.World
                 return;
 
             session.MarkLeftWorld();
-            _world.Despawn(entity);
+            _worldService.Despawn(entity);
 
             try
             {
-                await _db.CallAsync<CharacterSavePositionRequest, DbOkResponse>(
+                await _dbClient.CallAsync<CharacterSavePositionRequest, DbOkResponse>(
                     DbCmd.CharacterSavePosition,
                     new CharacterSavePositionRequest
                     {
@@ -945,14 +959,17 @@ namespace MMORPG.GameServer.World
             }
         }
 
-        private static CharacterSummary ToSummary(CharacterRow row) => new()
+        private static CharacterSummary ToSummary(CharacterRow row)
         {
-            CharacterId = row.CharacterId,
-            Name = row.Name,
-            ClassId = row.ClassId,
-            Level = row.Level,
-            MapId = row.MapId,
-        };
+            return new CharacterSummary
+            {
+                CharacterId = row.CharacterId,
+                Name = row.Name,
+                ClassId = row.ClassId,
+                Level = row.Level,
+                MapId = row.MapId,
+            };
+        }
     }
 }
 ```
@@ -996,7 +1013,7 @@ và trong khối `finally` của `RunAsync`, **trước** `SessionRegistry.Remov
 
 ```csharp
                 // Mất kết nối đột ngột cũng phải đi qua đúng đường dọn dẹp như Leave chủ động.
-                await Handlers.CharacterHandler.Characters.LeaveWorldAsync(this);
+                await Handlers.CharacterHandler.CharacterService.LeaveWorldAsync(this);
 ```
 
 **File mới:** `Server/GameServer/Handlers/CharacterHandler.cs`
@@ -1011,28 +1028,37 @@ namespace MMORPG.GameServer.Handlers
 {
     public static class CharacterHandler
     {
-        public static CharacterService Characters { get; set; } = null!;
+        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
+        public static CharacterService CharacterService { get; set; }
 
         [TcpHandler(NetCmd.CharacterList, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnList(NetRequest req) =>
-            NetResult.Ok(await Characters.ListAsync(req.Session));
+        public static async Task<NetResult> OnList(NetRequest req)
+        {
+            return NetResult.Ok(await CharacterService.ListAsync(req.Session));
+        }
 
         [TcpHandler(NetCmd.CharacterCreate, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnCreate(NetRequest req) =>
-            NetResult.Ok(await Characters.CreateAsync(req.Session, req.GetData<CharacterCreateRequest>()));
+        public static async Task<NetResult> OnCreate(NetRequest req)
+        {
+            return NetResult.Ok(await CharacterService.CreateAsync(req.Session, req.GetData<CharacterCreateRequest>()));
+        }
 
         [TcpHandler(NetCmd.CharacterDelete, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnDelete(NetRequest req) =>
-            NetResult.Ok(await Characters.DeleteAsync(req.Session, req.GetData<CharacterDeleteRequest>()));
+        public static async Task<NetResult> OnDelete(NetRequest req)
+        {
+            return NetResult.Ok(await CharacterService.DeleteAsync(req.Session, req.GetData<CharacterDeleteRequest>()));
+        }
 
         [TcpHandler(NetCmd.EnterWorld, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnEnterWorld(NetRequest req) =>
-            NetResult.Ok(await Characters.EnterWorldAsync(req.Session, req.GetData<EnterWorldRequest>()));
+        public static async Task<NetResult> OnEnterWorld(NetRequest req)
+        {
+            return NetResult.Ok(await CharacterService.EnterWorldAsync(req.Session, req.GetData<EnterWorldRequest>()));
+        }
 
         [TcpHandler(NetCmd.LeaveWorld, MinState = SessionState.InWorld)]
         public static async Task<NetResult> OnLeaveWorld(NetRequest req)
         {
-            await Characters.LeaveWorldAsync(req.Session);
+            await CharacterService.LeaveWorldAsync(req.Session);
             return NetResult.Ok(new LeaveWorldResponse { Success = true });
         }
     }
@@ -1094,23 +1120,38 @@ namespace MMORPG.Client.Character
 {
     public sealed class CharacterApi
     {
-        private readonly NetService _net;
+        private readonly NetService _netService;
 
-        public CharacterApi(NetService net) => _net = net;
+        public CharacterApi(NetService netService)
+        {
+            _netService = netService;
+        }
 
-        public void RequestList() => _net.Send(NetCmd.CharacterList, new EmptyRequest());
+        public void RequestList()
+        {
+            _netService.Send(NetCmd.CharacterList, new EmptyRequest());
+        }
 
-        public void Create(string name, int classId) =>
-            _net.Send(NetCmd.CharacterCreate, new CharacterCreateRequest { Name = name, ClassId = classId });
+        public void Create(string name, int classId)
+        {
+            _netService.Send(NetCmd.CharacterCreate, new CharacterCreateRequest { Name = name, ClassId = classId });
+        }
 
-        public void Delete(long characterId, string confirmName) =>
-            _net.Send(NetCmd.CharacterDelete,
+        public void Delete(long characterId, string confirmName)
+        {
+            _netService.Send(NetCmd.CharacterDelete,
                       new CharacterDeleteRequest { CharacterId = characterId, ConfirmName = confirmName });
+        }
 
-        public void EnterWorld(long characterId) =>
-            _net.Send(NetCmd.EnterWorld, new EnterWorldRequest { CharacterId = characterId });
+        public void EnterWorld(long characterId)
+        {
+            _netService.Send(NetCmd.EnterWorld, new EnterWorldRequest { CharacterId = characterId });
+        }
 
-        public void LeaveWorld() => _net.Send(NetCmd.LeaveWorld, new EmptyRequest());
+        public void LeaveWorld()
+        {
+            _netService.Send(NetCmd.LeaveWorld, new EmptyRequest());
+        }
     }
 }
 ```
@@ -1133,19 +1174,34 @@ namespace MMORPG.Client.Network.Handlers
         public event Action<LeaveWorldResponse> OnLeftWorld;
 
         [NetHandler(NetCmd.CharacterList)]
-        private void HandleList(NetPacket p) => OnList?.Invoke(p.GetData<CharacterListResponse>());
+        private void HandleList(NetPacket packet)
+        {
+            OnList?.Invoke(packet.GetData<CharacterListResponse>());
+        }
 
         [NetHandler(NetCmd.CharacterCreate)]
-        private void HandleCreate(NetPacket p) => OnCreated?.Invoke(p.GetData<CharacterCreateResponse>());
+        private void HandleCreate(NetPacket packet)
+        {
+            OnCreated?.Invoke(packet.GetData<CharacterCreateResponse>());
+        }
 
         [NetHandler(NetCmd.CharacterDelete)]
-        private void HandleDelete(NetPacket p) => OnDeleted?.Invoke(p.GetData<CharacterDeleteResponse>());
+        private void HandleDelete(NetPacket packet)
+        {
+            OnDeleted?.Invoke(packet.GetData<CharacterDeleteResponse>());
+        }
 
         [NetHandler(NetCmd.EnterWorld)]
-        private void HandleEnter(NetPacket p) => OnEnteredWorld?.Invoke(p.GetData<EnterWorldResponse>());
+        private void HandleEnter(NetPacket packet)
+        {
+            OnEnteredWorld?.Invoke(packet.GetData<EnterWorldResponse>());
+        }
 
         [NetHandler(NetCmd.LeaveWorld)]
-        private void HandleLeave(NetPacket p) => OnLeftWorld?.Invoke(p.GetData<LeaveWorldResponse>());
+        private void HandleLeave(NetPacket packet)
+        {
+            OnLeftWorld?.Invoke(packet.GetData<LeaveWorldResponse>());
+        }
     }
 }
 ```
@@ -1177,17 +1233,17 @@ namespace MMORPG.Client.Character
         public float X { get; private set; }
         public float Y { get; private set; }
 
-        public void Apply(EnterWorldResponse res)
+        public void Apply(EnterWorldResponse response)
         {
             IsInWorld = true;
-            EntityId = res.EntityId;
-            CharacterId = res.CharacterId;
-            Name = res.Name;
-            ClassId = res.ClassId;
-            Level = res.Level;
-            MapId = res.MapId;
-            X = res.X;
-            Y = res.Y;
+            EntityId = response.EntityId;
+            CharacterId = response.CharacterId;
+            Name = response.Name;
+            ClassId = response.ClassId;
+            Level = response.Level;
+            MapId = response.MapId;
+            X = response.X;
+            Y = response.Y;
         }
 
         public void Clear()
@@ -1225,78 +1281,81 @@ namespace MMORPG.Client.Character
         [SerializeField] private Button _enterButton;
         [SerializeField] private TextMeshProUGUI _messageText;
 
-        private CharacterApi _characters;
-        private CharacterNetHandler _handler;
-        private AuthNetHandler _authHandler;
+        private CharacterApi _characterApi;
+        private CharacterNetHandler _characterNetHandler;
+        private AuthNetHandler _authNetHandler;
         private LocalPlayer _player;
         private WorldSpawner _spawner;
 
         private long _selectedId;
 
         [Inject]
-        public void Construct(CharacterApi characters, CharacterNetHandler handler,
-                              AuthNetHandler authHandler, LocalPlayer player, WorldSpawner spawner)
+        public void Construct(CharacterApi characterApi, CharacterNetHandler characterNetHandler,
+                              AuthNetHandler authNetHandler, LocalPlayer player, WorldSpawner spawner)
         {
-            _characters = characters;
-            _handler = handler;
-            _authHandler = authHandler;
+            _characterApi = characterApi;
+            _characterNetHandler = characterNetHandler;
+            _authNetHandler = authNetHandler;
             _player = player;
             _spawner = spawner;
         }
 
         private void Awake()
         {
-            _createButton.onClick.AddListener(() => _characters.Create(_nameInput.text, classId: 1));
+            _createButton.onClick.AddListener(OnCreateClicked);
             _enterButton.onClick.AddListener(OnEnterClicked);
 
-            _handler.OnList += OnList;
-            _handler.OnCreated += OnCreated;
-            _handler.OnEnteredWorld += OnEnteredWorld;
-            _authHandler.OnLoginResult += OnLoggedIn;
+            _characterNetHandler.OnList += OnList;
+            _characterNetHandler.OnCreated += OnCreated;
+            _characterNetHandler.OnEnteredWorld += OnEnteredWorld;
+            _authNetHandler.OnLoginResult += OnLoggedIn;
 
             _root.SetActive(false);
         }
 
         private void OnDestroy()
         {
-            if (_handler == null)
+            _createButton.onClick.RemoveListener(OnCreateClicked);
+            _enterButton.onClick.RemoveListener(OnEnterClicked);
+
+            if (_characterNetHandler == null)
                 return;
 
-            _handler.OnList -= OnList;
-            _handler.OnCreated -= OnCreated;
-            _handler.OnEnteredWorld -= OnEnteredWorld;
-            _authHandler.OnLoginResult -= OnLoggedIn;
+            _characterNetHandler.OnList -= OnList;
+            _characterNetHandler.OnCreated -= OnCreated;
+            _characterNetHandler.OnEnteredWorld -= OnEnteredWorld;
+            _authNetHandler.OnLoginResult -= OnLoggedIn;
         }
 
-        private void OnLoggedIn(AuthResponse res)
+        private void OnLoggedIn(AuthResponse response)
         {
-            if (!res.Success)
+            if (!response.Success)
                 return;
 
             _root.SetActive(true);
-            _characters.RequestList();
+            _characterApi.RequestList();
         }
 
-        private void OnList(CharacterListResponse res)
+        private void OnList(CharacterListResponse response)
         {
             foreach (Transform child in _slotContainer)
                 Destroy(child.gameObject);
 
-            foreach (CharacterSummary summary in res.Characters)
+            foreach (CharacterSummary summary in response.Characters)
             {
                 CharacterSlotUi slot = Instantiate(_slotPrefab, _slotContainer);
                 slot.Bind(summary, () => Select(summary.CharacterId));
             }
 
-            _createButton.interactable = res.Characters.Length < res.MaxSlots;
+            _createButton.interactable = response.Characters.Length < response.MaxSlots;
             _enterButton.interactable = false;
 
-            _messageText.text = res.Characters.Length == 0
+            _messageText.text = response.Characters.Length == 0
                 ? "Chưa có nhân vật nào. Đặt tên rồi bấm Tạo."
-                : $"{res.Characters.Length}/{res.MaxSlots} nhân vật.";
+                : $"{response.Characters.Length}/{response.MaxSlots} nhân vật.";
 
-            if (res.Characters.Length > 0)
-                Select(res.Characters.First().CharacterId);
+            if (response.Characters.Length > 0)
+                Select(response.Characters.First().CharacterId);
         }
 
         private void Select(long characterId)
@@ -1305,48 +1364,56 @@ namespace MMORPG.Client.Character
             _enterButton.interactable = true;
         }
 
-        private void OnCreated(CharacterCreateResponse res)
+        private void OnCreated(CharacterCreateResponse response)
         {
-            if (!res.Success)
+            if (!response.Success)
             {
-                _messageText.text = ErrorText(res.Error);
+                _messageText.text = ErrorText(response.Error);
                 return;
             }
 
             _nameInput.text = string.Empty;
-            _characters.RequestList();
+            _characterApi.RequestList();
+        }
+
+        private void OnCreateClicked()
+        {
+            _characterApi.Create(_nameInput.text, classId: 1);
         }
 
         private void OnEnterClicked()
         {
             _enterButton.interactable = false;
-            _characters.EnterWorld(_selectedId);
+            _characterApi.EnterWorld(_selectedId);
         }
 
-        private void OnEnteredWorld(EnterWorldResponse res)
+        private void OnEnteredWorld(EnterWorldResponse response)
         {
-            if (!res.Success)
+            if (!response.Success)
             {
-                _messageText.text = ErrorText(res.Error);
+                _messageText.text = ErrorText(response.Error);
                 _enterButton.interactable = true;
-                _characters.RequestList();
+                _characterApi.RequestList();
                 return;
             }
 
-            _player.Apply(res);
-            _spawner.SpawnLocalPlayer(res);
+            _player.Apply(response);
+            _spawner.SpawnLocalPlayer(response);
             _root.SetActive(false);
         }
 
-        private static string ErrorText(ErrorCode code) => code switch
+        private static string ErrorText(ErrorCode code)
         {
-            ErrorCode.NameTaken => "Tên này đã có người dùng.",
-            ErrorCode.SlotFull => "Bạn đã đủ số nhân vật tối đa.",
-            ErrorCode.InvalidInput => "Tên nhân vật 2–12 ký tự, chỉ chữ và số.",
-            ErrorCode.CharacterInUse => "Nhân vật này đang được chơi ở nơi khác.",
-            ErrorCode.NotFound => "Không tìm thấy nhân vật.",
-            _ => "Có lỗi xảy ra. Thử lại sau.",
-        };
+            return code switch
+            {
+                ErrorCode.NameTaken => "Tên này đã có người dùng.",
+                ErrorCode.SlotFull => "Bạn đã đủ số nhân vật tối đa.",
+                ErrorCode.InvalidInput => "Tên nhân vật 2–12 ký tự, chỉ chữ và số.",
+                ErrorCode.CharacterInUse => "Nhân vật này đang được chơi ở nơi khác.",
+                ErrorCode.NotFound => "Không tìm thấy nhân vật.",
+                _ => "Có lỗi xảy ra. Thử lại sau.",
+            };
+        }
     }
 }
 ```
@@ -1373,6 +1440,8 @@ namespace MMORPG.Client.Character
             _nameText.text = summary.Name;
             _infoText.text = $"Cấp {summary.Level} · Nghề {summary.ClassId}";
 
+            // Slot được Bind lại mỗi lần refresh danh sách — lambda ở đây hợp lệ VÌ có RemoveAllListeners
+            // quét sạch ngay trước đó. Đây là ngoại lệ duy nhất của quy tắc "listener phải là method có tên".
             _selectButton.onClick.RemoveAllListeners();
             _selectButton.onClick.AddListener(() => onSelect());
         }
@@ -1406,18 +1475,18 @@ namespace MMORPG.Client.World
 
         private GameObject _localPlayerObject;
 
-        public void SpawnLocalPlayer(EnterWorldResponse res)
+        public void SpawnLocalPlayer(EnterWorldResponse response)
         {
             if (_localPlayerObject != null)
                 Destroy(_localPlayerObject);
 
             _localPlayerObject = Instantiate(
-                _playerPrefab, new Vector3(res.X, res.Y, 0f), Quaternion.identity, _entityRoot);
-            _localPlayerObject.name = $"Player_{res.EntityId}_{res.Name}";
+                _playerPrefab, new Vector3(response.X, response.Y, 0f), Quaternion.identity, _entityRoot);
+            _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
 
             _camera.SetTarget(_localPlayerObject.transform);
 
-            this.Log($"Vào map {res.MapId} tại ({res.X:0.##}, {res.Y:0.##}) — entity {res.EntityId}");
+            this.Log($"Vào map {response.MapId} tại ({response.X:0.##}, {response.Y:0.##}) — entity {response.EntityId}");
         }
 
         public void DespawnLocalPlayer()
@@ -1448,7 +1517,10 @@ namespace MMORPG.Client.World
         private Transform _target;
         private Vector3 _velocity;
 
-        public void SetTarget(Transform target) => _target = target;
+        public void SetTarget(Transform target)
+        {
+            _target = target;
+        }
 
         // LateUpdate chứ không phải Update: nhân vật phải di chuyển xong rồi camera mới bám theo.
         // Làm ngược lại thì camera luôn trễ một frame và hình bị rung nhẹ.
@@ -1537,7 +1609,7 @@ Bây giờ chưa di chuyển được nên giá trị chưa đổi; Phase 6 sẽ
 | `foreign key constraint failed` khi tạo nhân vật | `account_id` không tồn tại, hoặc `PRAGMA foreign_keys` không bật | Kiểm `Database.InitAsync` chạy trước mọi query |
 | Entity treo lại sau khi client thoát | `LeaveWorldAsync` không được gọi trong `finally` | Thêm vào `ClientSession.RunAsync`, trước `SessionRegistry.Remove` |
 | `CharacterInUse` mãi không hết | Cùng nguyên nhân trên — entity ma còn trong `WorldService` | Restart GameServer để xác nhận, rồi sửa đường dọn dẹp |
-| Nhân vật hiện ở `(0,0)` dù DB ghi khác | Client dựng vị trí từ hằng số thay vì từ `EnterWorldResponse` | `WorldSpawner` phải dùng `res.X`, `res.Y` |
+| Nhân vật hiện ở `(0,0)` dù DB ghi khác | Client dựng vị trí từ hằng số thay vì từ `EnterWorldResponse` | `WorldSpawner` phải dùng `response.X`, `response.Y` |
 | Camera không bám | `SetTarget` chưa được gọi, hoặc `CameraFollow` chưa kéo vào `WorldSpawner` | Kiểm tham chiếu trong Inspector |
 | `VContainerException: WorldSpawner is not registered` | Quên `RegisterComponentInHierarchy` | Thêm vào `GameLifetimeScope`; object phải có sẵn trong scene |
 | Tên có dấu bị coi là 2 ký tự | Dùng `name.Length` thay vì `StringInfo` | Xem `CharacterNameRules.IsValidName` |

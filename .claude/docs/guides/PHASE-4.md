@@ -315,7 +315,10 @@ namespace MMORPG.DBServer.Repositories
 
         private readonly Database _database;
 
-        public AccountRepository(Database database) => _database = database;
+        public AccountRepository(Database database)
+        {
+            _database = database;
+        }
 
         public async Task<AccountGetResponse> GetByUsernameAsync(string username, CancellationToken ct = default)
         {
@@ -400,6 +403,7 @@ namespace MMORPG.DBServer.Repositories
 ```csharp
 using MMORPG.DBServer.Net;
 using MMORPG.DBServer.Repositories;
+using MMORPG.ServerCore;
 using MMORPG.Shared.Db;
 using MMORPG.Shared.Dto.Db;
 
@@ -407,20 +411,31 @@ namespace MMORPG.DBServer.Handlers
 {
     public static class AccountDbHandler
     {
-        public static AccountRepository Repository { get; set; } = null!;
+        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
+        public static AccountRepository Repository { get; set; }
 
         [DbHandler(DbCmd.AccountGetByName)]
         public static async Task<DbResult> OnGetByName(DbRequest req)
         {
             var request = req.GetData<AccountGetRequest>();
-            return DbResult.Ok(await Repository.GetByUsernameAsync(request.Username));
+            AccountGetResponse account = await Repository.GetByUsernameAsync(request.Username);
+
+            Log.Debug($"AccountGetByName {request.Username.Cyan()} → {(account.Found ? "thấy".Green() : "không thấy".Yellow())}");
+            return DbResult.Ok(account);
         }
 
         [DbHandler(DbCmd.AccountCreate)]
         public static async Task<DbResult> OnCreate(DbRequest req)
         {
             var request = req.GetData<AccountCreateRequest>();
-            return DbResult.Ok(await Repository.CreateAsync(request));
+            AccountCreateResponse result = await Repository.CreateAsync(request);
+
+            if (result.Created)
+                Log.Info($"Tạo tài khoản {request.Username.Cyan()} → id {result.AccountId.ToString().Green()}");
+            else
+                Log.Warn($"Không tạo được {request.Username.Cyan()}: tên đã tồn tại");
+
+            return DbResult.Ok(result);
         }
 
         [DbHandler(DbCmd.AccountTouchLogin)]
@@ -429,11 +444,19 @@ namespace MMORPG.DBServer.Handlers
             var request = req.GetData<AccountTouchLoginRequest>();
             await Repository.TouchLoginAsync(request.AccountId);
 
+            Log.Debug($"Ghi last_login cho account {request.AccountId.ToString().Magenta()}");
             return DbResult.Ok(new DbOkResponse { Success = true });
         }
     }
 }
 ```
+
+> **Vì sao chỉ cần `{ get; set; }` trần, không `= null!`.** Template .NET 8 bật sẵn *nullable reference
+> types* — chính nó đẻ ra cả họ `string?`, `= null!`, warning CS86xx. Repo này **tắt** nó ở GameServer +
+> DBServer (`<Nullable>disable</Nullable>` trong csproj) cho đồng bộ với Unity client — Unity vốn tắt
+> mặc định. Property gán-một-lần vì vậy khai báo trần là đủ; quên gán trong `Program.cs` thì request
+> đầu tiên ném `NullReferenceException` với stack trace trỏ đúng handler — đủ biết chỗ sửa.
+> Riêng `Shared` giữ nullable: nó là thư viện, annotation nằm trong DLL, không bắt ai viết `?` theo.
 
 Trong `Server/DBServer/Program.cs`, thêm trước `DbDispatcher.RegisterAll()`:
 
@@ -498,12 +521,16 @@ namespace MMORPG.GameServer.Auth
         /// Băm giả để tiêu tốn đúng lượng thời gian như một lần kiểm thật.
         /// Dùng khi tài khoản KHÔNG tồn tại — xem <c>AuthService.LoginAsync</c>.
         /// </summary>
-        public static void BurnEquivalentTime() =>
+        public static void BurnEquivalentTime()
+        {
             Derive("dummy", new byte[SALT_SIZE], DEFAULT_ITERATIONS);
+        }
 
-        private static byte[] Derive(string password, byte[] salt, int iterations) =>
-            Rfc2898DeriveBytes.Pbkdf2(
+        private static byte[] Derive(string password, byte[] salt, int iterations)
+        {
+            return Rfc2898DeriveBytes.Pbkdf2(
                 Encoding.UTF8.GetBytes(password), salt, iterations, HashAlgorithmName.SHA256, HASH_SIZE);
+        }
     }
 }
 ```
@@ -531,18 +558,24 @@ namespace MMORPG.GameServer.Auth
         private static readonly Regex _usernamePattern = new("^[a-z0-9_]+$", RegexOptions.Compiled);
 
         /// <summary>Chuẩn hoá về dạng lưu trong DB. Gọi TRƯỚC mọi so sánh và mọi query.</summary>
-        public static string Normalize(string username) =>
-            (username ?? string.Empty).Trim().ToLowerInvariant();
+        public static string Normalize(string username)
+        {
+            return (username ?? string.Empty).Trim().ToLowerInvariant();
+        }
 
-        public static bool IsValidUsername(string normalized) =>
-            normalized.Length >= USERNAME_MIN &&
-            normalized.Length <= USERNAME_MAX &&
-            _usernamePattern.IsMatch(normalized);
+        public static bool IsValidUsername(string normalized)
+        {
+            return normalized.Length >= USERNAME_MIN &&
+                   normalized.Length <= USERNAME_MAX &&
+                   _usernamePattern.IsMatch(normalized);
+        }
 
-        public static bool IsValidPassword(string password) =>
-            !string.IsNullOrEmpty(password) &&
-            password.Length >= PASSWORD_MIN &&
-            password.Length <= PASSWORD_MAX;
+        public static bool IsValidPassword(string password)
+        {
+            return !string.IsNullOrEmpty(password) &&
+                   password.Length >= PASSWORD_MIN &&
+                   password.Length <= PASSWORD_MAX;
+        }
     }
 }
 ```
@@ -628,11 +661,17 @@ namespace MMORPG.GameServer
         /// <summary>Trạng thái tối thiểu để được gọi lệnh này. Mặc định: không cần đăng nhập.</summary>
         public SessionState MinState { get; set; } = SessionState.Connected;
 
-        public TcpHandlerAttribute(NetCmd command) => Command = command;
+        public TcpHandlerAttribute(NetCmd command)
+        {
+            Command = command;
+        }
     }
 ```
 
-`TcpDispatcher` lưu thêm `MinState` cạnh delegate và kiểm trước khi gọi:
+`TcpDispatcher` lưu thêm `MinState` cạnh delegate và kiểm trước khi gọi. Có đúng **ba chỗ đổi**, đều trong `TcpDispatcher.cs`:
+
+**(1) Kiểu lưu trữ.** Delegate trần trong Dictionary không còn đủ chỗ — gói nó cùng `MinState` vào một record struct.
+Dòng `Dictionary<NetCmd, Func<NetRequest, Task<NetResult>>>` cũ bị **thay thế**, không phải thêm bên cạnh:
 
 ```csharp
         private readonly record struct HandlerEntry(Func<NetRequest, Task<NetResult>> Invoke, SessionState MinState);
@@ -640,14 +679,54 @@ namespace MMORPG.GameServer
         private static readonly Dictionary<NetCmd, HandlerEntry> _handlers = new();
 ```
 
+**(2) `RegisterAll`.** Dòng đăng ký cuối vòng `foreach` giờ bọc delegate vào entry, đọc `MinState` từ attribute:
+
 ```csharp
+                _handlers[attr.Command] = new HandlerEntry(
+                    (Func<NetRequest, Task<NetResult>>)Delegate.CreateDelegate(
+                        typeof(Func<NetRequest, Task<NetResult>>), method),
+                    attr.MinState);
+```
+
+**(3) `DispatchAsync`.** `TryGetValue` giờ trả về `HandlerEntry` (struct nên bỏ dấu `?` ở biến `out`),
+chốt chặn trạng thái đứng ngay sau chốt "lệnh lạ" — handler chưa kịp chạy thì payload cũng chưa bị giải mã:
+
+```csharp
+            if (!_handlers.TryGetValue(cmd, out HandlerEntry entry))
+            {
+                SendError(session, cmd, ErrorCode.UnknownCommand, $"Không có handler cho {cmd}");
+                return;
+            }
+
             if (session.State < entry.MinState)
             {
                 SendError(session, cmd, ErrorCode.NotAuthenticated,
                           $"{cmd} cần trạng thái {entry.MinState}, session đang ở {session.State}");
                 return;
             }
+
+            NetResult result;
+            try
+            {
+                result = await entry.Invoke(new NetRequest(session, cmd, payload));
+            }
 ```
+
+Các khối `catch` và phần gửi phản hồi phía dưới giữ nguyên. Cố tình **không** log từng gói ở dispatcher:
+đây là hot path, từ Phase 6 trở đi gói di chuyển/AOI chạy liên tục — log nghiệp vụ nằm ở service/handler,
+nơi có quyết định đáng đọc.
+
+Phía handler, khai báo yêu cầu trạng thái ngay trong attribute:
+
+```csharp
+        [TcpHandler(NetCmd.Logout, MinState = SessionState.Authenticated)]
+```
+
+> **Bẫy cú pháp attribute:** `MinState` là **property assignment**, không phải tham số constructor —
+> C# cho phép gán property public có setter ngay sau danh sách đối số constructor, cùng cấp, ngăn nhau
+> bằng dấu phẩy. Viết `[TcpHandler((NetCmd.Logout, MinState = ...))]` (thừa một cặp ngoặc) là compiler
+> hiểu cả cụm trong ngoặc thành một tuple và báo lỗi kiểu *"TcpHandler không nhận đối số này"* —
+> lỗi trỏ vào attribute nhưng thủ phạm là cặp ngoặc thừa.
 
 > **Vì sao đặt ở dispatcher chứ không phải đầu mỗi handler.** Vì bảo vệ mà phải nhớ mới có thì sớm muộn sẽ quên —
 > và cái handler bạn quên chính là cái bị lợi dụng. Ở đây thì mặc định là *có bảo vệ*: một handler mới quên khai
@@ -675,28 +754,35 @@ namespace MMORPG.GameServer.Auth
     /// </summary>
     public sealed class AuthService
     {
-        private readonly DbClient _db;
+        private readonly DbClient _dbClient;
         private readonly LoginRateLimiter _rateLimiter;
 
-        public AuthService(DbClient db, LoginRateLimiter rateLimiter)
+        public AuthService(DbClient dbClient, LoginRateLimiter rateLimiter)
         {
-            _db = db;
+            _dbClient = dbClient;
             _rateLimiter = rateLimiter;
         }
 
         public async Task<AuthResponse> RegisterAsync(ClientSession session, RegisterRequest request)
         {
             string username = AccountNameRules.Normalize(request.Username);
+            Log.Info($"{session.Tag} Đăng ký: {username.Cyan()} (mật khẩu {request.Password?.Length ?? 0} ký tự)");
 
             if (!AccountNameRules.IsValidUsername(username))
+            {
+                Log.Warn($"{session.Tag} Từ chối đăng ký {username.Cyan()}: tên không hợp lệ");
                 return Fail(ErrorCode.InvalidInput);
+            }
 
             if (!AccountNameRules.IsValidPassword(request.Password))
+            {
+                Log.Warn($"{session.Tag} Từ chối đăng ký {username.Cyan()}: mật khẩu không hợp lệ");
                 return Fail(ErrorCode.InvalidInput);
+            }
 
             (byte[] hash, byte[] salt, int iterations) = PasswordHasher.Hash(request.Password);
 
-            var result = await _db.CallAsync<AccountCreateRequest, AccountCreateResponse>(
+            var result = await _dbClient.CallAsync<AccountCreateRequest, AccountCreateResponse>(
                 DbCmd.AccountCreate,
                 new AccountCreateRequest
                 {
@@ -707,7 +793,10 @@ namespace MMORPG.GameServer.Auth
                 });
 
             if (!result.Created)
+            {
+                Log.Warn($"{session.Tag} Từ chối đăng ký {username.Cyan()}: tên đã có người dùng");
                 return Fail(ErrorCode.AccountExists);
+            }
 
             Log.Info($"{session.Tag} Tạo tài khoản {username.Cyan()} (id {result.AccountId.ToString().Green()})");
 
@@ -718,20 +807,26 @@ namespace MMORPG.GameServer.Auth
         public async Task<AuthResponse> LoginAsync(ClientSession session, LoginRequest request)
         {
             if (!_rateLimiter.TryConsume(session.Id))
+            {
+                Log.Warn($"{session.Tag} Chặn đăng nhập: vượt hạn mức thử trong một phút");
                 return Fail(ErrorCode.TooManyAttempts);
+            }
 
             string username = AccountNameRules.Normalize(request.Username);
+            Log.Info($"{session.Tag} Đăng nhập: {username.Cyan()} (mật khẩu {request.Password?.Length ?? 0} ký tự)");
 
             // Định dạng sai thì chắc chắn không có trong DB — nhưng vẫn trả InvalidCredentials
             // chứ không phải InvalidInput. Nói "tên này sai định dạng" là đã tiết lộ một mẩu thông tin.
             if (!AccountNameRules.IsValidUsername(username) ||
                 !AccountNameRules.IsValidPassword(request.Password))
             {
+                // Lý do thật chỉ được nói trong log server — client luôn nhận InvalidCredentials chung.
+                Log.Warn($"{session.Tag} Từ chối {username.Cyan()}: sai định dạng tên/mật khẩu");
                 PasswordHasher.BurnEquivalentTime();
                 return Fail(ErrorCode.InvalidCredentials);
             }
 
-            var account = await _db.CallAsync<AccountGetRequest, AccountGetResponse>(
+            var account = await _dbClient.CallAsync<AccountGetRequest, AccountGetResponse>(
                 DbCmd.AccountGetByName, new AccountGetRequest { Username = username });
 
             if (!account.Found)
@@ -739,20 +834,27 @@ namespace MMORPG.GameServer.Auth
                 // Không có tài khoản thì trả về ngay sẽ NHANH hơn hẳn trường hợp có tài khoản
                 // (vì bỏ qua 100.000 vòng PBKDF2). Kẻ tấn công chỉ cần bấm giờ là dò được
                 // tài khoản nào tồn tại. Đốt đúng lượng thời gian đó để hai đường bằng nhau.
+                Log.Warn($"{session.Tag} Từ chối {username.Cyan()}: tài khoản không tồn tại");
                 PasswordHasher.BurnEquivalentTime();
                 return Fail(ErrorCode.InvalidCredentials);
             }
 
             if (!PasswordHasher.Verify(request.Password, account.PasswordHash, account.Salt, account.Iterations))
+            {
+                Log.Warn($"{session.Tag} Từ chối {username.Cyan()}: sai mật khẩu");
                 return Fail(ErrorCode.InvalidCredentials);
+            }
 
             if (account.IsBanned)
+            {
+                Log.Warn($"{session.Tag} Từ chối {username.Cyan()}: tài khoản bị khoá");
                 return Fail(ErrorCode.InvalidCredentials);
+            }
 
             _rateLimiter.Reset(session.Id);
             KickPreviousSession(session, account.AccountId);
 
-            _ = _db.CallAsync<AccountTouchLoginRequest, DbOkResponse>(
+            _ = _dbClient.CallAsync<AccountTouchLoginRequest, DbOkResponse>(
                 DbCmd.AccountTouchLogin, new AccountTouchLoginRequest { AccountId = account.AccountId });
 
             Log.Info($"{session.Tag} {username.Cyan()} đăng nhập thành công");
@@ -761,6 +863,7 @@ namespace MMORPG.GameServer.Auth
 
         public AuthResponse Logout(ClientSession session)
         {
+            Log.Info($"{session.Tag} {session.Username.Cyan()} đăng xuất");
             SessionTokens.Revoke(session.AccountId);
             session.MarkLoggedOut();
 
@@ -787,16 +890,22 @@ namespace MMORPG.GameServer.Auth
         {
             session.MarkAuthenticated(accountId, username);
 
+            // Chỉ log ĐỘ DÀI — token là thứ thay cho mật khẩu, lộ ra log là lộ phiên.
+            string sessionToken = SessionTokens.Issue(accountId);
+            Log.Debug($"{session.Tag} Cấp token phiên cho {username.Cyan()} ({sessionToken.Length} ký tự)");
+
             return new AuthResponse
             {
                 Success = true,
                 Username = username,
-                SessionToken = SessionTokens.Issue(accountId),
+                SessionToken = sessionToken,
             };
         }
 
-        private static AuthResponse Fail(ErrorCode error) =>
-            new() { Success = false, Error = error };
+        private static AuthResponse Fail(ErrorCode error)
+        {
+            return new AuthResponse { Success = false, Error = error };
+        }
     }
 }
 ```
@@ -830,14 +939,19 @@ namespace MMORPG.GameServer.Auth
             return token;
         }
 
-        public static bool Validate(long accountId, string token) =>
-            _byAccount.TryGetValue(accountId, out string? known) &&
-            !string.IsNullOrEmpty(token) &&
-            CryptographicOperations.FixedTimeEquals(
-                System.Text.Encoding.ASCII.GetBytes(known),
-                System.Text.Encoding.ASCII.GetBytes(token));
+        public static bool Validate(long accountId, string token)
+        {
+            return _byAccount.TryGetValue(accountId, out string? known) &&
+                   !string.IsNullOrEmpty(token) &&
+                   CryptographicOperations.FixedTimeEquals(
+                       System.Text.Encoding.ASCII.GetBytes(known),
+                       System.Text.Encoding.ASCII.GetBytes(token));
+        }
 
-        public static void Revoke(long accountId) => _byAccount.TryRemove(accountId, out _);
+        public static void Revoke(long accountId)
+        {
+            _byAccount.TryRemove(accountId, out _);
+        }
     }
 }
 ```
@@ -875,7 +989,10 @@ namespace MMORPG.GameServer.Auth
             return count <= MAX_ATTEMPTS;
         }
 
-        public void Reset(int sessionId) => _attempts.TryRemove(sessionId, out _);
+        public void Reset(int sessionId)
+        {
+            _attempts.TryRemove(sessionId, out _);
+        }
     }
 }
 ```
@@ -896,7 +1013,8 @@ namespace MMORPG.GameServer.Handlers
     /// </summary>
     public static class AuthHandler
     {
-        public static AuthService Auth { get; set; } = null!;
+        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
+        public static AuthService AuthService { get; set; }
 
         [TcpHandler(NetCmd.Register)]
         public static async Task<NetResult> OnRegister(NetRequest req)
@@ -904,7 +1022,7 @@ namespace MMORPG.GameServer.Handlers
             if (req.Session.State >= SessionState.Authenticated)
                 return NetResult.Ok(new AuthResponse { Success = false, Error = ErrorCode.AlreadyAuthenticated });
 
-            return NetResult.Ok(await Auth.RegisterAsync(req.Session, req.GetData<RegisterRequest>()));
+            return NetResult.Ok(await AuthService.RegisterAsync(req.Session, req.GetData<RegisterRequest>()));
         }
 
         [TcpHandler(NetCmd.Login)]
@@ -913,12 +1031,14 @@ namespace MMORPG.GameServer.Handlers
             if (req.Session.State >= SessionState.Authenticated)
                 return NetResult.Ok(new AuthResponse { Success = false, Error = ErrorCode.AlreadyAuthenticated });
 
-            return NetResult.Ok(await Auth.LoginAsync(req.Session, req.GetData<LoginRequest>()));
+            return NetResult.Ok(await AuthService.LoginAsync(req.Session, req.GetData<LoginRequest>()));
         }
 
         [TcpHandler(NetCmd.Logout, MinState = SessionState.Authenticated)]
-        public static Task<NetResult> OnLogout(NetRequest req) =>
-            Task.FromResult(NetResult.Ok(Auth.Logout(req.Session)));
+        public static Task<NetResult> OnLogout(NetRequest req)
+        {
+            return Task.FromResult(NetResult.Ok(AuthService.Logout(req.Session)));
+        }
     }
 }
 ```
@@ -926,7 +1046,7 @@ namespace MMORPG.GameServer.Handlers
 Nối vào `Server/GameServer/Program.cs`:
 
 ```csharp
-AuthHandler.Auth = new AuthService(db, new LoginRateLimiter());
+AuthHandler.AuthService = new AuthService(dbClient, new LoginRateLimiter());
 ```
 
 ### ✅ CHECKPOINT A — server đứng vững một mình
@@ -934,8 +1054,18 @@ AuthHandler.Auth = new AuthService(db, new LoginRateLimiter());
 Chưa cần Unity. Bật DBServer + GameServer, rồi tạm thêm nút Register/Login vào `NetworkProbe`
 (hoặc dùng lại nút Echo, sửa tạm nội dung gửi):
 
+Console GameServer phải kể trọn câu chuyện của một lần đăng ký:
+
 ```
+INFO  [AuthService] #1 Đăng ký: hung (mật khẩu 6 ký tự)
 INFO  [AuthService] #1 Tạo tài khoản hung (id 1)
+DEBUG [AuthService] #1 Cấp token phiên cho hung (64 ký tự)
+```
+
+Và console DBServer:
+
+```
+INFO  [AccountDbHandler] Tạo tài khoản hung → id 1
 ```
 
 Kiểm tra trong `mmorpg.db`:
@@ -951,6 +1081,7 @@ Phải ra `1 | hung | 100000 | 32 | 16`. **Nhìn kỹ: không có cột nào ch�
 **File mới:** `Assets/Game/Scripts/Auth/AuthApi.cs`
 
 ```csharp
+using HungNT;
 using MMORPG.Client.Network;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
@@ -963,17 +1094,32 @@ namespace MMORPG.Client.Auth
     /// </summary>
     public sealed class AuthApi
     {
-        private readonly NetService _net;
+        private readonly NetService _netService;
 
-        public AuthApi(NetService net) => _net = net;
+        public AuthApi(NetService netService)
+        {
+            _netService = netService;
+        }
 
-        public void Register(string username, string password) =>
-            _net.Send(NetCmd.Register, new RegisterRequest { Username = username, Password = password });
+        public void Register(string username, string password)
+        {
+            // Đang dev nên in thẳng mật khẩu tài khoản test để đối chiếu nhập-gì-gửi-nấy.
+            // Phase hardening (TLS) sẽ rà và gỡ toàn bộ log secret trước khi có người chơi thật.
+            this.Log($"Register: username:{username.Color("cyan")}, password:{password.Color("cyan")}");
+            _netService.Send(NetCmd.Register, new RegisterRequest { Username = username, Password = password });
+        }
 
-        public void Login(string username, string password) =>
-            _net.Send(NetCmd.Login, new LoginRequest { Username = username, Password = password });
+        public void Login(string username, string password)
+        {
+            this.Log($"Login: username:{username.Color("cyan")}, password:{password.Color("cyan")}");
+            _netService.Send(NetCmd.Login, new LoginRequest { Username = username, Password = password });
+        }
 
-        public void Logout() => _net.Send(NetCmd.Logout, new EmptyRequest());
+        public void Logout()
+        {
+            this.Log("Logout");
+            _netService.Send(NetCmd.Logout, new EmptyRequest());
+        }
     }
 }
 ```
@@ -995,16 +1141,28 @@ namespace MMORPG.Client.Network.Handlers
         public event Action<KickedNotice> OnKicked;
 
         [NetHandler(NetCmd.Register)]
-        private void HandleRegister(NetPacket packet) => OnRegisterResult?.Invoke(packet.GetData<AuthResponse>());
+        private void HandleRegister(NetPacket packet)
+        {
+            OnRegisterResult?.Invoke(packet.GetData<AuthResponse>());
+        }
 
         [NetHandler(NetCmd.Login)]
-        private void HandleLogin(NetPacket packet) => OnLoginResult?.Invoke(packet.GetData<AuthResponse>());
+        private void HandleLogin(NetPacket packet)
+        {
+            OnLoginResult?.Invoke(packet.GetData<AuthResponse>());
+        }
 
         [NetHandler(NetCmd.Logout)]
-        private void HandleLogout(NetPacket packet) => OnLogoutResult?.Invoke(packet.GetData<AuthResponse>());
+        private void HandleLogout(NetPacket packet)
+        {
+            OnLogoutResult?.Invoke(packet.GetData<AuthResponse>());
+        }
 
         [NetHandler(NetCmd.Kicked)]
-        private void HandleKicked(NetPacket packet) => OnKicked?.Invoke(packet.GetData<KickedNotice>());
+        private void HandleKicked(NetPacket packet)
+        {
+            OnKicked?.Invoke(packet.GetData<KickedNotice>());
+        }
     }
 }
 ```
@@ -1024,16 +1182,19 @@ namespace MMORPG.Client.Auth
     /// </summary>
     public static class AuthErrorText
     {
-        public static string Of(ErrorCode code) => code switch
+        public static string Of(ErrorCode code)
         {
-            ErrorCode.InvalidInput =>
-                "Tên đăng nhập 3–16 ký tự (chữ thường, số, gạch dưới). Mật khẩu tối thiểu 6 ký tự.",
-            ErrorCode.AccountExists => "Tên đăng nhập này đã có người dùng.",
-            ErrorCode.InvalidCredentials => "Sai tài khoản hoặc mật khẩu.",
-            ErrorCode.TooManyAttempts => "Bạn thử sai quá nhiều lần. Chờ một phút rồi thử lại.",
-            ErrorCode.ServiceUnavailable => "Máy chủ đang bận. Thử lại sau giây lát.",
-            _ => "Có lỗi xảy ra. Thử lại sau.",
-        };
+            return code switch
+            {
+                ErrorCode.InvalidInput =>
+                    "Tên đăng nhập 3–16 ký tự (chữ thường, số, gạch dưới). Mật khẩu tối thiểu 6 ký tự.",
+                ErrorCode.AccountExists => "Tên đăng nhập này đã có người dùng.",
+                ErrorCode.InvalidCredentials => "Sai tài khoản hoặc mật khẩu.",
+                ErrorCode.TooManyAttempts => "Bạn thử sai quá nhiều lần. Chờ một phút rồi thử lại.",
+                ErrorCode.ServiceUnavailable => "Máy chủ đang bận. Thử lại sau giây lát.",
+                _ => "Có lỗi xảy ra. Thử lại sau.",
+            };
+        }
     }
 }
 ```
@@ -1085,14 +1246,56 @@ namespace MMORPG.Client.Auth
             _registerButton.interactable = value;
         }
 
-        public void SetVisible(bool value) => _root.SetActive(value);
+        public void SetVisible(bool value)
+        {
+            _root.SetActive(value);
+        }
     }
 }
+```
+
+**File mới:** `Assets/Game/Scripts/Network/NetworkSettings.cs` — địa chỉ server khai báo đúng MỘT chỗ.
+Đừng rải `[SerializeField] host/port` vào từng MonoBehaviour: giá trị serialize bị chôn trong scene,
+đổi một chỗ không kéo các chỗ còn lại theo được — sớm muộn hai nơi lệch nhau và bạn debug nhầm server.
+
+```csharp
+namespace MMORPG.Client.Network
+{
+    /// <summary>
+    /// Nguồn DUY NHẤT cho địa chỉ GameServer phía client — chỉnh trong Inspector của GameLifetimeScope.
+    /// </summary>
+    public sealed class NetworkSettings
+    {
+        public string Host { get; }
+        public int Port { get; }
+
+        public NetworkSettings(string host, int port)
+        {
+            Host = host;
+            Port = port;
+        }
+    }
+}
+```
+
+**Sửa** `GameLifetimeScope.cs` — thêm hai field serialize (cần `using UnityEngine;`) và đăng ký instance
+ở đầu `Configure`:
+
+```csharp
+        [SerializeField] private string _serverHost = "127.0.0.1";
+        [SerializeField] private int _serverPort = 7778;
+```
+
+```csharp
+            // Địa chỉ server chỉ khai báo ở ĐÂY — ai cần thì inject NetworkSettings.
+            builder.RegisterInstance(new NetworkSettings(_serverHost, _serverPort));
 ```
 
 **File mới:** `Assets/Game/Scripts/Auth/LoginPresenter.cs`
 
 ```csharp
+using System;
+using System.Threading;
 using Cysharp.Threading.Tasks;
 using HungNT;
 using MMORPG.Client.Network;
@@ -1109,86 +1312,148 @@ namespace MMORPG.Client.Auth
     /// </summary>
     public sealed class LoginPresenter : MonoBehaviour
     {
-        [SerializeField] private LoginUi _ui;
-        [SerializeField] private string _host = "127.0.0.1";
-        [SerializeField] private int _port = 7778;
+        [SerializeField] private LoginUi _loginUi;
 
-        private NetService _net;
-        private AuthApi _auth;
-        private AuthNetHandler _authHandler;
+        private const float RESPONSE_TIMEOUT_SECONDS = 8f;
+
+        private NetService _netService;
+        private AuthApi _authApi;
+        private AuthNetHandler _authNetHandler;
+        private NetworkSettings _networkSettings;
+        private CancellationTokenSource _responseTimeout;
 
         [Inject]
-        public void Construct(NetService net, AuthApi auth, AuthNetHandler authHandler)
+        public void Construct(NetService netService, AuthApi authApi, AuthNetHandler authNetHandler, NetworkSettings networkSettings)
         {
-            _net = net;
-            _auth = auth;
-            _authHandler = authHandler;
+            _netService = netService;
+            _authApi = authApi;
+            _authNetHandler = authNetHandler;
+            _networkSettings = networkSettings;
         }
 
         private void Awake()
         {
-            _ui.LoginButton.onClick.AddListener(() => SubmitAsync(isRegister: false).Forget());
-            _ui.RegisterButton.onClick.AddListener(() => SubmitAsync(isRegister: true).Forget());
+            _loginUi.LoginButton.onClick.AddListener(OnClickLogin);
+            _loginUi.RegisterButton.onClick.AddListener(OnClickRegister);
 
-            _authHandler.OnLoginResult += OnAuthResult;
-            _authHandler.OnRegisterResult += OnAuthResult;
-            _authHandler.OnKicked += OnKicked;
+            _authNetHandler.OnLoginResult += OnAuthResult;
+            _authNetHandler.OnRegisterResult += OnAuthResult;
+            _authNetHandler.OnKicked += OnKicked;
         }
 
         private void OnDestroy()
         {
-            if (_authHandler == null)
+            CancelResponseTimeout();
+
+            // Gỡ đúng cái đã gắn — nên listener phải là method có tên, không phải lambda:
+            // lambda mỗi lần viết là một delegate MỚI, RemoveListener không bao giờ khớp được.
+            _loginUi.LoginButton.onClick.RemoveListener(OnClickLogin);
+            _loginUi.RegisterButton.onClick.RemoveListener(OnClickRegister);
+
+            if (_authNetHandler == null)
                 return;
 
-            _authHandler.OnLoginResult -= OnAuthResult;
-            _authHandler.OnRegisterResult -= OnAuthResult;
-            _authHandler.OnKicked -= OnKicked;
+            _authNetHandler.OnLoginResult -= OnAuthResult;
+            _authNetHandler.OnRegisterResult -= OnAuthResult;
+            _authNetHandler.OnKicked -= OnKicked;
+        }
+
+        private void OnClickLogin()
+        {
+            SubmitAsync(isRegister: false).Forget();
+        }
+
+        private void OnClickRegister()
+        {
+            SubmitAsync(isRegister: true).Forget();
         }
 
         private async UniTaskVoid SubmitAsync(bool isRegister)
         {
             // Khoá nút ngay: người chơi bấm 5 lần liên tiếp thì server nhận 5 request,
             // và với rate limiter 5 lần/phút thì họ tự khoá chính mình.
-            _ui.SetInteractable(false);
-            _ui.ShowMessage("Đang kết nối...", isError: false);
+            _loginUi.SetInteractable(false);
+            _loginUi.ShowMessage("Đang kết nối...", isError: false);
 
-            if (!_net.IsConnected && !await _net.ConnectAsync(_host, _port))
+            if (!_netService.IsConnected && !await _netService.ConnectAsync(_networkSettings.Host, _networkSettings.Port))
             {
-                _ui.ShowMessage("Không kết nối được máy chủ.", isError: true);
-                _ui.SetInteractable(true);
+                this.LogWarning($"Không kết nối được {$"{_networkSettings.Host}:{_networkSettings.Port}".Color("orange")}");
+                _loginUi.ShowMessage("Không kết nối được máy chủ.", isError: true);
+                _loginUi.SetInteractable(true);
                 return;
             }
 
-            _ui.ShowMessage(isRegister ? "Đang tạo tài khoản..." : "Đang đăng nhập...", isError: false);
+            _loginUi.ShowMessage(isRegister ? "Đang tạo tài khoản..." : "Đang đăng nhập...", isError: false);
 
             if (isRegister)
-                _auth.Register(_ui.Username, _ui.Password);
+                _authApi.Register(_loginUi.Username, _loginUi.Password);
             else
-                _auth.Login(_ui.Username, _ui.Password);
+                _authApi.Login(_loginUi.Username, _loginUi.Password);
+
+            ArmResponseTimeout();
         }
 
         private void OnAuthResult(AuthResponse response)
         {
-            _ui.SetInteractable(true);
+            CancelResponseTimeout();
+            _loginUi.SetInteractable(true);
 
             if (!response.Success)
             {
-                _ui.ShowMessage(AuthErrorText.Of(response.Error), isError: true);
+                this.LogWarning($"Server từ chối: {response.Error.ToString().Color("red")}");
+                _loginUi.ShowMessage(AuthErrorText.Of(response.Error), isError: true);
                 return;
             }
 
-            _ui.ShowMessage($"Xin chào, {response.Username}!", isError: false);
-            this.Log($"Đăng nhập xong. Token dài {response.SessionToken.Length} ký tự.");
+            this.Log($"Đăng nhập thành công: {response.Username.Color("cyan")} — token {response.SessionToken.Length.ToString().Bold()} ký tự");
+            _loginUi.ShowMessage($"Xin chào, {response.Username}!", isError: false);
 
             // Phase 5 sẽ thay bằng: mở màn hình chọn nhân vật.
-            _ui.SetVisible(false);
+            _loginUi.SetVisible(false);
         }
 
         private void OnKicked(KickedNotice notice)
         {
-            _ui.SetVisible(true);
-            _ui.SetInteractable(true);
-            _ui.ShowMessage(notice.Reason, isError: true);
+            CancelResponseTimeout();
+            this.LogWarning($"Bị đá khỏi server: {notice.Reason.Color("orange")}");
+            _loginUi.SetVisible(true);
+            _loginUi.SetInteractable(true);
+            _loginUi.ShowMessage(notice.Reason, isError: true);
+        }
+
+        /// <summary>
+        /// Server không trả lời thì trả quyền tương tác lại cho người chơi thay vì khoá UI vĩnh viễn.
+        /// Response về (OnAuthResult / OnKicked) sẽ huỷ đồng hồ này.
+        /// </summary>
+        private void ArmResponseTimeout()
+        {
+            CancelResponseTimeout();
+            _responseTimeout = new CancellationTokenSource();
+            WatchResponseTimeoutAsync(_responseTimeout.Token).Forget();
+        }
+
+        private void CancelResponseTimeout()
+        {
+            if (_responseTimeout == null)
+                return;
+
+            _responseTimeout.Cancel();
+            _responseTimeout.Dispose();
+            _responseTimeout = null;
+        }
+
+        private async UniTaskVoid WatchResponseTimeoutAsync(CancellationToken cancellationToken)
+        {
+            bool canceled = await UniTask
+                .Delay(TimeSpan.FromSeconds(RESPONSE_TIMEOUT_SECONDS), cancellationToken: cancellationToken)
+                .SuppressCancellationThrow();
+
+            if (canceled)
+                return;
+
+            this.LogWarning($"Không nhận được phản hồi sau {RESPONSE_TIMEOUT_SECONDS} giây");
+            _loginUi.ShowMessage("Máy chủ không phản hồi. Thử lại sau giây lát.", isError: true);
+            _loginUi.SetInteractable(true);
         }
     }
 }
@@ -1202,10 +1467,12 @@ namespace MMORPG.Client.Auth
             builder.Register<AuthNetHandler>(Lifetime.Singleton)
                    .AsSelf()
                    .As<INetHandlerGroup>();
+
+            builder.RegisterComponentInHierarchy<LoginPresenter>();
 ```
 
 Trong scene: một Canvas với 2 `TMP_InputField`, 2 `Button`, 1 `TextMeshProUGUI`, gắn `LoginUi` + `LoginPresenter`,
-kéo tham chiếu vào. Thêm object chứa `LoginPresenter` vào *Auto Inject Game Objects* của `GameLifetimeScope`.
+kéo tham chiếu vào. `RegisterComponentInHierarchy` đã lo phần inject nên không cần đụng *Auto Inject Game Objects*.
 
 > **Vì sao chưa dùng `com.hungnt.ui.panel`:** hiện mới có đúng một màn hình. `PanelManager` giải quyết bài toán
 > *nhiều* panel chồng lớp, đóng/mở theo thứ tự — chưa có bài toán đó thì thêm nó chỉ là thêm tầng. Phase 5 có
@@ -1216,11 +1483,15 @@ kéo tham chiếu vào. Thêm object chứa `LoginPresenter` vào *Auto Inject G
 ### ✅ CHECKPOINT B — mục tiêu cuối Phase 4
 
 1. Bật DBServer, bật GameServer, Play Unity.
-2. Gõ `hung` / `123456`, bấm **Đăng ký** → `Xin chào, hung!`, server log `INFO  [AuthService] #1 Tạo tài khoản hung (id 1)`.
+2. Gõ `hung` / `123456`, bấm **Đăng ký** → `Xin chào, hung!`. Console Unity phải có `[AuthApi] Register: username:hung, password:123456` và `[LoginPresenter] Đăng nhập thành công: hung — token 64 ký tự`; console server như CHECKPOINT A.
 3. Bấm **Đăng ký** lại cùng tên → `Tên đăng nhập này đã có người dùng.`
 4. Thoát Play mode, Play lại, bấm **Đăng nhập** cùng tài khoản → `Xin chào, hung!`
 5. Gõ sai mật khẩu → `Sai tài khoản hoặc mật khẩu.`
 6. Gõ tài khoản không tồn tại → **cùng một câu**, và cảm nhận được là **mất chừng ấy thời gian**.
+7. Tắt DBServer (GameServer vẫn chạy), bấm **Đăng nhập** → server trả `NetCmd.Error` (`ServiceUnavailable`);
+   client chưa có handler cho `Error` nên response rơi vào cảnh báo "Không có handler" — nhưng sau 8 giây
+   `ArmResponseTimeout` mở khoá UI với "Máy chủ không phản hồi". **UI không bao giờ được treo vĩnh viễn
+   chỉ vì một response không tới.** (Handler riêng cho `NetCmd.Error` sẽ thêm ở Phase 5.)
 
 ---
 
@@ -1233,7 +1504,7 @@ Hai con số phải xấp xỉ nhau (chênh dưới ~20%). Sau đó **bỏ tạm
 
 **2. Vượt rào trạng thái.** Trong Unity, gửi `NetCmd.Logout` khi **chưa** đăng nhập:
 ```csharp
-_net.Send(NetCmd.Logout, new EmptyRequest());
+_netService.Send(NetCmd.Logout, new EmptyRequest());
 ```
 → Console Unity: `NotAuthenticated — Logout cần trạng thái Authenticated, session đang ở Connected`.
 Đây là bằng chứng hàng rào ở dispatcher hoạt động, và là mẫu cho mọi lệnh từ Phase 5 trở đi.
@@ -1256,6 +1527,8 @@ ghi nhận và để dành Phase 16.
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |-------------|-------------|-------|
+| Lỗi biên dịch ngay tại `[TcpHandler(...)]` khi thêm `MinState` | Bọc thừa ngoặc: `[TcpHandler((NetCmd.X, MinState = ...))]` → compiler hiểu thành tuple | `MinState = ...` đứng cùng cấp với `NetCmd.X`, chỉ một cặp ngoặc: `[TcpHandler(NetCmd.X, MinState = ...)]` |
+| Khai báo `HandlerEntry` rồi mà `entry.MinState` / `entry.Invoke` báo không tồn tại | Mới thêm record struct nhưng Dictionary, `RegisterAll`, `DispatchAsync` vẫn dùng delegate trần | Đổi đủ **ba chỗ** trong Bước 4: kiểu Dictionary, dòng đăng ký trong `RegisterAll`, và `TryGetValue` + guard trong `DispatchAsync` |
 | Đăng nhập luôn `InvalidCredentials` dù mật khẩu đúng | `username` không được `Normalize` ở một trong hai đường (tạo / đọc) | Chỉ có `AccountNameRules.Normalize` được phép sinh ra chuỗi đem đi query |
 | `AccountCreate` luôn `Created = false` | Đã có dòng cũ từ lần test trước | `DELETE FROM account;` hoặc xoá file `.db` |
 | `SqliteException: UNIQUE constraint failed` lọt lên tới GameServer | `catch` bắt sai mã lỗi | Dùng `ex.SqliteExtendedErrorCode == 2067`, **không** phải `ex.SqliteErrorCode` (mã đó là 19) |

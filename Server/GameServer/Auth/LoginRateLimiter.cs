@@ -32,6 +32,9 @@ namespace MMORPG.GameServer.Auth
             return count <= MAX_ATTEMPTS;
         }
 
-        public void Reset(int sessionId) => _attempts.TryRemove(sessionId, out _);
+        public void Reset(int sessionId)
+        {
+            _attempts.TryRemove(sessionId, out _);
+        }
     }
 }

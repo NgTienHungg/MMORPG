@@ -16,7 +16,10 @@ namespace MMORPG.DBServer.Net
             _payload = payload;
         }
 
-        public T GetData<T>() where T : IMemoryPackable<T> => NetPayload.Deserialize<T>(_payload);
+        public T GetData<T>() where T : IMemoryPackable<T>
+        {
+            return NetPayload.Deserialize<T>(_payload);
+        }
     }
 
     /// <summary>Kết quả xử lý. Dispatcher lo việc gắn lại request id và gửi đi.</summary>
@@ -24,10 +27,15 @@ namespace MMORPG.DBServer.Net
     {
         public byte[] Payload { get; }
 
-        private DbResult(byte[] payload) => Payload = payload;
+        private DbResult(byte[] payload)
+        {
+            Payload = payload;
+        }
 
-        public static DbResult Ok<T>(T dto) where T : IMemoryPackable<T> =>
-            new(NetPayload.Serialize(dto));
+        public static DbResult Ok<T>(T dto) where T : IMemoryPackable<T>
+        {
+            return new DbResult(NetPayload.Serialize(dto));
+        }
     }
 
     /// <summary>Đánh dấu một static async method là handler cho một <see cref="DbCmd"/>.</summary>
@@ -36,6 +44,9 @@ namespace MMORPG.DBServer.Net
     {
         public DbCmd Command { get; }
 
-        public DbHandlerAttribute(DbCmd command) => Command = command;
+        public DbHandlerAttribute(DbCmd command)
+        {
+            Command = command;
+        }
     }
 }

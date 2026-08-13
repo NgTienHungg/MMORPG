@@ -20,7 +20,10 @@ namespace MMORPG.GameServer.Net
         }
 
         /// <summary>Giải mã payload thành DTO. Ném <see cref="System.IO.InvalidDataException"/> nếu sai kiểu.</summary>
-        public T GetData<T>() where T : IMemoryPackable<T> => NetPayload.Deserialize<T>(_payload);
+        public T GetData<T>() where T : IMemoryPackable<T>
+        {
+            return NetPayload.Deserialize<T>(_payload);
+        }
     }
 
     /// <summary>
@@ -45,10 +48,16 @@ namespace MMORPG.GameServer.Net
         public static NetResult None => default;
 
         /// <summary>Trả DTO về đúng cmd vừa nhận.</summary>
-        public static NetResult Ok<T>(T dto) where T : IMemoryPackable<T> => new(NetCmd.None, NetPayload.Serialize(dto));
+        public static NetResult Ok<T>(T dto) where T : IMemoryPackable<T>
+        {
+            return new NetResult(NetCmd.None, NetPayload.Serialize(dto));
+        }
 
         /// <summary>Trả DTO về một cmd khác (dùng khi response không cùng cặp với request).</summary>
-        public static NetResult On<T>(NetCmd cmd, T dto) where T : IMemoryPackable<T> => new(cmd, NetPayload.Serialize(dto));
+        public static NetResult On<T>(NetCmd cmd, T dto) where T : IMemoryPackable<T>
+        {
+            return new NetResult(cmd, NetPayload.Serialize(dto));
+        }
     }
 
     /// <summary>Đánh dấu một static method là handler cho một lệnh.</summary>
@@ -60,6 +69,9 @@ namespace MMORPG.GameServer.Net
         /// <summary>Trạng thái tối thiểu để được gọi lệnh này. Mặc định: không cần đăng nhập.</summary>
         public SessionState MinState { get; set; } = SessionState.Connected;
 
-        public TcpHandlerAttribute(NetCmd command) => Command = command;
+        public TcpHandlerAttribute(NetCmd command)
+        {
+            Command = command;
+        }
     }
 }

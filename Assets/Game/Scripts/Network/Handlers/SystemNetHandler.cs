@@ -15,10 +15,16 @@ namespace MMORPG.Client.Network.Handlers
         public event Action<ServerInfoResponse> OnServerInfo;
 
         [NetHandler(NetCmd.Ping)]
-        private void HandlePing(NetPacket packet) => OnPong?.Invoke(packet.GetData<PingResponse>());
+        private void HandlePing(NetPacket packet)
+        {
+            OnPong?.Invoke(packet.GetData<PingResponse>());
+        }
 
         [NetHandler(NetCmd.Echo)]
-        private void HandleEcho(NetPacket packet) => OnEcho?.Invoke(packet.GetData<EchoResponse>());
+        private void HandleEcho(NetPacket packet)
+        {
+            OnEcho?.Invoke(packet.GetData<EchoResponse>());
+        }
 
         [NetHandler(NetCmd.Error)]
         private void HandleError(NetPacket packet)
@@ -28,6 +34,9 @@ namespace MMORPG.Client.Network.Handlers
         }
 
         [NetHandler(NetCmd.ServerInfo)]
-        private void HandleServerInfo(NetPacket packet) => OnServerInfo?.Invoke(packet.GetData<ServerInfoResponse>());
+        private void HandleServerInfo(NetPacket packet)
+        {
+            OnServerInfo?.Invoke(packet.GetData<ServerInfoResponse>());
+        }
     }
 }

@@ -85,7 +85,10 @@ namespace MMORPG.Client.Network
             Cleanup();
         }
 
-        public void Dispose() => Disconnect();
+        public void Dispose()
+        {
+            Disconnect();
+        }
 
         private async Task ReadLoopAsync(CancellationToken ct)
         {
