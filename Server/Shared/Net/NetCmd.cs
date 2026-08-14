@@ -24,7 +24,6 @@ namespace MMORPG.Shared.Net
         None = 0,
 
         #region Hệ thống (1–99)
-
         /// <summary>
         /// Đo độ trễ. Request: <see cref="Dto.PingRequest"/> · Response: <see cref="Dto.PingResponse"/>
         /// Client chủ động gửi.
@@ -50,11 +49,9 @@ namespace MMORPG.Shared.Net
         /// Payload: <see cref="KickedNotice"/>
         /// </summary>
         Kicked = 5,
-
         #endregion
 
         #region Auth (100–199)
-
         /// <summary>
         /// Tạo tài khoản mới.
         /// Request: <see cref="RegisterRequest"/> · Response: <see cref="AuthResponse"/>
@@ -74,7 +71,15 @@ namespace MMORPG.Shared.Net
         /// Request: <see cref="Dto.EmptyRequest"/> · Response: <see cref="AuthResponse"/>
         /// </summary>
         Logout = 102,
+        #endregion
 
+        #region Character (200–299)
+        /// <summary>
+        /// Vào thế giới. Nhân vật tự tạo trong lần gọi đầu tiên của tài khoản.
+        /// Request: <see cref="Dto.EmptyRequest"/> · Response: <see cref="Dto.EnterWorldResponse"/>
+        /// Client chủ động gửi ngay sau khi đăng nhập thành công.
+        /// </summary>
+        EnterWorld = 200,
         #endregion
     }
 }

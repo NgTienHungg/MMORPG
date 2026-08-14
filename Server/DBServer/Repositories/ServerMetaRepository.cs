@@ -36,9 +36,9 @@ namespace MMORPG.DBServer.Repositories
             await using SqliteCommand cmd = connection.CreateCommand();
 
             cmd.CommandText = """
-                INSERT INTO server_meta (key, value) VALUES ($key, $value)
-                ON CONFLICT(key) DO UPDATE SET value = excluded.value;
-                """;
+                              INSERT INTO server_meta (key, value) VALUES ($key, $value)
+                              ON CONFLICT(key) DO UPDATE SET value = excluded.value;
+                              """;
             cmd.Parameters.AddWithValue("$key", key);
             cmd.Parameters.AddWithValue("$value", value);
 

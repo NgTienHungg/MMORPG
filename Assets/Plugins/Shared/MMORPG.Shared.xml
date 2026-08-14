@@ -31,6 +31,18 @@
             Request: <see cref="T:MMORPG.Shared.Dto.Db.AccountTouchLoginRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.DbOkResponse"/>
             </summary>
         </member>
+        <member name="F:MMORPG.Shared.Db.DbCmd.CharacterGetOrCreate">
+            <summary>
+            Lấy nhân vật của tài khoản; chưa có thì tạo với giá trị mặc định trong request.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.CharacterGetOrCreateRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.CharacterGetOrCreateResponse"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Db.DbCmd.CharacterSavePosition">
+            <summary>
+            Ghi vị trí cuối của nhân vật khi rời world.
+            Request: <see cref="T:MMORPG.Shared.Dto.Db.CharacterSavePositionRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.Db.DbOkResponse"/>
+            </summary>
+        </member>
         <member name="T:MMORPG.Shared.Db.DbFrame">
              <summary>
              Đường nội bộ dùng lại nguyên <see cref="T:MMORPG.Shared.Net.PacketFrame"/> và <see cref="T:MMORPG.Shared.Net.FrameReader"/> của đường client —
@@ -113,6 +125,30 @@
         <member name="P:MMORPG.Shared.Dto.KickedNotice.Reason">
             <summary>Chuỗi tiếng Việt hiển thị thẳng cho người chơi.</summary>
         </member>
+        <member name="T:MMORPG.Shared.Dto.Character.EnterWorldResponsive">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>bool</b> Success<br/>
+            <b>MMORPG.Shared.Net.ErrorCode</b> Error<br/>
+            <b>int</b> EntityId<br/>
+            <b>long</b> CharacterId<br/>
+            <b>string</b> Name<br/>
+            <b>int</b> ClassId<br/>
+            <b>int</b> Level<br/>
+            <b>int</b> MapId<br/>
+            <b>float</b> X<br/>
+            <b>float</b> Y<br/>
+            <b>long</b> ServerTimeMs<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponsive.EntityId">
+            <summary>Id runtime trong world. Chỉ có nghĩa tới khi rời world.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponsive.ServerTimeMs">
+            <summary>Mốc thời gian server lúc vào. Phase 6 dùng làm gốc cho đồng bộ tick.</summary>
+        </member>
         <member name="T:MMORPG.Shared.Dto.Db.AccountGetRequest">
             <remarks>
             MemoryPack GenerateType: Object<br/>
@@ -163,6 +199,64 @@
             MemoryPack GenerateType: Object<br/>
             <code>
             <b>long</b> AccountId<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.CharacterRow">
+            <summary>Một dòng nguyên vẹn của bảng <c>character</c>. Chỉ đi trên đường nội bộ.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> CharacterId<br/>
+            <b>long</b> AccountId<br/>
+            <b>string</b> Name<br/>
+            <b>int</b> ClassId<br/>
+            <b>int</b> Level<br/>
+            <b>long</b> Exp<br/>
+            <b>int</b> MapId<br/>
+            <b>float</b> X<br/>
+            <b>float</b> Y<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.CharacterGetOrCreateRequest">
+            <summary>
+            Giá trị mặc định cho lần tạo đầu do GAMESERVER quyết — spawn ở đâu, nghề gì là luật chơi,
+            không phải việc của tầng lưu trữ.
+            </summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> AccountId<br/>
+            <b>string</b> Name<br/>
+            <b>int</b> ClassId<br/>
+            <b>int</b> Level<br/>
+            <b>int</b> MapId<br/>
+            <b>float</b> X<br/>
+            <b>float</b> Y<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.CharacterGetOrCreateResponse">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>bool</b> Created<br/>
+            <b>MMORPG.Shared.Dto.Db.CharacterRow</b> Character<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Db.CharacterGetOrCreateResponse.Created">
+            <summary>true = lần này vừa tạo mới (lần vào world đầu tiên của tài khoản).</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.Db.CharacterSavePositionRequest">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>long</b> CharacterId<br/>
+            <b>int</b> MapId<br/>
+            <b>float</b> X<br/>
+            <b>float</b> Y<br/>
             </code>
             </remarks>
         </member>
@@ -353,6 +447,9 @@
         <member name="F:MMORPG.Shared.Net.ErrorCode.AlreadyAuthenticated">
             <summary>Gọi lệnh cần đăng nhập nhưng session đã đăng nhập rồi (vd: Login hai lần).</summary>
         </member>
+        <member name="F:MMORPG.Shared.Net.ErrorCode.CharacterInUse">
+            <summary>Nhân vật đang trong world rồi — gọi EnterWorld lần hai, hoặc session cũ chưa dọn xong.</summary>
+        </member>
         <member name="T:MMORPG.Shared.Net.FrameReader">
              <summary>
              Gom dòng byte đọc từ socket thành từng gói hoàn chỉnh.
@@ -440,6 +537,13 @@
             <summary>
             Đăng xuất chủ động (về màn hình login mà không cắt TCP).
             Request: <see cref="T:MMORPG.Shared.Dto.EmptyRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.AuthResponse"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.EnterWorld">
+            <summary>
+            Vào thế giới. Nhân vật tự tạo trong lần gọi đầu tiên của tài khoản.
+            Request: <see cref="T:MMORPG.Shared.Dto.EmptyRequest"/> · Response: <see cref="!:Dto.EnterWorldResponse"/>
+            Client chủ động gửi ngay sau khi đăng nhập thành công.
             </summary>
         </member>
         <member name="T:MMORPG.Shared.Net.NetPayload">

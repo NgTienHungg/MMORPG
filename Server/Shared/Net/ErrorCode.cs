@@ -37,5 +37,8 @@ namespace MMORPG.Shared.Net
 
         /// <summary>Gọi lệnh cần đăng nhập nhưng session đã đăng nhập rồi (vd: Login hai lần).</summary>
         AlreadyAuthenticated = 10,
+
+        /// <summary>Nhân vật đang trong world rồi — gọi EnterWorld lần hai, hoặc session cũ chưa dọn xong.</summary>
+        CharacterInUse = 11,
     }
 }

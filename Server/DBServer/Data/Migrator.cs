@@ -24,6 +24,7 @@ namespace MMORPG.DBServer.Data
                     ('server_name', 'local-dev'),
                     ('created_at',  datetime('now'));
                 """),
+
             (2, """
                 CREATE TABLE account (
                     id            INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -38,6 +39,21 @@ namespace MMORPG.DBServer.Data
 
                 -- Ràng buộc UNIQUE ở DB, không phải ở code. Xem giải thích ở AccountRepository.CreateAsync.
                 CREATE UNIQUE INDEX idx_account_username ON account (username);
+                """),
+            
+            (3, """
+                CREATE TABLE character (
+                    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+                    account_id INTEGER NOT NULL UNIQUE REFERENCES account(id) ON DELETE CASCADE,
+                    name       TEXT    NOT NULL,
+                    class_id   INTEGER NOT NULL,
+                    level      INTEGER NOT NULL DEFAULT 1,
+                    exp        INTEGER NOT NULL DEFAULT 0,
+                    map_id     INTEGER NOT NULL,
+                    pos_x      REAL    NOT NULL,
+                    pos_y      REAL    NOT NULL,
+                    created_at TEXT    NOT NULL
+                );
                 """),
         };
 
