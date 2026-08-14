@@ -1,13 +1,50 @@
-# PHASE 5 — Nhân vật & vào thế giới: ba danh tính của một người chơi
+# PHASE 5 — Vào thế giới: từ tài khoản tới nhân vật trên map
 
-> **Kết quả cuối Phase 5:** đăng nhập → màn hình chọn nhân vật → tạo nhân vật → bấm Vào game →
-> nhân vật xuất hiện trên map ở đúng vị trí lần trước thoát ra, camera bám theo.
+> **Kết quả cuối Phase 5:** đăng nhập → client tự động vào thẳng thế giới → nhân vật xuất hiện trên map
+> ở đúng vị trí lần trước thoát ra, camera bám theo. Lần đăng nhập đầu tiên, nhân vật được **tự tạo**
+> với tên trùng tên tài khoản — không có màn hình chọn nhân vật (kiểu Ngọc Rồng Online).
 >
 > **Điều kiện:** xong [`PHASE-4.md`](PHASE-4.md) tới CHECKPOINT B và cả 4 thử nghiệm ở Bước 7.
 >
 > **Bài học chính:** `Account`, `Character` và `Entity` là **ba** thứ khác nhau, sống ở ba nơi khác nhau,
-> có vòng đời khác nhau. Gộp chúng lại là sai lầm kiến trúc phổ biến nhất của người mới viết game server —
-> và nó chỉ lộ ra ở Phase 11, lúc quái vật cũng cần là entity nhưng chẳng có tài khoản nào.
+> có vòng đời khác nhau — kể cả khi quan hệ Account↔Character là 1-1. Gộp chúng lại là sai lầm kiến trúc
+> phổ biến nhất của người mới viết game server, và nó chỉ lộ ra ở Phase 11, lúc quái vật cũng cần là entity
+> nhưng chẳng có tài khoản nào.
+
+---
+
+## ⚠️ Cách dùng tài liệu này (format thử nghiệm)
+
+Từ phase này, mỗi bước có **hai tầng**:
+
+1. **Hướng làm** — mô tả cần dựng cái gì, vì sao, các quyết định thiết kế, bẫy cần né, và code khung
+   (chữ ký hàm, cấu trúc) đủ để bạn tự triển khai.
+2. **📖 Lời giải** — code đầy đủ, nằm trong foldout **mặc định đóng** ngay dưới phần hướng làm.
+
+Quy trình đúng: đọc hướng làm → **tự nghĩ và tự code** → chạy thử → *rồi mới* mở lời giải để đối chiếu
+xem có lệch ý gì không. Mở lời giải trước khi tự code thì format này mất hết tác dụng — lúc đó nó chỉ là
+doc cũ với thêm một cú click.
+
+Xong phase thì đánh giá: format này có đáng dùng tiếp cho Phase 6+ không.
+
+---
+
+## Thay đổi so với thiết kế cũ
+
+Bản nháp trước của phase này có màn hình chọn nhân vật, mỗi tài khoản 3 slot, tạo/xoá nhân vật, luật đặt tên.
+**Đã bỏ hết** — dự án học thì 1 tài khoản = 1 nhân vật là đủ, vào thẳng game như Ngọc Rồng Online.
+
+| Bỏ | Giữ |
+|----|-----|
+| `CharacterList` / `CharacterCreate` / `CharacterDelete` | Bảng `character` **riêng**, không gộp vào `account` |
+| UI chọn nhân vật, slot, xác nhận xoá | `EnterWorld` + snapshot khởi tạo |
+| Luật đặt tên nhân vật (`name_key`, chuẩn hoá Unicode) | `PlayerEntity` + `WorldService` trong RAM |
+| Xoá mềm `deleted_at` | Lưu vị trí khi rời world / mất kết nối |
+
+Vì sao bảng `character` vẫn riêng dù 1-1? Vì hai bảng chứa hai **loại** dữ liệu có vòng đời khác nhau:
+`account` là chuyện đăng nhập (hash mật khẩu, ban, mốc login), `character` là chuyện gameplay (level, exp,
+vị trí — Phase 10 thêm túi đồ tham chiếu vào đây). Và nếu sau này muốn nhiều nhân vật, chỉ cần bỏ một ràng
+buộc `UNIQUE` + thêm UI — không phải đập lại schema. Thiết kế cũ (3 slot) vẫn nằm trong git history nếu cần.
 
 ---
 
@@ -18,25 +55,19 @@
 | **Là gì** | Danh tính đăng nhập | Nhân vật trong game | Đối tượng đang sống trong world |
 | **Sống ở** | Bảng `account` | Bảng `character` | RAM của GameServer |
 | **Id** | `account.id` (long) | `character.id` (long) | `entityId` (int, cấp lúc chạy) |
-| **Vòng đời** | Từ lúc đăng ký tới lúc xoá | Từ lúc tạo tới lúc xoá | Từ `EnterWorld` tới lúc rời map |
-| **Số lượng** | 1 người 1 account | 1 account có tối đa 3 character | 1 character online = 1 entity |
-| **Client được biết** | ❌ không bao giờ | ⚠️ chỉ id nhân vật của chính mình | ✅ entityId của mọi ai trong tầm nhìn |
-
-Ba câu hỏi làm rõ vì sao phải tách:
+| **Vòng đời** | Từ lúc đăng ký tới lúc xoá | Tự tạo lần đầu vào world, sống mãi | Từ `EnterWorld` tới lúc rời world |
+| **Số lượng** | 1 người 1 account | **1 account = đúng 1 character** (chốt của dự án này) | 1 character online = 1 entity |
+| **Client được biết** | ❌ không bao giờ | ⚠️ chỉ dữ liệu nhân vật của chính mình | ✅ entityId của mọi ai trong tầm nhìn |
 
 **Vì sao `Entity` không phải là `Character`?**
 Entity mang những thứ chỉ có nghĩa khi đang online: mục tiêu đang đánh, buff còn 3 giây, ô lưới AOI đang đứng,
-vector vận tốc. Không thứ nào cần vào DB. Nếu `Character` gánh luôn phần đó thì object nào cũng nửa "dữ liệu lâu dài"
-nửa "trạng thái tạm", và bạn sẽ không bao giờ trả lời dứt khoát được câu "cái gì cần lưu?".
+vector vận tốc. Không thứ nào cần vào DB. Nếu `Character` gánh luôn phần đó thì object nào cũng nửa "dữ liệu
+lâu dài" nửa "trạng thái tạm", và bạn sẽ không bao giờ trả lời dứt khoát được câu "cái gì cần lưu?".
 
 **Vì sao `entityId` không dùng thẳng `character.id`?**
 Ba lý do, xếp theo mức quan trọng tăng dần: (1) `int` gọn hơn `long` trên gói tin gửi 20 lần/giây;
-(2) Phase 11 quái vật cũng cần entity id mà chúng không có character; (3) `character.id` là thông tin lâu dài về
-người khác — không có lý do gì để client biết id thật của người bên cạnh.
-
-**Vì sao một `Account` có nhiều `Character`?**
-Đó là chuẩn của thể loại. Quan trọng hơn: nó ép bạn viết đúng câu hỏi ngay từ đầu — "nhân vật này có thuộc
-tài khoản đang hỏi không?" Nếu 1-1 thì câu hỏi đó không tồn tại, và tới lúc cần thì phải sửa khắp nơi.
+(2) Phase 11 quái vật cũng cần entity id mà chúng không có character; (3) `character.id` là thông tin lâu dài
+về người khác — không có lý do gì để client biết id thật của người bên cạnh.
 
 ---
 
@@ -45,157 +76,121 @@ tài khoản đang hỏi không?" Nếu 1-1 thì câu hỏi đó không tồn t�
 ```
 Đăng nhập xong (SessionState.Authenticated)
       │
-      ├─► NetCmd.CharacterList ──► CharacterService ──► DB ──► danh sách 0..3 nhân vật
-      │
-      ├─► NetCmd.CharacterCreate ─► kiểm tên, kiểm slot ──► DB (UNIQUE trên name_key)
-      │
-      └─► NetCmd.EnterWorld { CharacterId }
-              └─► ❗ kiểm nhân vật này CÓ THUỘC account của session không
-                   └─► load nhân vật từ DB
-                        └─► WorldService.Spawn() → PlayerEntity (entityId mới)
-                             └─► session.MarkInWorld(entity)
-                                  └─► EnterWorldResponse { EntityId, X, Y, MapId, ... }
-                                       └─► Client: load scene game, spawn prefab, camera bám
+      └─► client TỰ gửi NetCmd.EnterWorld (payload rỗng — không có CharacterId!)
+              │
+              └─► CharacterService.EnterWorldAsync(session)
+                      │  AccountId lấy từ SESSION, không phải từ gói tin
+                      └─► DB: CharacterGetOrCreate(accountId)
+                              │  chưa có → tự tạo, tên = username, vị trí spawn mặc định
+                              └─► WorldService.Spawn() → PlayerEntity (entityId mới)
+                                      └─► session.MarkInWorld(entity)
+                                              └─► EnterWorldResponse { EntityId, X, Y, MapId, ... }
+                                                      └─► Client: spawn prefab, camera bám
 ```
 
-Mũi tên có `❗` là dòng code quan trọng nhất Phase này. Bỏ nó đi thì mọi người chơi vào được nhân vật của bất kỳ ai,
-chỉ bằng cách đổi một con số trong gói tin.
+Điểm đáng ngẫm nhất của phase: **`EnterWorld` không mang theo trường nào cả.**
+Bản thiết kế cũ có `EnterWorldRequest { CharacterId }` — và kèm theo nó là lỗ hổng nghiêm trọng nhất
+của phase: quên kiểm "nhân vật này có thuộc account đang hỏi không" thì ai cũng vào được nhân vật của
+bất kỳ ai. Giờ client không gửi id nào, server tự tra nhân vật từ `session.AccountId` — lỗ hổng đó
+**không thể tồn tại**, vì không có trường nào để giả mạo.
+
+> Trường nguy hiểm nhất trên gói tin là trường mà server tin từ client.
+> Trường an toàn nhất là trường không tồn tại.
 
 ---
 
-## Bước 1 — Shared: contract của character
+## Bước 1 — Shared: contract
 
-**Sửa** `Server/Shared/Net/NetCmd.cs`:
+### Hướng làm
+
+**`NetCmd`** — dải Character (200–299) giờ chỉ cần đúng một lệnh:
 
 ```csharp
         #region Character (200–299)
 
         /// <summary>
-        /// Xin danh sách nhân vật của tài khoản đang đăng nhập.
-        /// Request: <see cref="Dto.EmptyRequest"/> · Response: <see cref="Dto.CharacterListResponse"/>
+        /// Vào thế giới. Nhân vật tự tạo trong lần gọi đầu tiên của tài khoản.
+        /// Request: <see cref="Dto.EmptyRequest"/> · Response: <see cref="Dto.EnterWorldResponse"/>
+        /// Client chủ động gửi ngay sau khi đăng nhập thành công.
         /// </summary>
-        CharacterList = 200,
-
-        /// <summary>
-        /// Tạo nhân vật mới.
-        /// Request: <see cref="Dto.CharacterCreateRequest"/> · Response: <see cref="Dto.CharacterCreateResponse"/>
-        /// </summary>
-        CharacterCreate = 201,
-
-        /// <summary>
-        /// Xoá nhân vật.
-        /// Request: <see cref="Dto.CharacterDeleteRequest"/> · Response: <see cref="Dto.CharacterDeleteResponse"/>
-        /// </summary>
-        CharacterDelete = 202,
-
-        /// <summary>
-        /// Chọn nhân vật và vào thế giới.
-        /// Request: <see cref="Dto.EnterWorldRequest"/> · Response: <see cref="Dto.EnterWorldResponse"/>
-        /// </summary>
-        EnterWorld = 203,
-
-        /// <summary>
-        /// Rời thế giới về màn hình chọn nhân vật (không cắt TCP).
-        /// Request: <see cref="Dto.EmptyRequest"/> · Response: <see cref="Dto.LeaveWorldResponse"/>
-        /// </summary>
-        LeaveWorld = 204,
+        EnterWorld = 200,
 
         #endregion
 ```
 
-**Sửa** `Server/Shared/Db/DbCmd.cs` — dải `1200–1299`:
+Không có `LeaveWorld`: không còn màn hình chọn nhân vật để "rời về", nên rời world chỉ xảy ra qua
+`Logout` (Phase 4 đã có) hoặc mất kết nối. Cả hai đường đều là việc của server, không cần lệnh riêng.
+
+**`DbCmd`** — dải 1200–1299, hai lệnh: `CharacterGetOrCreate = 1200` và `CharacterSavePosition = 1201`.
+Ghi XML doc theo đúng kiểu các lệnh Account đang có.
+
+**DTO cần tự viết** (nhìn `AuthDto.cs` / `AccountDto.cs` để theo đúng kiểu):
+
+- `Server/Shared/Dto/Character/CharacterDto.cs` — contract client↔server:
+  - `EnterWorldResponse`: `Success`, `Error`, `EntityId` (int), `CharacterId`, `Name`, `ClassId`, `Level`,
+    `MapId`, `X`, `Y`, và `ServerTimeMs` (Phase 6 dùng làm gốc đồng bộ tick).
+- `Server/Shared/Dto/Db/CharacterDbDto.cs` — contract nội bộ:
+  - `CharacterRow`: một dòng nguyên vẹn của bảng `character` (`CharacterId`, `AccountId`, `Name`,
+    `ClassId`, `Level`, `Exp`, `MapId`, `X`, `Y`). Chỉ đi trên đường nội bộ.
+  - `CharacterGetOrCreateRequest`: `AccountId` + toàn bộ giá trị mặc định cho lần tạo đầu
+    (`Name`, `ClassId`, `MapId`, `X`, `Y`).
+  - `CharacterGetOrCreateResponse`: `Created` (lần này có phải lần tạo đầu không — để log) + `Character`.
+  - `CharacterSavePositionRequest`: `CharacterId`, `MapId`, `X`, `Y`.
+
+**Câu hỏi thiết kế trước khi code:** vì sao giá trị mặc định (tên, vị trí spawn) do **GameServer** truyền
+xuống trong request, thay vì để DBServer tự bịa? — Vì "spawn ở đâu, nghề gì" là **luật chơi**, và luật chơi
+sống ở GameServer. DBServer chỉ biết lưu và lấy; ngày Phase 9 chuyển spawn point vào bảng config, chỉ
+GameServer phải đổi.
+
+**`ErrorCode`** — thêm một mã mới vào cuối:
+
+```csharp
+        /// <summary>Nhân vật đang trong world rồi — gọi EnterWorld lần hai, hoặc session cũ chưa dọn xong.</summary>
+        CharacterInUse = 11,
+```
+
+Xong thì `dotnet build Server/Shared` để DLL tự copy sang Unity.
+
+**Việc vặt tiện tay:** `NetCmd.Echo` và cặp `EchoRequest/EchoResponse` có hẹn "xoá khi Phase 4 xong" —
+giờ là lúc (nhớ gỡ luôn handler hai bên và nút thử trong `NetworkProbe` nếu còn).
+
+<details>
+<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
+
+**`Server/Shared/Db/DbCmd.cs`** — thêm region:
 
 ```csharp
         #region Character (1200–1299)
 
-        CharacterListByAccount = 1200,
-        CharacterCreate = 1201,
-        CharacterDelete = 1202,
-        CharacterLoad = 1203,
-        CharacterSavePosition = 1204,
+        /// <summary>
+        /// Lấy nhân vật của tài khoản; chưa có thì tạo với giá trị mặc định trong request.
+        /// Request: <see cref="Dto.Db.CharacterGetOrCreateRequest"/> · Response: <see cref="Dto.Db.CharacterGetOrCreateResponse"/>
+        /// </summary>
+        CharacterGetOrCreate = 1200,
+
+        /// <summary>
+        /// Ghi vị trí cuối của nhân vật khi rời world.
+        /// Request: <see cref="Dto.Db.CharacterSavePositionRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
+        /// </summary>
+        CharacterSavePosition = 1201,
 
         #endregion
 ```
 
-**File mới:** `Server/Shared/Dto/Character/CharacterDto.cs`
+**`Server/Shared/Dto/Character/CharacterDto.cs`**:
 
 ```csharp
-using System;
 using MemoryPack;
 
 namespace MMORPG.Shared.Dto
 {
-    /// <summary>
-    /// Một dòng trong màn hình chọn nhân vật. Cố tình gọn — không có toạ độ, không có chỉ số chi tiết.
-    /// Màn hình chọn không cần chúng, và thứ không gửi thì không lộ.
-    /// </summary>
-    [MemoryPackable]
-    public partial class CharacterSummary
-    {
-        public long CharacterId { get; set; }
-        public string Name { get; set; } = string.Empty;
-        public int ClassId { get; set; }
-        public int Level { get; set; }
-        public int MapId { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterListResponse
-    {
-        public CharacterSummary[] Characters { get; set; } = Array.Empty<CharacterSummary>();
-
-        /// <summary>Số slot tối đa, để client tự biết còn tạo được nữa không mà không hard-code.</summary>
-        public int MaxSlots { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterCreateRequest
-    {
-        public string Name { get; set; } = string.Empty;
-        public int ClassId { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterCreateResponse
-    {
-        public bool Success { get; set; }
-        public Net.ErrorCode Error { get; set; }
-        public CharacterSummary? Character { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterDeleteRequest
-    {
-        public long CharacterId { get; set; }
-
-        /// <summary>
-        /// Người chơi phải gõ lại đúng tên nhân vật. Đây là hàng rào cho chính họ, không phải bảo mật —
-        /// nhưng server vẫn kiểm, vì client có thể bỏ qua hộp thoại xác nhận.
-        /// </summary>
-        public string ConfirmName { get; set; } = string.Empty;
-    }
-
-    [MemoryPackable]
-    public partial class CharacterDeleteResponse
-    {
-        public bool Success { get; set; }
-        public Net.ErrorCode Error { get; set; }
-        public long CharacterId { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class EnterWorldRequest
-    {
-        public long CharacterId { get; set; }
-    }
-
     [MemoryPackable]
     public partial class EnterWorldResponse
     {
         public bool Success { get; set; }
         public Net.ErrorCode Error { get; set; }
 
-        /// <summary>Id runtime trong world. Chỉ có nghĩa tới khi rời map.</summary>
+        /// <summary>Id runtime trong world. Chỉ có nghĩa tới khi rời world.</summary>
         public int EntityId { get; set; }
 
         public long CharacterId { get; set; }
@@ -210,35 +205,16 @@ namespace MMORPG.Shared.Dto
         /// <summary>Mốc thời gian server lúc vào. Phase 6 dùng làm gốc cho đồng bộ tick.</summary>
         public long ServerTimeMs { get; set; }
     }
-
-    [MemoryPackable]
-    public partial class LeaveWorldResponse
-    {
-        public bool Success { get; set; }
-    }
 }
 ```
 
-**File mới:** `Server/Shared/Dto/Db/CharacterDbDto.cs`
+**`Server/Shared/Dto/Db/CharacterDbDto.cs`**:
 
 ```csharp
-using System;
 using MemoryPack;
 
 namespace MMORPG.Shared.Dto.Db
 {
-    [MemoryPackable]
-    public partial class CharacterListRequest
-    {
-        public long AccountId { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterListResult
-    {
-        public CharacterRow[] Characters { get; set; } = Array.Empty<CharacterRow>();
-    }
-
     /// <summary>Một dòng nguyên vẹn của bảng <c>character</c>. Chỉ đi trên đường nội bộ.</summary>
     [MemoryPackable]
     public partial class CharacterRow
@@ -254,15 +230,15 @@ namespace MMORPG.Shared.Dto.Db
         public float Y { get; set; }
     }
 
+    /// <summary>
+    /// Giá trị mặc định cho lần tạo đầu do GAMESERVER quyết — spawn ở đâu, nghề gì là luật chơi,
+    /// không phải việc của tầng lưu trữ.
+    /// </summary>
     [MemoryPackable]
-    public partial class CharacterCreateDbRequest
+    public partial class CharacterGetOrCreateRequest
     {
         public long AccountId { get; set; }
         public string Name { get; set; } = string.Empty;
-
-        /// <summary>Tên đã chuẩn hoá chữ thường — cột có ràng buộc UNIQUE là cột này.</summary>
-        public string NameKey { get; set; } = string.Empty;
-
         public int ClassId { get; set; }
         public int MapId { get; set; }
         public float X { get; set; }
@@ -270,40 +246,12 @@ namespace MMORPG.Shared.Dto.Db
     }
 
     [MemoryPackable]
-    public partial class CharacterCreateDbResponse
+    public partial class CharacterGetOrCreateResponse
     {
+        /// <summary>true = lần này vừa tạo mới (lần vào world đầu tiên của tài khoản).</summary>
         public bool Created { get; set; }
 
-        /// <summary>false khi trùng tên, true khi tài khoản đã đủ slot — hai lý do khác nhau.</summary>
-        public bool SlotFull { get; set; }
-
-        public long CharacterId { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterLoadRequest
-    {
-        public long CharacterId { get; set; }
-
-        /// <summary>
-        /// Server truyền xuống để DB lọc luôn. KHÔNG phải để tin client —
-        /// giá trị này lấy từ session, và đây là tầng phòng thủ thứ hai.
-        /// </summary>
-        public long AccountId { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterLoadResponse
-    {
-        public bool Found { get; set; }
-        public CharacterRow? Character { get; set; }
-    }
-
-    [MemoryPackable]
-    public partial class CharacterDeleteDbRequest
-    {
-        public long CharacterId { get; set; }
-        public long AccountId { get; set; }
+        public CharacterRow Character { get; set; } = new();
     }
 
     [MemoryPackable]
@@ -317,53 +265,78 @@ namespace MMORPG.Shared.Dto.Db
 }
 ```
 
+</details>
+
 ---
 
-## Bước 2 — DBServer: bảng `character`
+## Bước 2 — DBServer: bảng `character` + repository
 
-**Thêm** vào cuối `_migrations` trong `Migrator.cs`:
+### Hướng làm
+
+**Migration 3** — thêm vào cuối `_migrations` trong `Migrator.cs` (nhớ quy tắc: migration đã chạy thì
+không sửa nữa, chỉ thêm mới). Schema:
+
+```sql
+CREATE TABLE character (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    account_id INTEGER NOT NULL UNIQUE REFERENCES account(id) ON DELETE CASCADE,
+    name       TEXT    NOT NULL,
+    class_id   INTEGER NOT NULL,
+    level      INTEGER NOT NULL DEFAULT 1,
+    exp        INTEGER NOT NULL DEFAULT 0,
+    map_id     INTEGER NOT NULL,
+    pos_x      REAL    NOT NULL,
+    pos_y      REAL    NOT NULL,
+    created_at TEXT    NOT NULL
+);
+```
+
+`UNIQUE` trên `account_id` chính là chỗ quan hệ **1-1 được thi hành** — ở DB, không phải ở code.
+Đây là bài của Phase 4 lặp lại: ràng buộc đặt ở DB thì *không thể* bị lách, kể cả bởi bug của chính bạn.
+(SQLite tự tạo index cho cột UNIQUE nên không cần `CREATE INDEX` riêng.)
+
+**`Server/DBServer/Repositories/CharacterRepository.cs`** — nhìn `AccountRepository` để theo kiểu. Hai method:
+
+```csharp
+public async Task<CharacterGetOrCreateResponse> GetOrCreateAsync(CharacterGetOrCreateRequest request, CancellationToken ct = default)
+public async Task SavePositionAsync(CharacterSavePositionRequest request, CancellationToken ct = default)
+```
+
+Logic `GetOrCreateAsync`: SELECT theo `account_id` → có thì trả về luôn → chưa có thì INSERT → SELECT lại.
+
+**Bẫy cần tự xử lý — nghĩ trước khi mở lời giải:** hai request `EnterWorld` của **cùng tài khoản** chạy
+song song (client bấm nhanh, hoặc hai client cùng đăng nhập trong khe thời gian trước khi session cũ bị đá).
+Cả hai cùng SELECT thấy "chưa có", cả hai cùng INSERT. Đây là check-then-act — đúng cái bẫy
+`AccountRepository.CreateAsync` của Phase 4. Cách xử cũng y hệt: **để `UNIQUE` xử**. Kẻ INSERT sau lãnh
+`SqliteException` với `SqliteExtendedErrorCode == 2067` — nuốt đúng exception đó (bằng `when`) rồi SELECT
+lại là lấy được dòng kẻ đến trước vừa tạo. Không cần transaction, không cần lock.
+
+**`Server/DBServer/Handlers/CharacterDbHandler.cs`** — nhìn `AccountDbHandler`: class static,
+property `Repository` gán một lần trong `Program.cs`, mỗi lệnh một method `[DbHandler(DbCmd.X)]` vài dòng.
+
+<details>
+<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
+
+**`Migrator.cs`** — phần thêm vào `_migrations`:
 
 ```csharp
             (3, """
                 CREATE TABLE character (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
-                    account_id INTEGER NOT NULL REFERENCES account(id) ON DELETE CASCADE,
+                    account_id INTEGER NOT NULL UNIQUE REFERENCES account(id) ON DELETE CASCADE,
                     name       TEXT    NOT NULL,
-                    name_key   TEXT    NOT NULL,
                     class_id   INTEGER NOT NULL,
                     level      INTEGER NOT NULL DEFAULT 1,
                     exp        INTEGER NOT NULL DEFAULT 0,
                     map_id     INTEGER NOT NULL,
                     pos_x      REAL    NOT NULL,
                     pos_y      REAL    NOT NULL,
-                    created_at TEXT    NOT NULL,
-                    deleted_at TEXT
+                    created_at TEXT    NOT NULL
                 );
-
-                -- Chỉ nhân vật CHƯA xoá mới phải giữ tên duy nhất. Nhân vật đã xoá
-                -- nằm ngoài index, nên tên của nó được trả lại cho người khác dùng.
-                CREATE UNIQUE INDEX idx_character_name_key
-                    ON character (name_key) WHERE deleted_at IS NULL;
-
-                CREATE INDEX idx_character_account ON character (account_id) WHERE deleted_at IS NULL;
                 """),
 ```
 
-Ba quyết định đáng giải thích:
-
-**`name` và `name_key` là hai cột.** `name` giữ đúng cách viết hoa người chơi chọn (`HùngKiếm`), `name_key` là bản
-chữ thường dùng để so trùng. Không thể dùng một cột cho cả hai: hiển thị thì cần nguyên dạng, so trùng thì cần
-chuẩn hoá, và `COLLATE NOCASE` của SQLite không đủ tin cậy với tiếng Việt có dấu.
-
-**Xoá mềm (`deleted_at`), không `DELETE`.** Người chơi xoá nhầm nhân vật cấp 40 là chuyện sẽ xảy ra. Xoá mềm cho bạn
-khả năng khôi phục bằng một câu `UPDATE`. Cái giá là **mọi** query từ nay phải có `WHERE deleted_at IS NULL` —
-quên một chỗ là nhân vật ma hiện lên. Đó là đánh đổi có thật, và ta chọn vế an toàn cho dữ liệu người chơi.
-
-**Index một phần trả lại tên.** Hệ quả: xoá `HùngKiếm` thì người khác đăng ký được tên đó ngay. Nếu muốn giữ chỗ
-(nhiều game làm vậy để tránh mạo danh) thì bỏ mệnh đề `WHERE` khỏi index — và chấp nhận rằng tên đã xoá mất vĩnh viễn.
-Ta chọn trả lại, vì dự án học thì việc thử lại tên cũ tiện hơn.
-
-**File mới:** `Server/DBServer/Repositories/CharacterRepository.cs`
+**`Server/DBServer/Repositories/CharacterRepository.cs`**:
 
 ```csharp
 using Microsoft.Data.Sqlite;
@@ -376,9 +349,6 @@ namespace MMORPG.DBServer.Repositories
     {
         private const int SQLITE_CONSTRAINT_UNIQUE = 2067;
 
-        /// <summary>Đặt ở đây vì ràng buộc slot phải được thi hành trong CÙNG transaction với INSERT.</summary>
-        public const int MAX_SLOTS = 3;
-
         private const string SELECT_COLUMNS =
             "id, account_id, name, class_id, level, exp, map_id, pos_x, pos_y";
 
@@ -389,115 +359,45 @@ namespace MMORPG.DBServer.Repositories
             _database = database;
         }
 
-        public async Task<CharacterRow[]> ListByAccountAsync(long accountId, CancellationToken ct = default)
-        {
-            await using SqliteConnection connection = await _database.OpenAsync(ct);
-            await using SqliteCommand cmd = connection.CreateCommand();
-
-            cmd.CommandText = $"""
-                SELECT {SELECT_COLUMNS} FROM character
-                WHERE account_id = $accountId AND deleted_at IS NULL
-                ORDER BY id;
-                """;
-            cmd.Parameters.AddWithValue("$accountId", accountId);
-
-            var rows = new List<CharacterRow>();
-            await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
-
-            while (await reader.ReadAsync(ct))
-                rows.Add(Read(reader));
-
-            return rows.ToArray();
-        }
-
-        public async Task<CharacterLoadResponse> LoadAsync(long characterId, long accountId,
-                                                           CancellationToken ct = default)
-        {
-            await using SqliteConnection connection = await _database.OpenAsync(ct);
-            await using SqliteCommand cmd = connection.CreateCommand();
-
-            // account_id nằm trong WHERE, không phải kiểm sau khi đọc lên.
-            // Nhân vật của người khác thì query này trả về 0 dòng — không có đường nào để rò rỉ.
-            cmd.CommandText = $"""
-                SELECT {SELECT_COLUMNS} FROM character
-                WHERE id = $id AND account_id = $accountId AND deleted_at IS NULL;
-                """;
-            cmd.Parameters.AddWithValue("$id", characterId);
-            cmd.Parameters.AddWithValue("$accountId", accountId);
-
-            await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
-
-            if (!await reader.ReadAsync(ct))
-                return new CharacterLoadResponse { Found = false };
-
-            return new CharacterLoadResponse { Found = true, Character = Read(reader) };
-        }
-
-        public async Task<CharacterCreateDbResponse> CreateAsync(CharacterCreateDbRequest request,
-                                                                 CancellationToken ct = default)
+        public async Task<CharacterGetOrCreateResponse> GetOrCreateAsync(CharacterGetOrCreateRequest request,
+                                                                         CancellationToken ct = default)
         {
             await using SqliteConnection connection = await _database.OpenAsync(ct);
 
-            // Đếm slot và INSERT phải nằm trong cùng một transaction. Tách ra thì hai request
-            // tạo nhân vật gửi cùng lúc đều đếm ra 2/3 và đều tạo được — thành 4 nhân vật.
-            // Đây là đúng cái bẫy check-then-act của Phase 4, ở một hình dạng khác.
-            await using SqliteTransaction tx = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
+            CharacterRow existing = await SelectByAccountAsync(connection, request.AccountId, ct);
+            if (existing != null)
+                return new CharacterGetOrCreateResponse { Created = false, Character = existing };
 
-            await using (SqliteCommand count = connection.CreateCommand())
+            bool created = true;
+
+            await using (SqliteCommand insert = connection.CreateCommand())
             {
-                count.Transaction = tx;
-                count.CommandText =
-                    "SELECT COUNT(*) FROM character WHERE account_id = $accountId AND deleted_at IS NULL;";
-                count.Parameters.AddWithValue("$accountId", request.AccountId);
+                insert.CommandText = """
+                    INSERT INTO character (account_id, name, class_id, map_id, pos_x, pos_y, created_at)
+                    VALUES ($accountId, $name, $classId, $mapId, $x, $y, datetime('now'));
+                    """;
+                insert.Parameters.AddWithValue("$accountId", request.AccountId);
+                insert.Parameters.AddWithValue("$name", request.Name);
+                insert.Parameters.AddWithValue("$classId", request.ClassId);
+                insert.Parameters.AddWithValue("$mapId", request.MapId);
+                insert.Parameters.AddWithValue("$x", request.X);
+                insert.Parameters.AddWithValue("$y", request.Y);
 
-                if (Convert.ToInt32(await count.ExecuteScalarAsync(ct)) >= MAX_SLOTS)
-                    return new CharacterCreateDbResponse { Created = false, SlotFull = true };
+                try
+                {
+                    await insert.ExecuteNonQueryAsync(ct);
+                }
+                catch (SqliteException ex) when (ex.SqliteExtendedErrorCode == SQLITE_CONSTRAINT_UNIQUE)
+                {
+                    // Hai EnterWorld của cùng tài khoản chạy song song: cả hai SELECT thấy "chưa có"
+                    // rồi cùng INSERT. UNIQUE(account_id) biến kẻ đến sau thành vô hại — chỉ việc
+                    // đọc lại dòng kẻ đến trước vừa tạo. Cùng bài check-then-act của Phase 4.
+                    created = false;
+                }
             }
 
-            await using SqliteCommand insert = connection.CreateCommand();
-            insert.Transaction = tx;
-            insert.CommandText = """
-                INSERT INTO character (account_id, name, name_key, class_id, map_id, pos_x, pos_y, created_at)
-                VALUES ($accountId, $name, $nameKey, $classId, $mapId, $x, $y, datetime('now'))
-                RETURNING id;
-                """;
-            insert.Parameters.AddWithValue("$accountId", request.AccountId);
-            insert.Parameters.AddWithValue("$name", request.Name);
-            insert.Parameters.AddWithValue("$nameKey", request.NameKey);
-            insert.Parameters.AddWithValue("$classId", request.ClassId);
-            insert.Parameters.AddWithValue("$mapId", request.MapId);
-            insert.Parameters.AddWithValue("$x", request.X);
-            insert.Parameters.AddWithValue("$y", request.Y);
-
-            try
-            {
-                long id = Convert.ToInt64(await insert.ExecuteScalarAsync(ct));
-                await tx.CommitAsync(ct);
-
-                return new CharacterCreateDbResponse { Created = true, CharacterId = id };
-            }
-            catch (SqliteException ex) when (ex.SqliteExtendedErrorCode == SQLITE_CONSTRAINT_UNIQUE)
-            {
-                await tx.RollbackAsync(ct);
-                return new CharacterCreateDbResponse { Created = false, SlotFull = false };
-            }
-        }
-
-        public async Task<bool> SoftDeleteAsync(long characterId, long accountId, CancellationToken ct = default)
-        {
-            await using SqliteConnection connection = await _database.OpenAsync(ct);
-            await using SqliteCommand cmd = connection.CreateCommand();
-
-            cmd.CommandText = """
-                UPDATE character SET deleted_at = datetime('now')
-                WHERE id = $id AND account_id = $accountId AND deleted_at IS NULL;
-                """;
-            cmd.Parameters.AddWithValue("$id", characterId);
-            cmd.Parameters.AddWithValue("$accountId", accountId);
-
-            // Số dòng bị ảnh hưởng là câu trả lời: 0 nghĩa là không có nhân vật đó,
-            // hoặc nó của người khác, hoặc đã xoá rồi. Ba trường hợp, một phản hồi — cố ý.
-            return await cmd.ExecuteNonQueryAsync(ct) == 1;
+            CharacterRow row = await SelectByAccountAsync(connection, request.AccountId, ct);
+            return new CharacterGetOrCreateResponse { Created = created, Character = row };
         }
 
         public async Task SavePositionAsync(CharacterSavePositionRequest request, CancellationToken ct = default)
@@ -507,7 +407,7 @@ namespace MMORPG.DBServer.Repositories
 
             cmd.CommandText = """
                 UPDATE character SET map_id = $mapId, pos_x = $x, pos_y = $y
-                WHERE id = $id AND deleted_at IS NULL;
+                WHERE id = $id;
                 """;
             cmd.Parameters.AddWithValue("$id", request.CharacterId);
             cmd.Parameters.AddWithValue("$mapId", request.MapId);
@@ -517,8 +417,18 @@ namespace MMORPG.DBServer.Repositories
             await cmd.ExecuteNonQueryAsync(ct);
         }
 
-        private static CharacterRow Read(SqliteDataReader reader)
+        private static async Task<CharacterRow> SelectByAccountAsync(SqliteConnection connection, long accountId,
+                                                                     CancellationToken ct)
         {
+            await using SqliteCommand cmd = connection.CreateCommand();
+            cmd.CommandText = $"SELECT {SELECT_COLUMNS} FROM character WHERE account_id = $accountId;";
+            cmd.Parameters.AddWithValue("$accountId", accountId);
+
+            await using SqliteDataReader reader = await cmd.ExecuteReaderAsync(ct);
+
+            if (!await reader.ReadAsync(ct))
+                return null;
+
             return new CharacterRow
             {
                 CharacterId = reader.GetInt64(0),
@@ -536,11 +446,12 @@ namespace MMORPG.DBServer.Repositories
 }
 ```
 
-**File mới:** `Server/DBServer/Handlers/CharacterDbHandler.cs`
+**`Server/DBServer/Handlers/CharacterDbHandler.cs`**:
 
 ```csharp
 using MMORPG.DBServer.Net;
 using MMORPG.DBServer.Repositories;
+using MMORPG.ServerCore;
 using MMORPG.Shared.Db;
 using MMORPG.Shared.Dto.Db;
 
@@ -551,37 +462,16 @@ namespace MMORPG.DBServer.Handlers
         /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
         public static CharacterRepository Repository { get; set; }
 
-        [DbHandler(DbCmd.CharacterListByAccount)]
-        public static async Task<DbResult> OnList(DbRequest req)
+        [DbHandler(DbCmd.CharacterGetOrCreate)]
+        public static async Task<DbResult> OnGetOrCreate(DbRequest req)
         {
-            var request = req.GetData<CharacterListRequest>();
+            var request = req.GetData<CharacterGetOrCreateRequest>();
+            CharacterGetOrCreateResponse result = await Repository.GetOrCreateAsync(request);
 
-            return DbResult.Ok(new CharacterListResult
-            {
-                Characters = await Repository.ListByAccountAsync(request.AccountId),
-            });
-        }
+            if (result.Created)
+                Log.Info($"Tạo nhân vật {request.Name.Cyan()} cho account {request.AccountId.ToString().Green()}");
 
-        [DbHandler(DbCmd.CharacterCreate)]
-        public static async Task<DbResult> OnCreate(DbRequest req)
-        {
-            return DbResult.Ok(await Repository.CreateAsync(req.GetData<CharacterCreateDbRequest>()));
-        }
-
-        [DbHandler(DbCmd.CharacterLoad)]
-        public static async Task<DbResult> OnLoad(DbRequest req)
-        {
-            var request = req.GetData<CharacterLoadRequest>();
-            return DbResult.Ok(await Repository.LoadAsync(request.CharacterId, request.AccountId));
-        }
-
-        [DbHandler(DbCmd.CharacterDelete)]
-        public static async Task<DbResult> OnDelete(DbRequest req)
-        {
-            var request = req.GetData<CharacterDeleteDbRequest>();
-            bool deleted = await Repository.SoftDeleteAsync(request.CharacterId, request.AccountId);
-
-            return DbResult.Ok(new DbOkResponse { Success = deleted });
+            return DbResult.Ok(result);
         }
 
         [DbHandler(DbCmd.CharacterSavePosition)]
@@ -594,23 +484,56 @@ namespace MMORPG.DBServer.Handlers
 }
 ```
 
-Trong `Server/DBServer/Program.cs`:
+**`Server/DBServer/Program.cs`** — cạnh chỗ gán `AccountDbHandler.Repository`:
 
 ```csharp
 CharacterDbHandler.Repository = new CharacterRepository(database);
 ```
 
+</details>
+
 ---
 
 ## Bước 3 — GameServer: world tối thiểu
 
-**File mới:** `Server/GameServer/World/PlayerEntity.cs`
+### Hướng làm
+
+Hai file mới trong `Server/GameServer/World/`:
+
+**`PlayerEntity.cs`** — nhân vật đang sống trong world. Chỉ cần: `EntityId` (int), `CharacterId`,
+`AccountId`, `Name`, `ClassId`, `Level` (đọc từ `CharacterRow`, chỉ-đọc), `MapId`/`X`/`Y` (có setter —
+Phase 6 sẽ cập nhật mỗi tick), và `Owner` là `ClientSession` đang điều khiển (Phase 11 quái sẽ có
+`Owner == null`). Constructor nhận `(int entityId, CharacterRow row, ClientSession owner)`.
+
+**`WorldService.cs`** — sổ đăng ký entity đang sống. Phase 8 sẽ chia theo map và ô lưới AOI; bây giờ một
+dictionary phẳng là đủ và không che mất bài học nào. Cần:
+
+- Hằng số mặc định cho nhân vật mới: `DEFAULT_CLASS_ID = 1`, `DEFAULT_MAP_ID = 1`, `SPAWN_X`, `SPAWN_Y`
+  (Phase 9 chuyển vào config).
+- `Spawn(CharacterRow row, ClientSession owner)` → cấp `entityId` mới, tạo entity, ghi vào sổ, log.
+- `Despawn(PlayerEntity entity)` → gỡ khỏi sổ, log.
+- `TryGetByAccount(long accountId, out PlayerEntity entity)` → tài khoản này đã có entity trong world chưa.
+- `OnlineCount`.
+
+**Hai quyết định phải tự trả lời trước khi code:**
+
+1. *Cấp `entityId` thế nào cho an toàn đa luồng?* Handler chạy trên nhiều luồng —
+   `_nextEntityId++` là race. Xem cách `ClientSession` cấp `Id`.
+2. *Dùng dictionary thường hay `ConcurrentDictionary`?* Spawn/Despawn được gọi từ handler của nhiều session
+   khác nhau đồng thời. Muốn tra được theo cả `entityId` lẫn `accountId` thì cần mấy dictionary?
+
+<details>
+<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
+
+**`Server/GameServer/World/PlayerEntity.cs`**:
 
 ```csharp
+using MMORPG.Shared.Dto.Db;
+
 namespace MMORPG.GameServer.World
 {
     /// <summary>
-    /// Một nhân vật đang sống trong world. Tồn tại từ EnterWorld tới lúc rời map, không lâu hơn.
+    /// Một nhân vật đang sống trong world. Tồn tại từ EnterWorld tới lúc rời world, không lâu hơn.
     ///
     /// Phase 6 thêm vận tốc và lịch sử input, Phase 8 thêm ô lưới AOI, Phase 11 thêm HP và mục tiêu.
     /// Bây giờ chỉ cần đủ để biết ai đang ở đâu.
@@ -632,9 +555,9 @@ namespace MMORPG.GameServer.World
         public float Y { get; set; }
 
         /// <summary>Session đang điều khiển entity này. null nghĩa là NPC/quái (Phase 11).</summary>
-        public ClientSession? Owner { get; }
+        public ClientSession Owner { get; }
 
-        public PlayerEntity(int entityId, Shared.Dto.Db.CharacterRow row, ClientSession owner)
+        public PlayerEntity(int entityId, CharacterRow row, ClientSession owner)
         {
             EntityId = entityId;
             CharacterId = row.CharacterId;
@@ -651,7 +574,7 @@ namespace MMORPG.GameServer.World
 }
 ```
 
-**File mới:** `Server/GameServer/World/WorldService.cs`
+**`Server/GameServer/World/WorldService.cs`**:
 
 ```csharp
 using System.Collections.Concurrent;
@@ -666,13 +589,14 @@ namespace MMORPG.GameServer.World
     /// </summary>
     public sealed class WorldService
     {
-        /// <summary>Vị trí xuất phát của nhân vật mới. Phase 9 sẽ đọc từ bảng config.</summary>
+        /// <summary>Giá trị cho nhân vật tạo lần đầu. Phase 9 sẽ đọc từ bảng config.</summary>
+        public const int DEFAULT_CLASS_ID = 1;
         public const int DEFAULT_MAP_ID = 1;
         public const float SPAWN_X = 0f;
         public const float SPAWN_Y = 0f;
 
         private readonly ConcurrentDictionary<int, PlayerEntity> _entities = new();
-        private readonly ConcurrentDictionary<long, int> _entityIdByCharacter = new();
+        private readonly ConcurrentDictionary<long, int> _entityIdByAccount = new();
 
         private int _nextEntityId;
 
@@ -684,7 +608,7 @@ namespace MMORPG.GameServer.World
             var entity = new PlayerEntity(entityId, row, owner);
 
             _entities[entityId] = entity;
-            _entityIdByCharacter[row.CharacterId] = entityId;
+            _entityIdByAccount[row.AccountId] = entityId;
 
             Log.Info($"Spawn {entity.Name.Cyan()} entity {entityId.ToString().Green()} " +
                      $"tại map {entity.MapId} ({entity.X:0.##}, {entity.Y:0.##}) — " +
@@ -696,88 +620,95 @@ namespace MMORPG.GameServer.World
         public void Despawn(PlayerEntity entity)
         {
             _entities.TryRemove(entity.EntityId, out _);
-            _entityIdByCharacter.TryRemove(entity.CharacterId, out _);
+            _entityIdByAccount.TryRemove(entity.AccountId, out _);
 
             Log.Info($"Despawn {entity.Name.Cyan()} entity {entity.EntityId} — còn {OnlineCount} người");
         }
 
         /// <summary>
-        /// Nhân vật này đã có ai đang chơi chưa. Cần vì một tài khoản có thể đăng nhập
+        /// Tài khoản này đã có entity trong world chưa. Cần vì một tài khoản có thể đăng nhập
         /// ở hai chỗ trong khe thời gian trước khi session cũ kịp bị đá.
         /// </summary>
-        public bool TryGetByCharacter(long characterId, out PlayerEntity? entity)
+        public bool TryGetByAccount(long accountId, out PlayerEntity entity)
         {
             entity = null;
 
-            return _entityIdByCharacter.TryGetValue(characterId, out int entityId) &&
+            return _entityIdByAccount.TryGetValue(accountId, out int entityId) &&
                    _entities.TryGetValue(entityId, out entity);
         }
     }
 }
 ```
 
-**File mới:** `Server/GameServer/World/CharacterNameRules.cs`
-
-```csharp
-using System.Globalization;
-
-namespace MMORPG.GameServer.World
-{
-    /// <summary>
-    /// Luật đặt tên nhân vật. Khác luật tài khoản: tên nhân vật được hiện cho người khác thấy
-    /// nên phải chặt hơn về ký tự lạ, nhưng lại cho phép chữ có dấu.
-    /// </summary>
-    public static class CharacterNameRules
-    {
-        public const int NAME_MIN = 2;
-        public const int NAME_MAX = 12;
-
-        /// <summary>Nghề hợp lệ. Phase 9 sẽ đọc từ config thay vì hằng số ở đây.</summary>
-        public static readonly int[] VALID_CLASS_IDS = { 1, 2, 3 };
-
-        public static bool IsValidName(string name)
-        {
-            if (string.IsNullOrWhiteSpace(name))
-                return false;
-
-            // Đếm theo "text element" chứ không phải theo char: một chữ có dấu tiếng Việt
-            // ở dạng tổ hợp chiếm 2 char nhưng người chơi thấy 1 ký tự.
-            var elements = new StringInfo(name);
-            if (elements.LengthInTextElements < NAME_MIN || elements.LengthInTextElements > NAME_MAX)
-                return false;
-
-            foreach (char c in name)
-            {
-                if (!char.IsLetterOrDigit(c))
-                    return false;
-            }
-
-            return true;
-        }
-
-        /// <summary>
-        /// Sinh khoá so trùng. Chuẩn hoá Unicode về dạng tổ hợp sẵn TRƯỚC khi hạ chữ thường —
-        /// không có bước này thì "Hùng" gõ bằng hai kiểu bàn phím khác nhau ra hai chuỗi byte khác nhau
-        /// và cả hai đều tạo được nhân vật.
-        /// </summary>
-        public static string ToKey(string name)
-        {
-            return name.Normalize(NormalizationForm.FormC).Trim().ToLowerInvariant();
-        }
-
-        public static bool IsValidClass(int classId)
-        {
-            return Array.IndexOf(VALID_CLASS_IDS, classId) >= 0;
-        }
-    }
-}
-```
+</details>
 
 ---
 
-## Bước 4 — GameServer: `CharacterService` và `EnterWorld`
+## Bước 4 — GameServer: `CharacterService`, handler, và đường dọn dẹp
 
-**File mới:** `Server/GameServer/World/CharacterService.cs`
+### Hướng làm
+
+**`Server/GameServer/World/CharacterService.cs`** — nghiệp vụ vào/rời world, theo đúng vai như
+`AuthService` bên auth. Hai method:
+
+```csharp
+public async Task<EnterWorldResponse> EnterWorldAsync(ClientSession session)
+public async Task LeaveWorldAsync(ClientSession session)
+```
+
+`EnterWorldAsync`, theo thứ tự:
+
+1. **Chặn vào hai lần.** `session.Entity != null` → trả `CharacterInUse`. Vì sao `MinState` không chặn
+   được? — `InWorld (2) >= Authenticated (1)`, dispatcher so bằng `>=` nên session đã trong world vẫn
+   lọt qua cửa `MinState = Authenticated`.
+2. **Chặn tài khoản đang có entity ở session khác.** `TryGetByAccount` → `CharacterInUse`. Đây là khe
+   thời gian giữa lúc session mới đăng nhập (đá session cũ) và lúc session cũ dọn xong.
+3. Gọi DB `CharacterGetOrCreate` — `AccountId` lấy từ **session**, tên mặc định là `session.Username`,
+   các giá trị mặc định còn lại lấy từ hằng số `WorldService`.
+4. `Spawn` → `session.MarkInWorld(entity)` → trả response đầy đủ (kèm `ServerTimeMs`).
+
+`LeaveWorldAsync` — **một hàm cho mọi đường rời world**: logout chủ động, mất kết nối, bị kick. Tách
+thành hai đường là sớm muộn một đường quên lưu vị trí. Logic: session không có entity thì thôi;
+có thì `MarkLeftWorld` → `Despawn` → gọi DB lưu vị trí. **Riêng chỗ lưu vị trí phải bọc
+`try/catch (DbUnavailableException)`** và chỉ log warn — mất vị trí một lần chơi thì khó chịu, nhưng để
+exception ném xuyên qua đường dọn dẹp ngắt kết nối thì session không dọn được, entity treo trong world
+mãi mãi. (Đây là ngoại lệ có chủ đích của luật "không nuốt lỗi" — ghi comment giải thích tại chỗ.)
+
+**Sửa `ClientSession`** — gắn entity vào vòng đời session:
+
+```csharp
+/// <summary>Entity đang điều khiển. null khi chưa vào world.</summary>
+public World.PlayerEntity Entity { get; private set; }
+
+public void MarkInWorld(World.PlayerEntity entity)   // Entity = entity; State = InWorld;
+public void MarkLeftWorld()                          // Entity = null;  State = Authenticated;
+```
+
+và trong khối `finally` của `RunAsync`, **trước** `SessionRegistry.Remove(this)`, gọi
+`LeaveWorldAsync(this)` — mất kết nối đột ngột cũng phải đi qua đúng đường dọn dẹp như logout chủ động.
+(`CharacterService` là property static trên handler — nhớ kiểm null trước khi gọi, phòng lúc server đang
+khởi động dở.)
+
+**Sửa `AuthHandler.OnLogout`** — logout khi đang trong world phải rời world trước: thêm
+`await CharacterHandler.CharacterService.LeaveWorldAsync(req.Session);` trước khi gọi `AuthService.Logout`.
+Không có dòng này: người chơi logout xong, entity vẫn đứng trong world, và lần `EnterWorld` sau lãnh
+`CharacterInUse` oan.
+
+**`Server/GameServer/Handlers/CharacterHandler.cs`** — theo kiểu `AuthHandler`: class static, property
+`CharacterService` gán trong `Program.cs`, một handler:
+
+```csharp
+[TcpHandler(NetCmd.EnterWorld, MinState = SessionState.Authenticated)]
+```
+
+**`Program.cs`**: tạo `WorldService`, tạo `CharacterService(dbClient, worldService)`, gán vào handler.
+Tiện thể có thể cho `SystemHandler.OnServerInfo` báo `world.OnlineCount` (số người *trong world*) thay vì
+số kết nối — tuỳ bạn.
+
+<details>
+<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
+
+**`Server/GameServer/World/CharacterService.cs`**:
 
 ```csharp
 using MMORPG.GameServer.Db;
@@ -789,6 +720,9 @@ using MMORPG.Shared.Net;
 
 namespace MMORPG.GameServer.World
 {
+    /// <summary>
+    /// Nghiệp vụ vào / rời thế giới. Handler không chứa gì ngoài lời gọi vào đây.
+    /// </summary>
     public sealed class CharacterService
     {
         private readonly DbClient _dbClient;
@@ -800,115 +734,37 @@ namespace MMORPG.GameServer.World
             _worldService = worldService;
         }
 
-        public async Task<CharacterListResponse> ListAsync(ClientSession session)
+        public async Task<EnterWorldResponse> EnterWorldAsync(ClientSession session)
         {
-            var result = await _dbClient.CallAsync<CharacterListRequest, CharacterListResult>(
-                DbCmd.CharacterListByAccount, new CharacterListRequest { AccountId = session.AccountId });
+            // InWorld >= Authenticated nên MinState không chặn được lần gọi thứ hai — phải tự chặn.
+            if (session.Entity != null)
+                return Fail(ErrorCode.CharacterInUse);
 
-            return new CharacterListResponse
+            // Khe thời gian giữa lúc session mới đăng nhập (đá session cũ) và lúc session cũ dọn xong.
+            if (_worldService.TryGetByAccount(session.AccountId, out _))
             {
-                MaxSlots = 3,
-                Characters = result.Characters.Select(ToSummary).ToArray(),
-            };
-        }
+                Log.Warn($"{session.Tag} EnterWorld bị chặn: account {session.AccountId} " +
+                         "đang có entity của session khác chưa dọn xong");
+                return Fail(ErrorCode.CharacterInUse);
+            }
 
-        public async Task<CharacterCreateResponse> CreateAsync(ClientSession session,
-                                                               CharacterCreateRequest request)
-        {
-            string name = (request.Name ?? string.Empty).Trim();
-
-            if (!CharacterNameRules.IsValidName(name) || !CharacterNameRules.IsValidClass(request.ClassId))
-                return new CharacterCreateResponse { Success = false, Error = ErrorCode.InvalidInput };
-
-            var result = await _dbClient.CallAsync<CharacterCreateDbRequest, CharacterCreateDbResponse>(
-                DbCmd.CharacterCreate,
-                new CharacterCreateDbRequest
+            var result = await _dbClient.CallAsync<CharacterGetOrCreateRequest, CharacterGetOrCreateResponse>(
+                DbCmd.CharacterGetOrCreate,
+                new CharacterGetOrCreateRequest
                 {
                     AccountId = session.AccountId,
-                    Name = name,
-                    NameKey = CharacterNameRules.ToKey(name),
-                    ClassId = request.ClassId,
+                    Name = session.Username,
+                    ClassId = WorldService.DEFAULT_CLASS_ID,
                     MapId = WorldService.DEFAULT_MAP_ID,
                     X = WorldService.SPAWN_X,
                     Y = WorldService.SPAWN_Y,
                 });
 
-            if (!result.Created)
-            {
-                return new CharacterCreateResponse
-                {
-                    Success = false,
-                    Error = result.SlotFull ? ErrorCode.SlotFull : ErrorCode.NameTaken,
-                };
-            }
+            if (result.Created)
+                Log.Info($"{session.Tag} Lần vào world đầu tiên — tạo nhân vật {result.Character.Name.Cyan()} " +
+                         $"(id {result.Character.CharacterId.ToString().Green()})");
 
-            Log.Info($"{session.Tag} Tạo nhân vật {name.Cyan()} (id {result.CharacterId.ToString().Green()})");
-
-            return new CharacterCreateResponse
-            {
-                Success = true,
-                Character = new CharacterSummary
-                {
-                    CharacterId = result.CharacterId,
-                    Name = name,
-                    ClassId = request.ClassId,
-                    Level = 1,
-                    MapId = WorldService.DEFAULT_MAP_ID,
-                },
-            };
-        }
-
-        public async Task<CharacterDeleteResponse> DeleteAsync(ClientSession session,
-                                                               CharacterDeleteRequest request)
-        {
-            var load = await _dbClient.CallAsync<CharacterLoadRequest, CharacterLoadResponse>(
-                DbCmd.CharacterLoad,
-                new CharacterLoadRequest { CharacterId = request.CharacterId, AccountId = session.AccountId });
-
-            // Không tìm thấy CÓ THỂ nghĩa là nhân vật của người khác. Trả về cùng một lỗi
-            // cho cả hai trường hợp — đừng xác nhận giúp kẻ dò rằng id đó có tồn tại.
-            if (!load.Found || load.Character == null)
-                return new CharacterDeleteResponse { Success = false, Error = ErrorCode.NotFound };
-
-            if (!string.Equals(load.Character.Name, request.ConfirmName, StringComparison.Ordinal))
-                return new CharacterDeleteResponse { Success = false, Error = ErrorCode.InvalidInput };
-
-            if (_worldService.TryGetByCharacter(request.CharacterId, out _))
-                return new CharacterDeleteResponse { Success = false, Error = ErrorCode.CharacterInUse };
-
-            var result = await _dbClient.CallAsync<CharacterDeleteDbRequest, DbOkResponse>(
-                DbCmd.CharacterDelete,
-                new CharacterDeleteDbRequest { CharacterId = request.CharacterId, AccountId = session.AccountId });
-
-            return new CharacterDeleteResponse
-            {
-                Success = result.Success,
-                Error = result.Success ? ErrorCode.None : ErrorCode.NotFound,
-                CharacterId = request.CharacterId,
-            };
-        }
-
-        public async Task<EnterWorldResponse> EnterWorldAsync(ClientSession session, EnterWorldRequest request)
-        {
-            // ❗ Dòng quan trọng nhất Phase 5.
-            // AccountId lấy từ SESSION — thứ server tự gán ở Phase 4 — chứ không phải từ gói tin.
-            // Client gửi lên id nhân vật của người khác thì query trả về 0 dòng.
-            var load = await _dbClient.CallAsync<CharacterLoadRequest, CharacterLoadResponse>(
-                DbCmd.CharacterLoad,
-                new CharacterLoadRequest { CharacterId = request.CharacterId, AccountId = session.AccountId });
-
-            if (!load.Found || load.Character == null)
-            {
-                Log.Warn($"{session.Tag} (account {session.AccountId}) xin vào nhân vật " +
-                         $"{request.CharacterId.ToString().Red()} — không thuộc tài khoản này.");
-
-                return new EnterWorldResponse { Success = false, Error = ErrorCode.NotFound };
-            }
-
-            if (_worldService.TryGetByCharacter(request.CharacterId, out _))
-                return new EnterWorldResponse { Success = false, Error = ErrorCode.CharacterInUse };
-
-            PlayerEntity entity = _worldService.Spawn(load.Character, session);
+            PlayerEntity entity = _worldService.Spawn(result.Character, session);
             session.MarkInWorld(entity);
 
             return new EnterWorldResponse
@@ -927,12 +783,12 @@ namespace MMORPG.GameServer.World
         }
 
         /// <summary>
-        /// Rời world: lưu vị trí rồi bỏ entity. Gọi cả khi chủ động Leave lẫn khi mất kết nối —
+        /// Rời world: bỏ entity rồi lưu vị trí. Gọi cả khi logout chủ động lẫn khi mất kết nối —
         /// hai đường phải đi qua đúng một hàm, nếu không sớm muộn một đường sẽ quên lưu.
         /// </summary>
         public async Task LeaveWorldAsync(ClientSession session)
         {
-            PlayerEntity? entity = session.Entity;
+            PlayerEntity entity = session.Entity;
             if (entity == null)
                 return;
 
@@ -955,46 +811,46 @@ namespace MMORPG.GameServer.World
             {
                 // Mất vị trí của một lần chơi thì khó chịu, nhưng làm sập đường ngắt kết nối
                 // thì tệ hơn nhiều: session không dọn được, entity treo lại trong world mãi mãi.
-                Log.Warn($"Không lưu được vị trí của {entity.Name.Cyan()}: {ex.Message.Red()}");
+                Log.Warn($"Không lưu được vị trí của {entity.Name.Cyan()}: {ex.Message}");
             }
         }
 
-        private static CharacterSummary ToSummary(CharacterRow row)
+        private static EnterWorldResponse Fail(ErrorCode error)
         {
-            return new CharacterSummary
-            {
-                CharacterId = row.CharacterId,
-                Name = row.Name,
-                ClassId = row.ClassId,
-                Level = row.Level,
-                MapId = row.MapId,
-            };
+            return new EnterWorldResponse { Success = false, Error = error };
         }
     }
 }
 ```
 
-**Thêm** vào `ErrorCode`:
+**`Server/GameServer/Handlers/CharacterHandler.cs`**:
 
 ```csharp
-        /// <summary>Không có đối tượng đó — hoặc có nhưng không thuộc về bạn. Cố tình không phân biệt.</summary>
-        NotFound = 11,
+using MMORPG.GameServer.Net;
+using MMORPG.GameServer.World;
+using MMORPG.Shared.Net;
 
-        /// <summary>Tên nhân vật đã có người dùng.</summary>
-        NameTaken = 12,
+namespace MMORPG.GameServer.Handlers
+{
+    public static class CharacterHandler
+    {
+        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
+        public static CharacterService CharacterService { get; set; }
 
-        /// <summary>Đã đủ số nhân vật tối đa.</summary>
-        SlotFull = 13,
-
-        /// <summary>Nhân vật đang được chơi ở nơi khác.</summary>
-        CharacterInUse = 14,
+        [TcpHandler(NetCmd.EnterWorld, MinState = SessionState.Authenticated)]
+        public static async Task<NetResult> OnEnterWorld(NetRequest req)
+        {
+            return NetResult.Ok(await CharacterService.EnterWorldAsync(req.Session));
+        }
+    }
+}
 ```
 
-**Sửa** `ClientSession` — thêm phần world:
+**`ClientSession.cs`** — thêm phần world:
 
 ```csharp
         /// <summary>Entity đang điều khiển. null khi chưa vào world.</summary>
-        public World.PlayerEntity? Entity { get; private set; }
+        public World.PlayerEntity Entity { get; private set; }
 
         public void MarkInWorld(World.PlayerEntity entity)
         {
@@ -1009,154 +865,135 @@ namespace MMORPG.GameServer.World
         }
 ```
 
-và trong khối `finally` của `RunAsync`, **trước** `SessionRegistry.Remove(this)`:
+và trong khối `finally` của `RunAsync`, trước `SessionRegistry.Remove(this)`:
 
 ```csharp
-                // Mất kết nối đột ngột cũng phải đi qua đúng đường dọn dẹp như Leave chủ động.
-                await Handlers.CharacterHandler.CharacterService.LeaveWorldAsync(this);
+                // Mất kết nối đột ngột cũng phải đi qua đúng đường dọn dẹp như logout chủ động.
+                if (Handlers.CharacterHandler.CharacterService != null)
+                    await Handlers.CharacterHandler.CharacterService.LeaveWorldAsync(this);
 ```
 
-**File mới:** `Server/GameServer/Handlers/CharacterHandler.cs`
+**`AuthHandler.OnLogout`** — rời world trước khi đăng xuất:
 
 ```csharp
-using MMORPG.GameServer.Net;
-using MMORPG.GameServer.World;
-using MMORPG.Shared.Dto;
-using MMORPG.Shared.Net;
-
-namespace MMORPG.GameServer.Handlers
-{
-    public static class CharacterHandler
-    {
-        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
-        public static CharacterService CharacterService { get; set; }
-
-        [TcpHandler(NetCmd.CharacterList, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnList(NetRequest req)
+        [TcpHandler(NetCmd.Logout, MinState = SessionState.Authenticated)]
+        public static async Task<NetResult> OnLogout(NetRequest req)
         {
-            return NetResult.Ok(await CharacterService.ListAsync(req.Session));
+            // Logout khi đang trong world: rời world trước, cùng một đường dọn dẹp với mất kết nối.
+            await CharacterHandler.CharacterService.LeaveWorldAsync(req.Session);
+            return NetResult.Ok(AuthService.Logout(req.Session));
         }
-
-        [TcpHandler(NetCmd.CharacterCreate, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnCreate(NetRequest req)
-        {
-            return NetResult.Ok(await CharacterService.CreateAsync(req.Session, req.GetData<CharacterCreateRequest>()));
-        }
-
-        [TcpHandler(NetCmd.CharacterDelete, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnDelete(NetRequest req)
-        {
-            return NetResult.Ok(await CharacterService.DeleteAsync(req.Session, req.GetData<CharacterDeleteRequest>()));
-        }
-
-        [TcpHandler(NetCmd.EnterWorld, MinState = SessionState.Authenticated)]
-        public static async Task<NetResult> OnEnterWorld(NetRequest req)
-        {
-            return NetResult.Ok(await CharacterService.EnterWorldAsync(req.Session, req.GetData<EnterWorldRequest>()));
-        }
-
-        [TcpHandler(NetCmd.LeaveWorld, MinState = SessionState.InWorld)]
-        public static async Task<NetResult> OnLeaveWorld(NetRequest req)
-        {
-            await CharacterService.LeaveWorldAsync(req.Session);
-            return NetResult.Ok(new LeaveWorldResponse { Success = true });
-        }
-    }
-}
 ```
 
-> Chú ý `MinState` của từng lệnh. `CharacterList` cần `Authenticated` — chưa đăng nhập thì `session.AccountId`
-> bằng 0 và query sẽ trả danh sách rỗng, nhưng dựa vào "may mà nó rỗng" là chờ ngày hỏng. `LeaveWorld` cần `InWorld`
-> vì không có entity thì chẳng có gì để rời.
-
-Trong `Program.cs`:
+**`Program.cs`** (GameServer) — cạnh chỗ gán `AuthHandler.AuthService`:
 
 ```csharp
-var world = new WorldService();
-CharacterHandler.Characters = new CharacterService(db, world);
+var worldService = new WorldService();
+CharacterHandler.CharacterService = new CharacterService(dbClient, worldService);
 ```
 
-Và `SystemHandler.OnServerInfo` giờ báo đúng số người **trong world** thay vì số kết nối:
+</details>
 
-```csharp
-                OnlineCount = world.OnlineCount,
-```
-(truyền `world` vào `SystemHandler` giống cách truyền `Db`).
+### ✅ CHECKPOINT A — kiểm bằng gói tin trước khi làm phần client hoàn chỉnh
 
-### ✅ CHECKPOINT A — kiểm bằng gói tin trước khi làm UI
+Thêm tạm vào `NetworkProbe` một nút gửi `EnterWorld` (payload `EmptyRequest`). Trình tự kiểm:
 
-Trong `NetworkProbe`, thêm tạm 3 nút gửi `CharacterList`, `CharacterCreate`, `EnterWorld`. Server phải log:
-
-```
-INFO  [CharacterService] #1 Tạo nhân vật HùngKiếm (id 1)
-INFO  [WorldService] Spawn HùngKiếm entity 1 tại map 1 (0, 0) — 1 người trong world
-```
-
-**Rồi thử tấn công chính mình.** Tạo tài khoản thứ hai, đăng nhập bằng nó, gửi `EnterWorld` với
-`CharacterId = 1` (nhân vật của tài khoản đầu):
-
-```
-WARN  [CharacterService] #3 (account 2) xin vào nhân vật 1 — không thuộc tài khoản này.
-```
-và client nhận `NotFound`. **Nếu vào được thì dừng lại sửa ngay** — đó là lỗ hổng nghiêm trọng nhất
-có thể có ở phase này.
+1. Đăng nhập → bấm EnterWorld. Lần đầu server phải log đủ chuỗi:
+   ```
+   INFO  [CharacterService] #1 Lần vào world đầu tiên — tạo nhân vật hung (id 1)
+   INFO  [WorldService]     Spawn hung entity 1 tại map 1 (0, 0) — 1 người trong world
+   ```
+2. Bấm EnterWorld **lần nữa** → client nhận `CharacterInUse`, server **không** spawn entity thứ hai.
+3. Thoát Play mode → server log `Despawn hung entity 1 — còn 0 người`.
+4. Play lại, đăng nhập lại, EnterWorld → **không** còn dòng "Tạo nhân vật" (get-or-create idempotent),
+   chỉ có Spawn.
 
 ---
 
-## Bước 5 — Client: chọn nhân vật
+## Bước 5 — Client: vào thế giới
 
-Giờ đã có 2 màn hình (Login, CharacterSelect) nên đây là lúc đưa `com.hungnt.ui.panel` vào —
-đúng thời điểm nó bắt đầu giải quyết vấn đề thật. Đọc API của package trước khi viết; phần dưới dùng
-`MonoBehaviour` trần cho dễ đối chiếu, chuyển sang `PanelManager` sau khi CHECKPOINT B chạy được.
+### Hướng làm
 
-**File mới:** `Assets/Game/Scripts/Character/CharacterApi.cs`
+Điểm dễ chịu của phase này phía client: **không có màn hình UI mới nào**. Đăng nhập xong là tự vào world.
+Năm file mới + đăng ký DI:
+
+**`Assets/Game/Scripts/World/WorldApi.cs`** — chiều gửi, đối xứng với `AuthApi`: một method
+`EnterWorld()` gửi `NetCmd.EnterWorld` với `EmptyRequest`.
+
+**`Assets/Game/Scripts/Network/Handlers/WorldNetHandler.cs`** — chiều nhận, đối xứng với `AuthNetHandler`:
+một event `OnEnteredWorld` bắn `EnterWorldResponse`.
+
+**`Assets/Game/Scripts/World/LocalPlayer.cs`** — bản sao dữ liệu nhân vật của *chính mình* do server gửi
+xuống. **Cache chỉ-đọc, không phải nguồn sự thật**: mọi property setter đều private, thay đổi duy nhất qua
+`Apply(EnterWorldResponse)` và `Clear()`, chỉ được gọi từ chỗ nhận gói server. Ngày nào có `player.Level++`
+ở đâu đó trong code client là ngày golden rule #2 bị phá.
+
+**`Assets/Game/Scripts/World/WorldSpawner.cs`** — MonoBehaviour dựng biểu diễn hình ảnh:
+`SpawnLocalPlayer(EnterWorldResponse)` instantiate prefab tại `(response.X, response.Y)` (nhất định
+**từ response**, không phải hằng số — không thì bug "nhân vật luôn hiện ở (0,0)" sẽ im lặng chờ bạn),
+đặt tên object cho dễ debug, trỏ camera theo. `DespawnLocalPlayer()` cho đường logout/kick.
+Phase 7 sẽ thêm entity của người khác, Phase 8 mới cần `com.hungnt.objectpool` — giờ `Instantiate` là đủ.
+
+**`Assets/Game/Scripts/World/CameraFollow.cs`** — bám mượt bằng `SmoothDamp`.
+Câu hỏi thiết kế: vì sao phải là `LateUpdate` chứ không phải `Update`?
+
+**`Assets/Game/Scripts/World/WorldPresenter.cs`** — MonoBehaviour nối các mảnh:
+nghe `AuthNetHandler.OnLoginResult` (thành công → gọi `WorldApi.EnterWorld()`),
+nghe `WorldNetHandler.OnEnteredWorld` (thành công → `LocalPlayer.Apply` + `WorldSpawner.SpawnLocalPlayer`),
+nghe `OnKicked`/`OnLogoutResult` để despawn + `Clear`. Subscribe/unsubscribe theo đúng kiểu `LoginPresenter`.
+
+**Đăng ký DI — bước dễ quên nhất phase, đọc lại CLAUDE.md nếu quên vì sao:**
 
 ```csharp
+builder.Register<WorldApi>(Lifetime.Singleton);
+builder.Register<LocalPlayer>(Lifetime.Singleton);
+builder.Register<WorldNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+builder.RegisterComponentInHierarchy<WorldSpawner>();
+builder.RegisterComponentInHierarchy<WorldPresenter>();
+```
+
+Quên dòng `WorldNetHandler` thì `EnterWorldResponse` rơi vào hư không **không lỗi biên dịch, không log** —
+đó là anti-pattern số 4 của repo.
+
+**Trong scene:** một sprite bất kỳ làm prefab nhân vật (ô vuông màu là đủ), một `Grid + Tilemap` vẽ vài ô
+sàn để nhìn ra camera đang di chuyển, `CameraFollow` gắn lên Main Camera, `WorldSpawner` + `WorldPresenter`
+trên GameObject trong scene, kéo tham chiếu trong Inspector.
+
+<details>
+<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
+
+**`Assets/Game/Scripts/World/WorldApi.cs`**:
+
+```csharp
+using HungNT;
 using MMORPG.Client.Network;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
 
-namespace MMORPG.Client.Character
+namespace MMORPG.Client.World
 {
-    public sealed class CharacterApi
+    /// <summary>
+    /// Gom mọi lệnh world mà client GỬI ĐI. Đối xứng với <see cref="Network.Handlers.WorldNetHandler"/> ở chiều nhận.
+    /// </summary>
+    public sealed class WorldApi
     {
         private readonly NetService _netService;
 
-        public CharacterApi(NetService netService)
+        public WorldApi(NetService netService)
         {
             _netService = netService;
         }
 
-        public void RequestList()
+        public void EnterWorld()
         {
-            _netService.Send(NetCmd.CharacterList, new EmptyRequest());
-        }
-
-        public void Create(string name, int classId)
-        {
-            _netService.Send(NetCmd.CharacterCreate, new CharacterCreateRequest { Name = name, ClassId = classId });
-        }
-
-        public void Delete(long characterId, string confirmName)
-        {
-            _netService.Send(NetCmd.CharacterDelete,
-                      new CharacterDeleteRequest { CharacterId = characterId, ConfirmName = confirmName });
-        }
-
-        public void EnterWorld(long characterId)
-        {
-            _netService.Send(NetCmd.EnterWorld, new EnterWorldRequest { CharacterId = characterId });
-        }
-
-        public void LeaveWorld()
-        {
-            _netService.Send(NetCmd.LeaveWorld, new EmptyRequest());
+            this.Log("EnterWorld");
+            _netService.Send(NetCmd.EnterWorld, new EmptyRequest());
         }
     }
 }
 ```
 
-**File mới:** `Assets/Game/Scripts/Network/Handlers/CharacterNetHandler.cs`
+**`Assets/Game/Scripts/Network/Handlers/WorldNetHandler.cs`**:
 
 ```csharp
 using System;
@@ -1165,53 +1002,25 @@ using MMORPG.Shared.Net;
 
 namespace MMORPG.Client.Network.Handlers
 {
-    public sealed class CharacterNetHandler : INetHandlerGroup
+    public sealed class WorldNetHandler : INetHandlerGroup
     {
-        public event Action<CharacterListResponse> OnList;
-        public event Action<CharacterCreateResponse> OnCreated;
-        public event Action<CharacterDeleteResponse> OnDeleted;
         public event Action<EnterWorldResponse> OnEnteredWorld;
-        public event Action<LeaveWorldResponse> OnLeftWorld;
-
-        [NetHandler(NetCmd.CharacterList)]
-        private void HandleList(NetPacket packet)
-        {
-            OnList?.Invoke(packet.GetData<CharacterListResponse>());
-        }
-
-        [NetHandler(NetCmd.CharacterCreate)]
-        private void HandleCreate(NetPacket packet)
-        {
-            OnCreated?.Invoke(packet.GetData<CharacterCreateResponse>());
-        }
-
-        [NetHandler(NetCmd.CharacterDelete)]
-        private void HandleDelete(NetPacket packet)
-        {
-            OnDeleted?.Invoke(packet.GetData<CharacterDeleteResponse>());
-        }
 
         [NetHandler(NetCmd.EnterWorld)]
-        private void HandleEnter(NetPacket packet)
+        private void HandleEnterWorld(NetPacket packet)
         {
             OnEnteredWorld?.Invoke(packet.GetData<EnterWorldResponse>());
-        }
-
-        [NetHandler(NetCmd.LeaveWorld)]
-        private void HandleLeave(NetPacket packet)
-        {
-            OnLeftWorld?.Invoke(packet.GetData<LeaveWorldResponse>());
         }
     }
 }
 ```
 
-**File mới:** `Assets/Game/Scripts/Character/LocalPlayer.cs`
+**`Assets/Game/Scripts/World/LocalPlayer.cs`**:
 
 ```csharp
 using MMORPG.Shared.Dto;
 
-namespace MMORPG.Client.Character
+namespace MMORPG.Client.World
 {
     /// <summary>
     /// Bản sao dữ liệu nhân vật của CHÍNH mình, do server gửi xuống.
@@ -1257,203 +1066,7 @@ namespace MMORPG.Client.Character
 }
 ```
 
-**File mới:** `Assets/Game/Scripts/Character/CharacterSelectPresenter.cs`
-
-```csharp
-using System.Linq;
-using MMORPG.Client.Network.Handlers;
-using MMORPG.Shared.Dto;
-using MMORPG.Shared.Net;
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
-using VContainer;
-
-namespace MMORPG.Client.Character
-{
-    public sealed class CharacterSelectPresenter : MonoBehaviour
-    {
-        [SerializeField] private GameObject _root;
-        [SerializeField] private Transform _slotContainer;
-        [SerializeField] private CharacterSlotUi _slotPrefab;
-        [SerializeField] private TMP_InputField _nameInput;
-        [SerializeField] private Button _createButton;
-        [SerializeField] private Button _enterButton;
-        [SerializeField] private TextMeshProUGUI _messageText;
-
-        private CharacterApi _characterApi;
-        private CharacterNetHandler _characterNetHandler;
-        private AuthNetHandler _authNetHandler;
-        private LocalPlayer _player;
-        private WorldSpawner _spawner;
-
-        private long _selectedId;
-
-        [Inject]
-        public void Construct(CharacterApi characterApi, CharacterNetHandler characterNetHandler,
-                              AuthNetHandler authNetHandler, LocalPlayer player, WorldSpawner spawner)
-        {
-            _characterApi = characterApi;
-            _characterNetHandler = characterNetHandler;
-            _authNetHandler = authNetHandler;
-            _player = player;
-            _spawner = spawner;
-        }
-
-        private void Awake()
-        {
-            _createButton.onClick.AddListener(OnCreateClicked);
-            _enterButton.onClick.AddListener(OnEnterClicked);
-
-            _characterNetHandler.OnList += OnList;
-            _characterNetHandler.OnCreated += OnCreated;
-            _characterNetHandler.OnEnteredWorld += OnEnteredWorld;
-            _authNetHandler.OnLoginResult += OnLoggedIn;
-
-            _root.SetActive(false);
-        }
-
-        private void OnDestroy()
-        {
-            _createButton.onClick.RemoveListener(OnCreateClicked);
-            _enterButton.onClick.RemoveListener(OnEnterClicked);
-
-            if (_characterNetHandler == null)
-                return;
-
-            _characterNetHandler.OnList -= OnList;
-            _characterNetHandler.OnCreated -= OnCreated;
-            _characterNetHandler.OnEnteredWorld -= OnEnteredWorld;
-            _authNetHandler.OnLoginResult -= OnLoggedIn;
-        }
-
-        private void OnLoggedIn(AuthResponse response)
-        {
-            if (!response.Success)
-                return;
-
-            _root.SetActive(true);
-            _characterApi.RequestList();
-        }
-
-        private void OnList(CharacterListResponse response)
-        {
-            foreach (Transform child in _slotContainer)
-                Destroy(child.gameObject);
-
-            foreach (CharacterSummary summary in response.Characters)
-            {
-                CharacterSlotUi slot = Instantiate(_slotPrefab, _slotContainer);
-                slot.Bind(summary, () => Select(summary.CharacterId));
-            }
-
-            _createButton.interactable = response.Characters.Length < response.MaxSlots;
-            _enterButton.interactable = false;
-
-            _messageText.text = response.Characters.Length == 0
-                ? "Chưa có nhân vật nào. Đặt tên rồi bấm Tạo."
-                : $"{response.Characters.Length}/{response.MaxSlots} nhân vật.";
-
-            if (response.Characters.Length > 0)
-                Select(response.Characters.First().CharacterId);
-        }
-
-        private void Select(long characterId)
-        {
-            _selectedId = characterId;
-            _enterButton.interactable = true;
-        }
-
-        private void OnCreated(CharacterCreateResponse response)
-        {
-            if (!response.Success)
-            {
-                _messageText.text = ErrorText(response.Error);
-                return;
-            }
-
-            _nameInput.text = string.Empty;
-            _characterApi.RequestList();
-        }
-
-        private void OnCreateClicked()
-        {
-            _characterApi.Create(_nameInput.text, classId: 1);
-        }
-
-        private void OnEnterClicked()
-        {
-            _enterButton.interactable = false;
-            _characterApi.EnterWorld(_selectedId);
-        }
-
-        private void OnEnteredWorld(EnterWorldResponse response)
-        {
-            if (!response.Success)
-            {
-                _messageText.text = ErrorText(response.Error);
-                _enterButton.interactable = true;
-                _characterApi.RequestList();
-                return;
-            }
-
-            _player.Apply(response);
-            _spawner.SpawnLocalPlayer(response);
-            _root.SetActive(false);
-        }
-
-        private static string ErrorText(ErrorCode code)
-        {
-            return code switch
-            {
-                ErrorCode.NameTaken => "Tên này đã có người dùng.",
-                ErrorCode.SlotFull => "Bạn đã đủ số nhân vật tối đa.",
-                ErrorCode.InvalidInput => "Tên nhân vật 2–12 ký tự, chỉ chữ và số.",
-                ErrorCode.CharacterInUse => "Nhân vật này đang được chơi ở nơi khác.",
-                ErrorCode.NotFound => "Không tìm thấy nhân vật.",
-                _ => "Có lỗi xảy ra. Thử lại sau.",
-            };
-        }
-    }
-}
-```
-
-**File mới:** `Assets/Game/Scripts/Character/CharacterSlotUi.cs`
-
-```csharp
-using System;
-using MMORPG.Shared.Dto;
-using TMPro;
-using UnityEngine;
-using UnityEngine.UI;
-
-namespace MMORPG.Client.Character
-{
-    public sealed class CharacterSlotUi : MonoBehaviour
-    {
-        [SerializeField] private TextMeshProUGUI _nameText;
-        [SerializeField] private TextMeshProUGUI _infoText;
-        [SerializeField] private Button _selectButton;
-
-        public void Bind(CharacterSummary summary, Action onSelect)
-        {
-            _nameText.text = summary.Name;
-            _infoText.text = $"Cấp {summary.Level} · Nghề {summary.ClassId}";
-
-            // Slot được Bind lại mỗi lần refresh danh sách — lambda ở đây hợp lệ VÌ có RemoveAllListeners
-            // quét sạch ngay trước đó. Đây là ngoại lệ duy nhất của quy tắc "listener phải là method có tên".
-            _selectButton.onClick.RemoveAllListeners();
-            _selectButton.onClick.AddListener(() => onSelect());
-        }
-    }
-}
-```
-
----
-
-## Bước 6 — Client: nhân vật hiện ra trên map
-
-**File mới:** `Assets/Game/Scripts/World/WorldSpawner.cs`
+**`Assets/Game/Scripts/World/WorldSpawner.cs`**:
 
 ```csharp
 using HungNT;
@@ -1471,7 +1084,7 @@ namespace MMORPG.Client.World
     {
         [SerializeField] private GameObject _playerPrefab;
         [SerializeField] private Transform _entityRoot;
-        [SerializeField] private CameraFollow _camera;
+        [SerializeField] private CameraFollow _cameraFollow;
 
         private GameObject _localPlayerObject;
 
@@ -1484,7 +1097,7 @@ namespace MMORPG.Client.World
                 _playerPrefab, new Vector3(response.X, response.Y, 0f), Quaternion.identity, _entityRoot);
             _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
 
-            _camera.SetTarget(_localPlayerObject.transform);
+            _cameraFollow.SetTarget(_localPlayerObject.transform);
 
             this.Log($"Vào map {response.MapId} tại ({response.X:0.##}, {response.Y:0.##}) — entity {response.EntityId}");
         }
@@ -1496,13 +1109,13 @@ namespace MMORPG.Client.World
 
             Destroy(_localPlayerObject);
             _localPlayerObject = null;
-            _camera.SetTarget(null);
+            _cameraFollow.SetTarget(null);
         }
     }
 }
 ```
 
-**File mới:** `Assets/Game/Scripts/World/CameraFollow.cs`
+**`Assets/Game/Scripts/World/CameraFollow.cs`**:
 
 ```csharp
 using UnityEngine;
@@ -1536,66 +1149,147 @@ namespace MMORPG.Client.World
 }
 ```
 
-Đăng ký vào `GameLifetimeScope`:
+**`Assets/Game/Scripts/World/WorldPresenter.cs`**:
 
 ```csharp
-            builder.Register<CharacterApi>(Lifetime.Singleton);
-            builder.Register<LocalPlayer>(Lifetime.Singleton);
+using HungNT;
+using MMORPG.Client.Network.Handlers;
+using MMORPG.Shared.Dto;
+using UnityEngine;
+using VContainer;
 
-            builder.Register<CharacterNetHandler>(Lifetime.Singleton)
-                   .AsSelf()
-                   .As<INetHandlerGroup>();
+namespace MMORPG.Client.World
+{
+    /// <summary>
+    /// Nối auth với world: đăng nhập xong tự gửi EnterWorld, nhận response thì spawn.
+    /// Không có UI riêng — phase này client vào thẳng game.
+    /// </summary>
+    public sealed class WorldPresenter : MonoBehaviour
+    {
+        [SerializeField] private WorldSpawner _worldSpawner;
 
-            // WorldSpawner và CameraFollow là MonoBehaviour trong scene — đăng ký instance, không phải type.
-            builder.RegisterComponentInHierarchy<WorldSpawner>();
+        private WorldApi _worldApi;
+        private WorldNetHandler _worldNetHandler;
+        private AuthNetHandler _authNetHandler;
+        private LocalPlayer _localPlayer;
+
+        [Inject]
+        public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler,
+                              AuthNetHandler authNetHandler, LocalPlayer localPlayer)
+        {
+            _worldApi = worldApi;
+            _worldNetHandler = worldNetHandler;
+            _authNetHandler = authNetHandler;
+            _localPlayer = localPlayer;
+        }
+
+        private void Start()
+        {
+            _authNetHandler.OnLoginResult += OnLoggedIn;
+            _authNetHandler.OnLogoutResult += OnLoggedOut;
+            _authNetHandler.OnKicked += OnKicked;
+            _worldNetHandler.OnEnteredWorld += OnEnteredWorld;
+        }
+
+        private void OnDestroy()
+        {
+            if (_authNetHandler == null)
+                return;
+
+            _authNetHandler.OnLoginResult -= OnLoggedIn;
+            _authNetHandler.OnLogoutResult -= OnLoggedOut;
+            _authNetHandler.OnKicked -= OnKicked;
+            _worldNetHandler.OnEnteredWorld -= OnEnteredWorld;
+        }
+
+        private void OnLoggedIn(AuthResponse response)
+        {
+            if (!response.Success)
+                return;
+
+            _worldApi.EnterWorld();
+        }
+
+        private void OnEnteredWorld(EnterWorldResponse response)
+        {
+            if (!response.Success)
+            {
+                this.LogWarning($"EnterWorld thất bại: {response.Error}");
+                return;
+            }
+
+            _localPlayer.Apply(response);
+            _worldSpawner.SpawnLocalPlayer(response);
+        }
+
+        private void OnLoggedOut(AuthResponse response)
+        {
+            _worldSpawner.DespawnLocalPlayer();
+            _localPlayer.Clear();
+        }
+
+        private void OnKicked(KickedNotice notice)
+        {
+            _worldSpawner.DespawnLocalPlayer();
+            _localPlayer.Clear();
+        }
+    }
+}
 ```
 
-Trong scene: một `Sprite` bất kỳ làm prefab nhân vật (một hình vuông màu là đủ), một `Grid + Tilemap` vẽ vài ô sàn
-để nhìn ra được là camera đang di chuyển, `CameraFollow` gắn lên Main Camera.
+**`GameLifetimeScope.Configure`** — thêm cuối:
+
+```csharp
+            builder.Register<WorldApi>(Lifetime.Singleton);
+            builder.Register<LocalPlayer>(Lifetime.Singleton);
+            builder.Register<WorldNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+
+            // MonoBehaviour có sẵn trong scene — đăng ký instance, không phải type.
+            builder.RegisterComponentInHierarchy<WorldSpawner>();
+            builder.RegisterComponentInHierarchy<WorldPresenter>();
+```
+
+</details>
 
 ### ✅ CHECKPOINT B — mục tiêu cuối Phase 5
 
 1. Bật DBServer, GameServer, Play Unity.
-2. Đăng nhập → màn hình chọn nhân vật hiện ra, ghi `Chưa có nhân vật nào.`
-3. Gõ `HùngKiếm`, bấm **Tạo** → slot hiện ra `HùngKiếm · Cấp 1 · Nghề 1`.
-4. Bấm **Vào game** → UI chọn nhân vật đóng, ô vuông hiện tại `(0, 0)`, camera bám vào nó.
-5. Server log đủ chuỗi:
+2. Đăng nhập → **không cần bấm gì thêm**, nhân vật (ô vuông) hiện ra tại `(0, 0)`, camera bám vào nó.
+3. Server log đủ chuỗi:
    ```
    INFO  [AuthService]      #1 hung đăng nhập thành công
-   INFO  [CharacterService] #1 Tạo nhân vật HùngKiếm (id 1)
-   INFO  [WorldService]     Spawn HùngKiếm entity 1 tại map 1 (0, 0) — 1 người trong world
+   INFO  [CharacterService] #1 Lần vào world đầu tiên — tạo nhân vật hung (id 1)
+   INFO  [WorldService]     Spawn hung entity 1 tại map 1 (0, 0) — 1 người trong world
    ```
-6. **Sửa toạ độ trong DB** để chứng minh vị trí thật sự được nạp từ đĩa:
+4. **Sửa toạ độ trong DB** để chứng minh vị trí thật sự được nạp từ đĩa:
    ```sql
    UPDATE character SET pos_x = 5, pos_y = 3 WHERE id = 1;
    ```
-   Thoát Play mode, Play lại, đăng nhập, vào game → nhân vật xuất hiện ở `(5, 3)`.
-7. Thoát Play mode giữa lúc đang trong world → server log `INFO  [WorldService] Despawn ... — còn 0 người`.
+   Thoát Play mode, Play lại, đăng nhập → nhân vật xuất hiện ở `(5, 3)`.
+5. Thoát Play mode giữa lúc trong world → server log `Despawn ... — còn 0 người`.
+6. Đăng nhập lại lần nữa → **không** có dòng "tạo nhân vật" (chỉ tạo đúng một lần).
 
 ---
 
-## Bước 7 — Năm thử nghiệm bắt buộc
+## Bước 6 — Bốn thử nghiệm bắt buộc
 
-**1. Vào nhân vật của người khác.** Đã làm ở CHECKPOINT A. Làm lại sau khi có UI, lần này sửa
-`CharacterApi.EnterWorld` gửi tạm `characterId + 1`. Phải nhận `NotFound`.
+**1. Hai client cùng tài khoản.** Chạy bản build song song Editor (hoặc ParrelSync), đăng nhập cùng tài
+khoản ở cả hai. Client thứ hai đá client thứ nhất (cơ chế Phase 4) → session cũ đóng → `LeaveWorldAsync`
+trong `finally` chạy → entity cũ biến mất → client mới vào world bình thường.
+- Nếu client mới lãnh `CharacterInUse` mãi → entity của session cũ chưa được dọn: kiểm `LeaveWorldAsync`
+  có nằm trong `finally` của `RunAsync` không.
+- Nếu log có **hai** entity cùng một tài khoản → `TryGetByAccount` chưa được kiểm trước khi spawn.
 
-**2. Vào world hai lần cùng một nhân vật.** Chạy bản build song song Editor, đăng nhập **cùng tài khoản**
-ở cả hai, cùng chọn một nhân vật.
-- Client thứ hai đá client thứ nhất (cơ chế Phase 4) → session cũ đóng → `LeaveWorldAsync` chạy → entity biến mất.
-- Nếu bạn thấy `CharacterInUse` thì entity của session cũ chưa được dọn — kiểm tra `LeaveWorldAsync` có được gọi
-  trong `finally` của `RunAsync` không.
-- Nếu thấy **hai** entity cùng một `CharacterId` trong log thì `TryGetByCharacter` chưa được kiểm trước khi spawn.
+**2. EnterWorld hai lần trên cùng session.** Bấm nút probe hai lần liên tiếp → lần hai nhận
+`CharacterInUse`, world vẫn chỉ có một entity. Đây là chỗ chứng minh vì sao `MinState` một mình không đủ.
 
-**3. Trùng tên nhân vật.** Hai tài khoản khác nhau, cùng đặt tên `HùngKiếm` → tài khoản thứ hai nhận `NameTaken`.
-Rồi thử `hùngkiếm` (chữ thường) → **cũng phải** `NameTaken`, nhờ `name_key`.
+**3. Logout rồi vào lại.** Đang trong world → Logout → server log Despawn, client despawn ô vuông →
+đăng nhập lại → vào lại bình thường (không `CharacterInUse`). Nếu kẹt `CharacterInUse` thì
+`AuthHandler.OnLogout` chưa gọi `LeaveWorldAsync`.
 
-**4. Đủ slot.** Tạo 3 nhân vật → nút Tạo mờ đi, và nếu gửi thẳng gói `CharacterCreate` thứ 4 (bỏ qua UI)
-thì nhận `SlotFull`. Hàng rào ở UI là cho đẹp, hàng rào ở server mới là thật.
-
-**5. Vị trí được lưu khi rớt mạng.** Sửa tạm `WorldSpawner` cho phép kéo ô vuông bằng chuột và ghi ngược
-`entity.X/Y` lên server — **chưa cần**, Phase 6 làm việc đó. Cách nhanh hơn để kiểm cùng một điều: đang trong world,
-`Ctrl+C` **GameServer**. Bật lại, đăng nhập lại, vào game → vị trí vẫn là vị trí cũ trong DB.
-Bây giờ chưa di chuyển được nên giá trị chưa đổi; Phase 6 sẽ biến thử nghiệm này thành có ý nghĩa thật.
+**4. Tắt GameServer đột ngột (`Ctrl+C`) khi đang trong world.** Bật lại, đăng nhập, vào world → vị trí
+vẫn đúng như DB. Phase này chưa di chuyển được nên giá trị chưa đổi; Phase 6 sẽ biến thử nghiệm này thành
+có ý nghĩa thật (di chuyển → rớt mạng → vào lại đúng chỗ).
 
 ---
 
@@ -1603,17 +1297,16 @@ Bây giờ chưa di chuyển được nên giá trị chưa đổi; Phase 6 sẽ
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |-------------|-------------|-------|
-| `CharacterList` trả rỗng dù DB có dòng | `session.AccountId` bằng 0 — chưa đăng nhập, hoặc gửi trên kết nối khác | Kiểm `MinState = Authenticated` có được đặt; một client phải giữ **một** kết nối suốt phiên |
-| Tạo nhân vật luôn `NameTaken` | Nhân vật cũ đã xoá vẫn nằm trong index | Kiểm tra index có mệnh đề `WHERE deleted_at IS NULL` |
-| `SqliteException: no such column: deleted_at` | Migration 3 chưa chạy vì file DB cũ đã ở version 3 do sửa migration cũ | Đừng sửa migration đã chạy. Lúc dev: xoá `mmorpg.db`, `.db-wal`, `.db-shm` |
-| `foreign key constraint failed` khi tạo nhân vật | `account_id` không tồn tại, hoặc `PRAGMA foreign_keys` không bật | Kiểm `Database.InitAsync` chạy trước mọi query |
-| Entity treo lại sau khi client thoát | `LeaveWorldAsync` không được gọi trong `finally` | Thêm vào `ClientSession.RunAsync`, trước `SessionRegistry.Remove` |
-| `CharacterInUse` mãi không hết | Cùng nguyên nhân trên — entity ma còn trong `WorldService` | Restart GameServer để xác nhận, rồi sửa đường dọn dẹp |
-| Nhân vật hiện ở `(0,0)` dù DB ghi khác | Client dựng vị trí từ hằng số thay vì từ `EnterWorldResponse` | `WorldSpawner` phải dùng `response.X`, `response.Y` |
-| Camera không bám | `SetTarget` chưa được gọi, hoặc `CameraFollow` chưa kéo vào `WorldSpawner` | Kiểm tham chiếu trong Inspector |
-| `VContainerException: WorldSpawner is not registered` | Quên `RegisterComponentInHierarchy` | Thêm vào `GameLifetimeScope`; object phải có sẵn trong scene |
-| Tên có dấu bị coi là 2 ký tự | Dùng `name.Length` thay vì `StringInfo` | Xem `CharacterNameRules.IsValidName` |
-| Unity không thấy DTO mới | Chưa build `Shared` | `dotnet build Server/Shared` |
+| `EnterWorld` không có phản hồi, không lỗi | `WorldNetHandler` chưa đăng ký trong `GameLifetimeScope` | Thêm `.AsSelf().As<INetHandlerGroup>()` — anti-pattern số 4 |
+| `NotAuthenticated` khi gửi `EnterWorld` | Gửi trước khi login xong, hoặc gửi trên kết nối khác | `EnterWorld` chỉ gửi từ callback `OnLoginResult` thành công; một client giữ **một** kết nối suốt phiên |
+| `CharacterInUse` mãi không hết | Entity ma còn trong `WorldService` — đường dọn dẹp thiếu | Kiểm `LeaveWorldAsync` có trong `finally` của `RunAsync` **và** trong `OnLogout` |
+| `SqliteException: no such table: character` | Migration 3 chưa chạy | Kiểm đã thêm vào `_migrations`; lúc dev lỡ sửa migration cũ thì xoá `mmorpg.db`, `.db-wal`, `.db-shm` |
+| `foreign key constraint failed` khi tạo nhân vật | `account_id` không tồn tại, hoặc `PRAGMA foreign_keys` chưa bật | Kiểm `Database` có bật foreign keys lúc mở connection |
+| Mỗi lần đăng nhập lại tạo nhân vật mới | Thiếu `UNIQUE` trên `account_id`, hoặc SELECT-trước-INSERT sai cột | Kiểm schema migration 3 và `SelectByAccountAsync` |
+| Nhân vật hiện ở `(0,0)` dù DB ghi khác | Client dựng vị trí từ hằng số thay vì từ response | `WorldSpawner` phải dùng `response.X`, `response.Y` |
+| Camera không bám | `SetTarget` chưa được gọi, hoặc tham chiếu Inspector thiếu | Kiểm `_cameraFollow` trong `WorldSpawner` |
+| `VContainerException: ... WorldSpawner` (hoặc field inject null không lỗi) | Quên `RegisterComponentInHierarchy` | Đọc lỗi từ **dòng cuối** chuỗi `Failed to resolve` — xem CLAUDE.md |
+| Unity không thấy `EnterWorldResponse` | Chưa build `Shared` | `dotnet build Server/Shared` |
 
 ---
 
@@ -1621,22 +1314,26 @@ Bây giờ chưa di chuyển được nên giá trị chưa đổi; Phase 6 sẽ
 
 1. Nêu một thứ chỉ có ở `Entity`, một thứ chỉ có ở `Character`, và giải thích vì sao thứ đầu không nên vào DB.
 2. Vì sao `entityId` là `int` cấp lúc chạy chứ không dùng thẳng `character.id`? Nêu **ba** lý do khác nhau.
-3. Trong `EnterWorldAsync`, `AccountId` lấy từ đâu? Điều gì xảy ra nếu lấy từ `EnterWorldRequest` cho tiện?
-4. `LoadAsync` đặt `account_id` trong mệnh đề `WHERE` thay vì đọc lên rồi so sánh trong C#.
-   Hai cách cho cùng kết quả — vì sao cách đầu vẫn tốt hơn?
-5. `CreateAsync` bọc đếm-slot và INSERT trong một transaction. Viết ra chuỗi sự kiện khiến việc tách chúng ra bị hỏng.
-6. Vì sao cần **cả** `name` lẫn `name_key`? Bỏ `name_key` và dùng `COLLATE NOCASE` thì hỏng ở đâu với tiếng Việt?
-7. Xoá mềm bắt mọi query phải mang theo `WHERE deleted_at IS NULL`. Đó là chi phí thật —
-   nó mua lại được gì mà `DELETE` không cho?
-8. `LeaveWorldAsync` nuốt `DbUnavailableException` thay vì để nó ném lên. Vì sao ở **đây** thì nuốt là đúng,
-   trong khi `CONVENTIONS.md` §7 cấm nuốt lỗi?
-9. `CharacterDelete` trả `NotFound` cho cả "không có id đó" lẫn "id đó của người khác". Điều này chống được gì?
-10. `LocalPlayer` chỉ có setter private và một hàm `Apply`. Nếu mở setter công khai cho tiện thì golden rule nào bị phá,
-    và triệu chứng đầu tiên sẽ xuất hiện ở phase nào?
+3. Bản thiết kế cũ có `EnterWorldRequest { CharacterId }` và kèm theo nó là một lỗ hổng bảo mật phải nhớ
+   kiểm thủ công. Bản này client không gửi gì cả. Lỗ hổng đó biến đi đâu?
+4. `EnterWorld` là lệnh riêng — vì sao không nhét luôn dữ liệu world vào `AuthResponse` cho đỡ một round-trip?
+   (Gợi ý: Phase 8 đổi map, client cần thời gian load scene, và `Logout` không cắt TCP.)
+5. `GetOrCreateAsync` không dùng transaction mà vẫn an toàn trước hai request song song. Cái gì đang gánh
+   vai trò "khoá"? Chuỗi sự kiện cụ thể khi hai INSERT đua nhau là gì?
+6. `MinState = Authenticated` không chặn được `EnterWorld` gọi hai lần. Vì sao? Và vì sao ta chọn so `>=`
+   trong dispatcher thay vì so `==`?
+7. `LeaveWorldAsync` nuốt `DbUnavailableException` thay vì để nó ném lên, trong khi repo cấm nuốt lỗi.
+   Vì sao ở **đây** thì nuốt là đúng?
+8. Quan hệ Account↔Character là 1-1 nhưng vẫn tách hai bảng. Nêu hai lợi ích cụ thể của việc tách,
+   và một chi phí phải trả.
+9. `LocalPlayer` chỉ có setter private và một hàm `Apply`. Nếu mở setter công khai cho tiện thì golden rule
+   nào bị phá, và triệu chứng đầu tiên sẽ xuất hiện ở phase nào?
+10. Logout khi đang trong world phải gọi `LeaveWorldAsync` trước `AuthService.Logout`. Nếu đảo thứ tự
+    (logout trước, rời world sau) thì hỏng ở đâu? (Gợi ý: `MarkLoggedOut` đặt `AccountId = 0`.)
 
 ---
 
-**Xong Phase 5 → kết thúc Chặng B.** Người chơi đã có danh tính, nhân vật, và một chỗ đứng trong thế giới.
+**Xong Phase 5 → kết thúc Chặng B.** Người chơi có danh tính, nhân vật, và một chỗ đứng trong thế giới.
 Chặng C bắt đầu bằng [PHASE-6](PHASE-6.md): server chạy tick cố định, client gửi *ý định* di chuyển,
 server quyết vị trí — và bạn sẽ hiểu vì sao nhân vật trong game online luôn hơi "trượt" một chút.
-(Tài liệu Phase 6 sẽ được viết khi bạn báo đã xong Phase 5.)
+(Tài liệu Phase 6 sẽ được viết khi bạn báo đã xong Phase 5 — kèm đánh giá format hướng-làm/lời-giải này.)

@@ -20,6 +20,7 @@
 | Thể loại | 2D top-down, map tilemap, di chuyển tự do | Sát vo-lam-genz nhất → phần map/AOI/sorting đối chiếu được |
 | Unity | 6000.2.9f1, URP 2D, DI = VContainer | Theo `BaseCode_Test` |
 | Assembly client | **Không dùng asmdef** — code game nằm hết trong `Assembly-CSharp` | Assembly do asmdef định nghĩa không tham chiếu được `Assembly-CSharp-firstpass`, mà DOTween Pro nằm ở đó dưới dạng `.cs` không asmdef → mất API Pro. Đổi lại phải compile lại toàn bộ mỗi lần sửa; cỡ dự án này vẫn dưới vài giây. Tách asmdef sau, chỉ cho phần không đụng DOTween |
+| Nhân vật | **1 tài khoản = 1 nhân vật**, tự tạo trong lần vào world đầu (kiểu Ngọc Rồng Online) | Bản học ưu tiên đơn giản — bỏ màn hình chọn nhân vật. Bảng `character` vẫn tách khỏi `account` nên nâng lên nhiều nhân vật sau này chỉ là bỏ `UNIQUE(account_id)` + thêm UI chọn |
 | Repo | **1 repo duy nhất** chứa cả client + server + shared, tới hết Phase 12 | Đổi contract là sửa cả 2 bên — cùng 1 repo thì gói gọn trong 1 commit, `git checkout` commit cũ luôn cho ra cặp client/server khớp nhau. Tách repo (hoặc submodule) buộc phải commit 2 lần mỗi lần đổi contract; quên bước 2 thì 2 bên lệch mà git không báo gì |
 | Tách repo server | **Phase 16**, khi deploy thật | Lúc đó mới có lý do thật: đẩy server lên VPS không cần kéo theo vài GB asset Unity. Tách trước thời điểm đó là chịu chi phí mà chưa nhận được lợi ích |
 
@@ -39,13 +40,13 @@ Nhóm thành 5 chặng. **Không nhảy cóc** — mỗi phase dựa trên phase
 | **2** | **Contract & Dispatch** | `NetCmd` + DTO trong `Shared`, build ra DLL cho cả 2 bên; gửi/nhận bằng attribute `[TcpHandler]` / `[NetHandler]` | Dispatch table thay switch · auto-register bằng reflection · MemoryPack + nén LZ4 · vì sao contract phải 1 nguồn |
 
 ### Chặng B — Người chơi có danh tính (Phase 3–5)
-> Kết thúc chặng: đăng ký → đăng nhập → chọn nhân vật → nhân vật hiện ra trong map.
+> Kết thúc chặng: đăng ký → đăng nhập → vào thẳng thế giới, nhân vật hiện ra trong map.
 
 | # | Phase | Kết quả cụ thể | Học được gì |
 |---|-------|----------------|-------------|
 | **3** | **DBServer & tầng DAL** | Process `DBServer` riêng, SQLite, GameServer hỏi DB qua TCP nội bộ | Vì sao tách DB server · request/response async không block game loop · repository pattern |
 | **4** | **Đăng ký / Đăng nhập** | UI login trong Unity, tài khoản lưu SQLite, sai mật khẩu báo đúng lỗi | PBKDF2 hash · token session · không bao giờ tin client · chống login trùng |
-| **5** | **Nhân vật & vào thế giới** | Tạo nhân vật → chọn → `EnterWorld` → nhân vật xuất hiện, camera bám | Account ≠ Character ≠ Entity · state machine kết nối · snapshot khởi tạo |
+| **5** | **Vào thế giới** | Đăng nhập xong vào thẳng world: nhân vật tự tạo lần đầu (1 tài khoản = 1 nhân vật), xuất hiện đúng vị trí cũ, camera bám | Account ≠ Character ≠ Entity · get-or-create idempotent · UNIQUE thay cho check-then-act · snapshot khởi tạo |
 
 ### Chặng C — Thế giới sống (Phase 6–9)
 > Kết thúc chặng: 2 client chạy song song, thấy nhau di chuyển mượt trên map, server kiểm soát mọi thứ.
@@ -87,7 +88,7 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 | `0` | `None` — giá trị vô hiệu, không dùng | — |
 | `1–99` | **Hệ thống**: ping, handshake, disconnect, error | 1–2 |
 | `100–199` | **Auth**: register, login, logout, token | 4 |
-| `200–299` | **Character**: list, create, delete, enter world | 5 |
+| `200–299` | **Character**: enter world (mở rộng sau: list, create, delete nếu quay lại nhiều nhân vật) | 5 |
 | `300–399` | **World / Movement**: move, snapshot, spawn, despawn | 6–8 |
 | `400–499` | **Inventory / Item** | 10 |
 | `500–599` | **Combat / Monster** | 11 |
@@ -120,6 +121,11 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 
 **Nguyên tắc:** doc mô tả *cái gì* và *vì sao*, kèm code đủ để chép khi bí. Nhưng gõ lại tay vẫn học được nhiều hơn chép.
 
+**Format thử nghiệm từ Phase 5:** mỗi bước trong doc chia hai tầng — *hướng làm* (mô tả + quyết định thiết kế
++ code khung) hiện sẵn, còn *lời giải đầy đủ* nằm trong foldout `<details>` mặc định đóng ngay bên dưới.
+Owner tự nghĩ và tự code theo phần hướng trước, chạy được rồi mới mở lời giải để đối chiếu.
+Xong Phase 5 thì đánh giá hiệu quả; hợp lý mới áp dụng cho các phase sau.
+
 ---
 
 ## 4. Trạng thái
@@ -128,10 +134,10 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 |-------|-----------|--------------|
 | 0 — Nền móng | ✅ xong | [`guides/PHASE-0.md`](guides/PHASE-0.md) ✅ |
 | 1 — Transport | ✅ xong | [`guides/PHASE-1.md`](guides/PHASE-1.md) ✅ |
-| 2 — Contract & Dispatch | ⏳ đang làm | [`guides/PHASE-2.md`](guides/PHASE-2.md) ✅ |
-| 3 — DBServer & DAL | ⬜ chưa | [`guides/PHASE-3.md`](guides/PHASE-3.md) ✅ |
-| 4 — Auth | ⬜ chưa | [`guides/PHASE-4.md`](guides/PHASE-4.md) ✅ |
-| 5 — Character & EnterWorld | ⬜ chưa | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ |
+| 2 — Contract & Dispatch | ✅ xong | [`guides/PHASE-2.md`](guides/PHASE-2.md) ✅ |
+| 3 — DBServer & DAL | ✅ xong | [`guides/PHASE-3.md`](guides/PHASE-3.md) ✅ |
+| 4 — Auth | ✅ xong | [`guides/PHASE-4.md`](guides/PHASE-4.md) ✅ |
+| 5 — Vào thế giới | ⏳ đang làm | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ viết lại 2026-08: 1 tài khoản = 1 nhân vật, format hướng-làm + lời giải |
 | 6 — Game loop & movement | ⬜ chưa | ⬜ chưa viết |
 | 7 — Multi-player sync | ⬜ chưa | ⬜ chưa viết |
 | 8 — Map & AOI | ⬜ chưa | ⬜ chưa viết |
@@ -158,3 +164,4 @@ Ghi lại để sau này không tự hỏi "sao mình không làm cái này":
 | gRPC / WebSocket | TCP thuần dạy được nhiều nhất về framing | Có thể thử ở Phase 13 như 1 transport thay thế |
 | ECS / DOTS | Thêm 1 tầng khó không liên quan bài học chính | Không |
 | Guild / Quest / Skill tree | Đều là biến thể của Phase 10 (feature dọc) | Tự làm khi đã vững |
+| Nhiều nhân vật / màn hình chọn nhân vật | 1 tài khoản = 1 nhân vật (kiểu NRO) đủ cho mọi bài học của dự án; màn hình chọn chỉ thêm UI chứ không thêm kiến thức server | Khi muốn làm chuẩn thể loại — bỏ `UNIQUE(account_id)`, thêm CharacterList/Create/Delete; bản thiết kế 3-slot cũ còn trong git history của `PHASE-5.md` |
