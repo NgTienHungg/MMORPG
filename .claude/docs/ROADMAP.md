@@ -139,9 +139,9 @@ mở lời giải/đáp án sau để đối chiếu.
 | 4 — Auth | ✅ xong | [`guides/PHASE-4.md`](guides/PHASE-4.md) ✅ |
 | 5 — Vào thế giới | ✅ xong | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ |
 | 6 — Game loop & movement | ⏳ đang làm | [`guides/PHASE-6.md`](guides/PHASE-6.md) ✅ |
-| 7 — Multi-player sync | ⬜ chưa | ⬜ chưa viết |
-| 8 — Map & AOI | ⬜ chưa | ⬜ chưa viết |
-| 9 — Data & Config | ⬜ chưa | ⬜ chưa viết |
+| 7 — Multi-player sync | ⬜ chưa | [`guides/PHASE-7.md`](guides/PHASE-7.md) ✅ |
+| 8 — Map & AOI | ⬜ chưa | [`guides/PHASE-8.md`](guides/PHASE-8.md) ✅ |
+| 9 — Data & Config | ⬜ chưa | [`guides/PHASE-9.md`](guides/PHASE-9.md) ✅ |
 | 10 — Inventory | ⬜ chưa | ⬜ chưa viết |
 | 11 — Monster & Combat | ⬜ chưa | ⬜ chưa viết |
 | 12 — Chat | ⬜ chưa | ⬜ chưa viết |
