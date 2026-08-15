@@ -1,0 +1,183 @@
+{
+  "frames": {
+    "D:/NgTienHung/UnityProjects/MMORPG/Assets/Game/Textures/FrameItemIcon/Frame_Blue": {
+      "frame": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "sourceSize": {
+        "w": 110,
+        "h": 110
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "D:/NgTienHung/UnityProjects/MMORPG/Assets/Game/Textures/FrameItemIcon/Frame_Green": {
+      "frame": {
+        "x": 0,
+        "y": 130,
+        "w": 110,
+        "h": 110
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "sourceSize": {
+        "w": 110,
+        "h": 110
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "D:/NgTienHung/UnityProjects/MMORPG/Assets/Game/Textures/FrameItemIcon/Frame_None": {
+      "frame": {
+        "x": 130,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "sourceSize": {
+        "w": 110,
+        "h": 110
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "D:/NgTienHung/UnityProjects/MMORPG/Assets/Game/Textures/FrameItemIcon/Frame_Orange": {
+      "frame": {
+        "x": 0,
+        "y": 260,
+        "w": 110,
+        "h": 110
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "sourceSize": {
+        "w": 110,
+        "h": 110
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "D:/NgTienHung/UnityProjects/MMORPG/Assets/Game/Textures/FrameItemIcon/Frame_Purple": {
+      "frame": {
+        "x": 130,
+        "y": 130,
+        "w": 110,
+        "h": 110
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "sourceSize": {
+        "w": 110,
+        "h": 110
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "D:/NgTienHung/UnityProjects/MMORPG/Assets/Game/Textures/FrameItemIcon/Frame_White": {
+      "frame": {
+        "x": 260,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "sourceSize": {
+        "w": 110,
+        "h": 110
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    },
+    "D:/NgTienHung/UnityProjects/MMORPG/Assets/Game/Textures/FrameItemIcon/Frame_Yellow": {
+      "frame": {
+        "x": 130,
+        "y": 260,
+        "w": 110,
+        "h": 110
+      },
+      "rotated": false,
+      "trimmed": true,
+      "spriteSourceSize": {
+        "x": 0,
+        "y": 0,
+        "w": 110,
+        "h": 110
+      },
+      "sourceSize": {
+        "w": 110,
+        "h": 110
+      },
+      "pivot": {
+        "x": 0.5,
+        "y": 0.5
+      }
+    }
+  },
+  "meta": {
+    "app": "Atlas Pro",
+    "version": "1.0",
+    "image": "item_frame.png",
+    "format": "RGBA8888",
+    "size": {
+      "w": 390,
+      "h": 390
+    },
+    "scale": 1.0
+  }
+}
