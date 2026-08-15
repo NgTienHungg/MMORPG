@@ -1,0 +1,983 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Hành trình gói tin Login</title>
+</head>
+<body>
+
+<style>
+  :root {
+    --bg: #f2f4f7;
+    --surface: #ffffff;
+    --ink: #1b2430;
+    --ink-soft: #55637a;
+    --line: #d4dae3;
+    --client: #2e6fd0;
+    --client-bg: #e8effa;
+    --server: #b26a1b;
+    --server-bg: #f8efe2;
+    --db: #2e8b62;
+    --db-bg: #e5f3ec;
+    --mag: #b03a8c;
+    --mag-bg: #f7e8f2;
+    --code-bg: #eceff4;
+    --mono: ui-monospace, "Cascadia Code", Consolas, "JetBrains Mono", Menlo, monospace;
+    --sans: "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #10151c;
+      --surface: #171e28;
+      --ink: #dde4ee;
+      --ink-soft: #93a0b3;
+      --line: #2c3745;
+      --client: #6fa5f0;
+      --client-bg: #1a2536;
+      --server: #dd9c55;
+      --server-bg: #2b2318;
+      --db: #56bd8e;
+      --db-bg: #16281f;
+      --mag: #d879bd;
+      --mag-bg: #2e1c28;
+      --code-bg: #1f2732;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #10151c;
+    --surface: #171e28;
+    --ink: #dde4ee;
+    --ink-soft: #93a0b3;
+    --line: #2c3745;
+    --client: #6fa5f0;
+    --client-bg: #1a2536;
+    --server: #dd9c55;
+    --server-bg: #2b2318;
+    --db: #56bd8e;
+    --db-bg: #16281f;
+    --mag: #d879bd;
+    --mag-bg: #2e1c28;
+    --code-bg: #1f2732;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--ink);
+    font-family: var(--sans);
+    font-size: 16px;
+    line-height: 1.65;
+    margin: 0;
+    padding: 0 20px 96px;
+  }
+  main { max-width: 900px; margin: 0 auto; }
+
+  header.hero { padding: 56px 0 8px; }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 12px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--ink-soft);
+    margin: 0 0 10px;
+  }
+  h1 {
+    font-family: var(--mono);
+    font-size: clamp(28px, 5vw, 40px);
+    line-height: 1.15;
+    margin: 0 0 14px;
+    text-wrap: balance;
+  }
+  .lede { max-width: 62ch; color: var(--ink-soft); margin: 0 0 20px; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 10px 18px; margin: 8px 0 0; }
+  .chip {
+    display: inline-flex; align-items: center; gap: 8px;
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .chip i { width: 13px; height: 13px; border-radius: 3px; display: inline-block; }
+
+  section { margin-top: 64px; }
+  h2 {
+    font-family: var(--mono);
+    font-size: 21px;
+    margin: 0 0 6px;
+    text-wrap: balance;
+  }
+  h2 .no {
+    color: var(--mag);
+    margin-right: 8px;
+  }
+  .sec-note { color: var(--ink-soft); max-width: 68ch; margin: 0 0 20px; }
+
+  figure {
+    margin: 20px 0;
+    background: var(--surface);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 18px 14px 10px;
+  }
+  .scroll { overflow-x: auto; }
+  .scroll svg { display: block; height: auto; }
+  figcaption {
+    font-size: 13.5px;
+    color: var(--ink-soft);
+    padding: 10px 6px 4px;
+    max-width: 74ch;
+  }
+
+  svg text { font-family: var(--sans); font-size: 12px; fill: var(--ink); }
+  svg text.m  { font-family: var(--mono); }
+  svg text.sm { font-size: 10.5px; }
+  svg text.dim { fill: var(--ink-soft); }
+  svg text.tc { fill: var(--client); }
+  svg text.ts { fill: var(--server); }
+  svg text.td { fill: var(--db); }
+  svg text.tm { fill: var(--mag); }
+  svg .box   { fill: var(--surface); stroke: var(--line); rx: 6; }
+  svg .life  { stroke: var(--line); stroke-dasharray: 3 4; }
+  svg .msg   { stroke: var(--ink); fill: none; stroke-width: 1.4; }
+  svg .ret   { stroke: var(--ink-soft); fill: none; stroke-width: 1.2; stroke-dasharray: 5 4; }
+  svg .note  { fill: var(--code-bg); stroke: none; rx: 4; }
+
+  code, .path {
+    font-family: var(--mono);
+    font-size: 0.86em;
+    background: var(--code-bg);
+    border-radius: 4px;
+    padding: 1px 6px;
+    white-space: nowrap;
+  }
+
+  table { border-collapse: collapse; width: 100%; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th {
+    font-family: var(--mono); font-size: 11.5px; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--ink-soft); font-weight: 600;
+  }
+  td:first-child { white-space: nowrap; }
+  .tablewrap { overflow-x: auto; background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; margin: 18px 0; }
+
+  .cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 16px; margin: 20px 0; }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    padding: 16px 18px;
+  }
+  .card h3 { font-family: var(--mono); font-size: 14.5px; margin: 0 0 8px; }
+  .card p, .card ul { font-size: 14px; color: var(--ink-soft); margin: 0; }
+  .card ul { padding-left: 18px; }
+  .card li { margin: 4px 0; }
+  .card .val { color: var(--ink); font-family: var(--mono); font-size: 13px; }
+
+  .warn { border-left: 4px solid var(--mag); }
+  .warn h3 { color: var(--mag); }
+
+  .split { display: grid; grid-template-columns: 1.5fr 1fr; gap: 16px; align-items: start; }
+  @media (max-width: 760px) { .split { grid-template-columns: 1fr; } }
+
+  a { color: var(--client); }
+</style>
+
+<main>
+
+<header class="hero">
+  <p class="eyebrow">MMORPG · Phase 4 · TCP · MemoryPack</p>
+  <h1>Hành trình gói tin Login</h1>
+  <p class="lede">
+    Theo chân <b>một cú click nút Đăng nhập</b> đi qua đủ 3 tiến trình — Unity Client,
+    GameServer, DBServer — rồi quay về UI. Mọi tên class, method, hằng số trong trang này
+    lấy đúng từ code hiện tại của repo, để bạn có thể mở file đối chiếu từng bước.
+  </p>
+  <div class="legend">
+    <span class="chip"><i style="background:var(--client)"></i>Unity Client</span>
+    <span class="chip"><i style="background:var(--server)"></i>GameServer (:7778)</span>
+    <span class="chip"><i style="background:var(--db)"></i>DBServer (:7779)</span>
+    <span class="chip"><i style="background:var(--mag)"></i>ranh giới luồng / điểm dễ quên</span>
+  </div>
+</header>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§1</span>Bức tranh lớn: 3 tiến trình, 2 đường TCP, 1 contract</h2>
+  <p class="sec-note">
+    Client không bao giờ chạm DB. Mọi dữ liệu đi theo đúng một chuỗi, và cả 3 bên
+    nói chung một "ngôn ngữ" là <code>MMORPG.Shared.dll</code> — nơi duy nhất định nghĩa
+    <code>NetCmd</code>, <code>DbCmd</code>, DTO và cách đóng khung byte.
+  </p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 940 402" role="img" aria-label="Sơ đồ 3 tiến trình: Unity Client nối GameServer qua TCP 7778, GameServer nối DBServer qua TCP 7779, cả ba dùng chung MMORPG.Shared.dll" style="min-width:860px; width:100%;">
+      <defs>
+        <marker id="a1i" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--ink)"/>
+        </marker>
+        <marker id="a1c" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--client)"/>
+        </marker>
+        <marker id="a1d" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--db)"/>
+        </marker>
+      </defs>
+
+      <!-- zone: client -->
+      <rect x="20" y="34" width="264" height="256" rx="10" fill="var(--client-bg)" stroke="var(--client)"/>
+      <text x="152" y="58" text-anchor="middle" class="m" font-weight="700" fill="var(--client)">Unity Client</text>
+      <text x="152" y="74" text-anchor="middle" class="sm dim">Assembly-CSharp · VContainer</text>
+
+      <rect x="44" y="88"  width="216" height="32" class="box"/>
+      <text x="152" y="108" text-anchor="middle" class="m sm">LoginUi · LoginPresenter</text>
+      <rect x="44" y="136" width="216" height="32" class="box"/>
+      <text x="152" y="156" text-anchor="middle" class="m sm">AuthApi</text>
+      <rect x="44" y="184" width="216" height="32" class="box"/>
+      <text x="152" y="204" text-anchor="middle" class="m sm">NetService · NetDispatcher</text>
+      <rect x="44" y="232" width="216" height="32" class="box"/>
+      <text x="152" y="252" text-anchor="middle" class="m sm">TcpTransport (FrameReader)</text>
+      <line x1="152" y1="120" x2="152" y2="134" class="msg" marker-end="url(#a1i)"/>
+      <line x1="152" y1="168" x2="152" y2="182" class="msg" marker-end="url(#a1i)"/>
+      <line x1="152" y1="216" x2="152" y2="230" class="msg" marker-end="url(#a1i)"/>
+
+      <!-- zone: gameserver -->
+      <rect x="348" y="34" width="264" height="256" rx="10" fill="var(--server-bg)" stroke="var(--server)"/>
+      <text x="480" y="58" text-anchor="middle" class="m" font-weight="700" fill="var(--server)">GameServer</text>
+      <text x="480" y="74" text-anchor="middle" class="sm dim">.NET 8 · lắng nghe 0.0.0.0:7778</text>
+
+      <rect x="372" y="88"  width="216" height="32" class="box"/>
+      <text x="480" y="108" text-anchor="middle" class="m sm">ClientSession (FrameReader)</text>
+      <rect x="372" y="136" width="216" height="32" class="box"/>
+      <text x="480" y="156" text-anchor="middle" class="m sm">TcpDispatcher</text>
+      <rect x="372" y="184" width="216" height="32" class="box"/>
+      <text x="480" y="204" text-anchor="middle" class="m sm">AuthHandler · AuthService</text>
+      <rect x="372" y="232" width="216" height="32" class="box"/>
+      <text x="480" y="252" text-anchor="middle" class="m sm">DbClient</text>
+      <line x1="480" y1="120" x2="480" y2="134" class="msg" marker-end="url(#a1i)"/>
+      <line x1="480" y1="168" x2="480" y2="182" class="msg" marker-end="url(#a1i)"/>
+      <line x1="480" y1="216" x2="480" y2="230" class="msg" marker-end="url(#a1i)"/>
+
+      <!-- zone: dbserver -->
+      <rect x="676" y="34" width="244" height="256" rx="10" fill="var(--db-bg)" stroke="var(--db)"/>
+      <text x="798" y="58" text-anchor="middle" class="m" font-weight="700" fill="var(--db)">DBServer</text>
+      <text x="798" y="74" text-anchor="middle" class="sm dim">.NET 8 · chỉ loopback :7779</text>
+
+      <rect x="698" y="88"  width="200" height="32" class="box"/>
+      <text x="798" y="108" text-anchor="middle" class="m sm">DbSession · DbDispatcher</text>
+      <rect x="698" y="136" width="200" height="32" class="box"/>
+      <text x="798" y="156" text-anchor="middle" class="m sm">AccountDbHandler</text>
+      <rect x="698" y="184" width="200" height="32" class="box"/>
+      <text x="798" y="204" text-anchor="middle" class="m sm">AccountRepository</text>
+      <rect x="698" y="232" width="200" height="32" class="box"/>
+      <text x="798" y="252" text-anchor="middle" class="m sm">SQLite (mmorpg.db · WAL)</text>
+      <line x1="798" y1="120" x2="798" y2="134" class="msg" marker-end="url(#a1i)"/>
+      <line x1="798" y1="168" x2="798" y2="182" class="msg" marker-end="url(#a1i)"/>
+      <line x1="798" y1="216" x2="798" y2="230" class="msg" marker-end="url(#a1i)"/>
+
+      <!-- links between zones -->
+      <line x1="286" y1="152" x2="344" y2="152" stroke="var(--client)" stroke-width="2" marker-end="url(#a1c)"/>
+      <line x1="344" y1="176" x2="288" y2="176" stroke="var(--client)" stroke-width="2" marker-end="url(#a1c)"/>
+      <text x="316" y="140" text-anchor="middle" class="m sm tc" font-weight="700">TCP :7778</text>
+      <text x="316" y="198" text-anchor="middle" class="m sm dim">PacketFrame</text>
+
+      <line x1="614" y1="152" x2="672" y2="152" stroke="var(--db)" stroke-width="2" marker-end="url(#a1d)"/>
+      <line x1="672" y1="176" x2="616" y2="176" stroke="var(--db)" stroke-width="2" marker-end="url(#a1d)"/>
+      <text x="644" y="140" text-anchor="middle" class="m sm td" font-weight="700">TCP :7779</text>
+      <text x="644" y="198" text-anchor="middle" class="m sm dim">DbFrame</text>
+
+      <!-- shared strip -->
+      <rect x="20" y="330" width="900" height="46" rx="8" fill="var(--surface)" stroke="var(--ink-soft)" stroke-dasharray="6 4"/>
+      <text x="470" y="349" text-anchor="middle" class="m sm" font-weight="700">MMORPG.Shared.dll — nguồn contract duy nhất</text>
+      <text x="470" y="366" text-anchor="middle" class="sm dim">NetCmd · DbCmd · ErrorCode · DTO [MemoryPackable] · PacketFrame · NetPayload · FrameReader · DbFrame</text>
+      <line x1="152" y1="292" x2="152" y2="328" stroke="var(--ink-soft)" stroke-dasharray="3 4"/>
+      <line x1="480" y1="292" x2="480" y2="328" stroke="var(--ink-soft)" stroke-dasharray="3 4"/>
+      <line x1="798" y1="292" x2="798" y2="328" stroke="var(--ink-soft)" stroke-dasharray="3 4"/>
+    </svg>
+    </div>
+    <figcaption>
+      Mỗi cột là một <b>tiến trình riêng</b> (client build ra game, 2 server là 2 app console).
+      Chúng chỉ nói chuyện qua TCP; thứ duy nhất "dùng chung" là DLL contract — client nhận bản copy
+      tại <code>Assets/Plugins/Shared/</code> do post-build của <code>Server/Shared</code> tự chép sang.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§2</span>Data trên dây: byte nào nằm ở đâu</h2>
+  <p class="sec-note">
+    TCP chỉ là một <b>dòng byte vô tận</b> — không có khái niệm "gói". Muốn có gói thì tự vẽ ranh giới:
+    mỗi message được <code>PacketFrame.Encode</code> dán một header 8 byte lên đầu, và bên nhận dùng
+    <code>FrameReader</code> gom byte cho đến khi đủ một frame. Đây là phần lõi nhất để giảng về TCP.
+  </p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 940 470" role="img" aria-label="Cấu trúc byte của PacketFrame, NetPayload và DbFrame" style="min-width:860px; width:100%;">
+      <!-- ===== PacketFrame ===== -->
+      <text x="40" y="28" class="m" font-weight="700">1 · PacketFrame — khung ngoài cùng (Client ↔ GameServer)</text>
+
+      <rect x="40"  y="42" width="150" height="46" fill="var(--code-bg)" stroke="var(--line)"/>
+      <rect x="190" y="42" width="150" height="46" fill="var(--server-bg)" stroke="var(--server)"/>
+      <rect x="340" y="42" width="470" height="46" fill="var(--surface)" stroke="var(--line)" stroke-dasharray="5 4"/>
+
+      <text x="115" y="61" text-anchor="middle" class="m sm" font-weight="700">len : int32</text>
+      <text x="115" y="77" text-anchor="middle" class="sm dim">little-endian</text>
+      <text x="265" y="61" text-anchor="middle" class="m sm ts" font-weight="700">cmd : int32</text>
+      <text x="265" y="77" text-anchor="middle" class="sm ts">chìa khóa dispatch</text>
+      <text x="575" y="61" text-anchor="middle" class="m sm" font-weight="700">payload (len − 4 byte)</text>
+      <text x="575" y="77" text-anchor="middle" class="sm dim">= NetPayload, xem mục 2 bên dưới</text>
+
+      <!-- bracket: len covers cmd+payload -->
+      <path d="M 190 100 L 190 110 L 810 110 L 810 100" fill="none" stroke="var(--ink-soft)"/>
+      <text x="500" y="126" text-anchor="middle" class="sm dim">len đo đúng phần này = 4 + payload.Length (không tính chính nó) · MAX_PACKET_SIZE = 1 MiB</text>
+
+      <!-- example -->
+      <text x="40" y="156" class="sm dim">Ví dụ frame Login:</text>
+      <text x="160" y="156" class="m sm">1C 00 00 00</text>
+      <text x="248" y="156" class="sm dim">(=28)</text>
+      <text x="300" y="156" class="m sm ts">65 00 00 00</text>
+      <text x="390" y="156" class="sm ts">(=101 → NetCmd.Login)</text>
+      <text x="540" y="156" class="m sm">00  9A 9F …</text>
+      <text x="625" y="156" class="sm dim">(flag + 23 byte MemoryPack)</text>
+
+      <!-- ===== NetPayload ===== -->
+      <text x="40" y="208" class="m" font-weight="700">2 · NetPayload — ruột của payload</text>
+
+      <text x="40" y="236" class="sm dim">flag = 0x00 (thường gặp — auth luôn đi nhánh này):</text>
+      <rect x="380" y="220" width="46"  height="36" fill="var(--mag-bg)" stroke="var(--mag)"/>
+      <rect x="426" y="220" width="384" height="36" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="403" y="242" text-anchor="middle" class="m sm tm" font-weight="700">00</text>
+      <text x="618" y="242" text-anchor="middle" class="m sm">MemoryPack(LoginRequest { Username, Password })</text>
+
+      <text x="40" y="290" class="sm dim">flag = 0x01 (chỉ khi DTO &gt; 4 KB — COMPRESS_THRESHOLD):</text>
+      <rect x="380" y="274" width="46"  height="36" fill="var(--mag-bg)" stroke="var(--mag)"/>
+      <rect x="426" y="274" width="120" height="36" fill="var(--code-bg)" stroke="var(--line)"/>
+      <rect x="546" y="274" width="264" height="36" fill="var(--surface)" stroke="var(--line)"/>
+      <text x="403" y="296" text-anchor="middle" class="m sm tm" font-weight="700">01</text>
+      <text x="506" y="296" text-anchor="middle" class="m sm">rawLen : int32</text>
+      <text x="678" y="296" text-anchor="middle" class="m sm">LZ4(MemoryPack bytes)</text>
+      <text x="40" y="330" class="sm dim">Nếu nén xong mà to hơn bản gốc → tự quay về flag 0x00. Login/Register không bao giờ chạm nhánh LZ4.</text>
+
+      <!-- ===== DbFrame ===== -->
+      <text x="40" y="376" class="m" font-weight="700">3 · DbFrame — GameServer ↔ DBServer (thêm đúng 1 trường)</text>
+
+      <rect x="40"  y="390" width="130" height="46" fill="var(--code-bg)" stroke="var(--line)"/>
+      <rect x="170" y="390" width="130" height="46" fill="var(--server-bg)" stroke="var(--server)"/>
+      <rect x="300" y="390" width="150" height="46" fill="var(--db-bg)" stroke="var(--db)" stroke-width="2"/>
+      <rect x="450" y="390" width="360" height="46" fill="var(--surface)" stroke="var(--line)" stroke-dasharray="5 4"/>
+
+      <text x="105" y="409" text-anchor="middle" class="m sm" font-weight="700">len : int32</text>
+      <text x="235" y="409" text-anchor="middle" class="m sm ts" font-weight="700">cmd : int32</text>
+      <text x="235" y="425" text-anchor="middle" class="sm ts">DbCmd, vd 1100</text>
+      <text x="375" y="409" text-anchor="middle" class="m sm td" font-weight="700">reqId : int32</text>
+      <text x="375" y="425" text-anchor="middle" class="sm td">ghép response ↔ request</text>
+      <text x="630" y="409" text-anchor="middle" class="m sm" font-weight="700">NetPayload (flag + MemoryPack)</text>
+      <text x="630" y="425" text-anchor="middle" class="sm dim">vd AccountGetRequest { Username }</text>
+    </svg>
+    </div>
+    <figcaption>
+      Ba tầng đóng gói: <b>DTO</b> (object C#) → <code>NetPayload.Serialize</code> (MemoryPack + cờ nén)
+      → <code>PacketFrame.Encode</code> (dán <code>len</code> + <code>cmd</code>). Kênh nội bộ DB dùng lại
+      toàn bộ, chỉ chèn thêm <span style="color:var(--db); font-weight:600">reqId</span> — vì một kết nối
+      DbClient chạy nhiều truy vấn song song, cần biết response nào trả cho request nào (§7).
+    </figcaption>
+  </figure>
+
+  <div class="cards">
+    <div class="card">
+      <h3>Hằng số trong Shared</h3>
+      <ul>
+        <li><span class="val">HEADER_SIZE = 8</span> (len 4 + cmd 4)</li>
+        <li><span class="val">MAX_PACKET_SIZE = 1 MiB</span> — chặn allocation bomb, <code>FrameReader</code> kiểm tra <i>trước khi</i> cấp phát</li>
+        <li><span class="val">COMPRESS_THRESHOLD = 4 KB</span> — dưới ngưỡng gửi raw</li>
+      </ul>
+    </div>
+    <div class="card">
+      <h3>Vì sao cần FrameReader?</h3>
+      <p>TCP có thể trả về <b>nửa frame</b> hoặc <b>ba frame dính nhau</b> trong một lần
+      <code>ReadAsync</code>. <code>Feed()</code> dồn byte vào buffer, <code>TryRead()</code> chỉ nhả ra
+      khi đã đủ một frame trọn vẹn — mỗi kết nối một instance, không thread-safe.</p>
+    </div>
+    <div class="card">
+      <h3>Dải số NetCmd</h3>
+      <ul>
+        <li><span class="val">1–99</span> hệ thống (Ping=1, Error=2, Kicked=5)</li>
+        <li><span class="val">100–199</span> auth (Register=100, Login=101, Logout=102)</li>
+        <li><span class="val">1000+</span> DbCmd nội bộ (AccountGetByName=1100, AccountCreate=1101)</li>
+      </ul>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§3</span>Chặng 1 — Từ cú click đến socket (phía client)</h2>
+  <p class="sec-note">
+    <code>LoginUi</code> chỉ là view câm. <code>LoginPresenter</code> là class duy nhất biết cả UI lẫn mạng.
+    Chú ý: client <b>gửi rồi quên</b> — <code>NetService.Send</code> không trả về response;
+    presenter tự bật đồng hồ 8 giây phòng khi server im lặng.
+  </p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 880 460" role="img" aria-label="Sequence diagram: click nút Login đi qua LoginPresenter, AuthApi, NetService, TcpTransport rồi ra socket" style="min-width:840px; width:100%;">
+      <defs>
+        <marker id="a3i" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--ink)"/>
+        </marker>
+        <marker id="a3c" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--client)"/>
+        </marker>
+      </defs>
+
+      <!-- headers -->
+      <rect x="35"  y="20" width="110" height="34" class="box" stroke="var(--client)"/>
+      <rect x="195" y="20" width="130" height="34" class="box" stroke="var(--client)"/>
+      <rect x="375" y="20" width="90"  height="34" class="box" stroke="var(--client)"/>
+      <rect x="515" y="20" width="110" height="34" class="box" stroke="var(--client)"/>
+      <rect x="665" y="20" width="120" height="34" class="box" stroke="var(--client)"/>
+      <text x="90"  y="41" text-anchor="middle" class="m sm" font-weight="700">LoginUi</text>
+      <text x="260" y="41" text-anchor="middle" class="m sm" font-weight="700">LoginPresenter</text>
+      <text x="420" y="41" text-anchor="middle" class="m sm" font-weight="700">AuthApi</text>
+      <text x="570" y="41" text-anchor="middle" class="m sm" font-weight="700">NetService</text>
+      <text x="725" y="41" text-anchor="middle" class="m sm" font-weight="700">TcpTransport</text>
+
+      <!-- lifelines -->
+      <line x1="90"  y1="54" x2="90"  y2="430" class="life"/>
+      <line x1="260" y1="54" x2="260" y2="430" class="life"/>
+      <line x1="420" y1="54" x2="420" y2="430" class="life"/>
+      <line x1="570" y1="54" x2="570" y2="430" class="life"/>
+      <line x1="725" y1="54" x2="725" y2="430" class="life"/>
+
+      <!-- 1 click -->
+      <line x1="90" y1="90" x2="257" y2="90" class="msg" marker-end="url(#a3i)"/>
+      <text x="174" y="82" text-anchor="middle" class="m sm">Button.onClick → OnClickLogin()</text>
+
+      <!-- 2 lock UI -->
+      <line x1="260" y1="128" x2="93" y2="128" class="msg" marker-end="url(#a3i)"/>
+      <text x="174" y="120" text-anchor="middle" class="sm">khóa nút · «Đang kết nối…»</text>
+
+      <!-- 3 connect (optional) -->
+      <line x1="260" y1="166" x2="567" y2="166" class="ret" marker-end="url(#a3i)"/>
+      <text x="414" y="158" text-anchor="middle" class="m sm">ConnectAsync(host, 7778)</text>
+      <text x="414" y="180" text-anchor="middle" class="sm dim">chỉ khi chưa nối — kết nối lười</text>
+
+      <!-- 4 authapi -->
+      <line x1="260" y1="216" x2="417" y2="216" class="msg" marker-end="url(#a3i)"/>
+      <text x="340" y="208" text-anchor="middle" class="m sm">Login(username, password)</text>
+
+      <!-- 5 send -->
+      <line x1="420" y1="252" x2="567" y2="252" class="msg" marker-end="url(#a3i)"/>
+      <text x="494" y="244" text-anchor="middle" class="m sm">Send(NetCmd.Login, LoginRequest)</text>
+
+      <!-- 6 serialize note -->
+      <rect x="480" y="268" width="180" height="22" class="note"/>
+      <text x="570" y="283" text-anchor="middle" class="m sm">NetPayload.Serialize → byte[]</text>
+
+      <!-- 7 to transport -->
+      <line x1="570" y1="316" x2="722" y2="316" class="msg" marker-end="url(#a3i)"/>
+      <text x="646" y="308" text-anchor="middle" class="m sm">Send(101, payload)</text>
+
+      <!-- 8 encode + queue -->
+      <rect x="620" y="332" width="212" height="22" class="note"/>
+      <text x="726" y="347" text-anchor="middle" class="m sm">PacketFrame.Encode → _sendQueue</text>
+
+      <!-- 9 sendloop -->
+      <line x1="725" y1="384" x2="862" y2="384" stroke="var(--client)" stroke-width="2" marker-end="url(#a3c)"/>
+      <text x="790" y="376" text-anchor="middle" class="m sm tc" font-weight="700">socket :7778</text>
+      <text x="770" y="400" text-anchor="middle" class="sm tm">SendLoopAsync — luồng nền</text>
+
+      <!-- 10 watchdog -->
+      <rect x="180" y="374" width="162" height="22" class="note"/>
+      <text x="261" y="389" text-anchor="middle" class="m sm">ArmResponseTimeout(8s)</text>
+      <text x="261" y="414" text-anchor="middle" class="sm dim">server im lặng 8s → mở khóa UI lại</text>
+    </svg>
+    </div>
+    <figcaption>
+      Từ click đến lúc bỏ vào <code>_sendQueue</code> đều chạy trên <b>main thread</b> của Unity;
+      chỉ <code>SendLoopAsync</code> (Task nền do <code>ConnectAsync</code> khởi động) mới thật sự
+      ghi byte ra socket. Nhờ hàng đợi + semaphore, gameplay không bao giờ bị chặn bởi I/O mạng.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§4</span>Chặng 2 — GameServer xử lý &amp; hỏi DBServer</h2>
+  <p class="sec-note">
+    Mỗi client được một <code>ClientSession</code> riêng (vòng đời = vòng đời kết nối TCP).
+    <code>TcpDispatcher</code> tra bảng handler dựng sẵn bằng reflection — không có
+    <code>switch (cmd)</code> nào cả. Handler gọi service, service gọi DB qua <code>DbClient</code>
+    rồi <code>await</code> đến khi response mang đúng <b>reqId</b> quay về.
+  </p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 1060 750" role="img" aria-label="Sequence diagram phía server: ClientSession nhận frame Login, TcpDispatcher gọi AuthHandler, AuthService gọi DbClient sang DBServer truy vấn SQLite rồi trả AuthResponse" style="min-width:1000px; width:100%;">
+      <defs>
+        <marker id="a4i" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--ink)"/>
+        </marker>
+        <marker id="a4r" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--ink-soft)"/>
+        </marker>
+        <marker id="a4d" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--db)"/>
+        </marker>
+        <marker id="a4c" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--client)"/>
+        </marker>
+      </defs>
+
+      <!-- zone bands -->
+      <rect x="28"  y="10" width="662" height="726" rx="10" fill="var(--server-bg)" opacity="0.55"/>
+      <rect x="702" y="10" width="348" height="726" rx="10" fill="var(--db-bg)" opacity="0.55"/>
+      <text x="42"  y="30" class="m sm ts" font-weight="700">GAMESERVER</text>
+      <text x="716" y="30" class="m sm td" font-weight="700">DBSERVER</text>
+
+      <!-- headers -->
+      <rect x="35"  y="44" width="104" height="46" class="box" stroke="var(--server)"/>
+      <rect x="168" y="44" width="106" height="46" class="box" stroke="var(--server)"/>
+      <rect x="303" y="44" width="104" height="46" class="box" stroke="var(--server)"/>
+      <rect x="438" y="44" width="104" height="46" class="box" stroke="var(--server)"/>
+      <rect x="573" y="44" width="94"  height="46" class="box" stroke="var(--server)"/>
+      <rect x="712" y="44" width="110" height="46" class="box" stroke="var(--db)"/>
+      <rect x="850" y="44" width="118" height="46" class="box" stroke="var(--db)"/>
+      <rect x="986" y="44" width="58"  height="46" class="box" stroke="var(--db)"/>
+      <text x="87"   y="63" text-anchor="middle" class="m sm" font-weight="700">Client</text>
+      <text x="87"   y="79" text-anchor="middle" class="m sm" font-weight="700">Session</text>
+      <text x="221"  y="63" text-anchor="middle" class="m sm" font-weight="700">Tcp</text>
+      <text x="221"  y="79" text-anchor="middle" class="m sm" font-weight="700">Dispatcher</text>
+      <text x="355"  y="63" text-anchor="middle" class="m sm" font-weight="700">Auth</text>
+      <text x="355"  y="79" text-anchor="middle" class="m sm" font-weight="700">Handler</text>
+      <text x="490"  y="63" text-anchor="middle" class="m sm" font-weight="700">Auth</text>
+      <text x="490"  y="79" text-anchor="middle" class="m sm" font-weight="700">Service</text>
+      <text x="620"  y="63" text-anchor="middle" class="m sm" font-weight="700">Db</text>
+      <text x="620"  y="79" text-anchor="middle" class="m sm" font-weight="700">Client</text>
+      <text x="767"  y="63" text-anchor="middle" class="m sm" font-weight="700">DbSession ·</text>
+      <text x="767"  y="79" text-anchor="middle" class="m sm" font-weight="700">DbDispatcher</text>
+      <text x="909"  y="63" text-anchor="middle" class="m sm" font-weight="700">AccountDbHandler</text>
+      <text x="909"  y="79" text-anchor="middle" class="m sm" font-weight="700">+ Repository</text>
+      <text x="1015" y="63" text-anchor="middle" class="m sm" font-weight="700">SQLite</text>
+
+      <!-- lifelines -->
+      <line x1="87"   y1="90" x2="87"   y2="722" class="life"/>
+      <line x1="221"  y1="90" x2="221"  y2="722" class="life"/>
+      <line x1="355"  y1="90" x2="355"  y2="722" class="life"/>
+      <line x1="490"  y1="90" x2="490"  y2="722" class="life"/>
+      <line x1="620"  y1="90" x2="620"  y2="722" class="life"/>
+      <line x1="767"  y1="90" x2="767"  y2="722" class="life"/>
+      <line x1="909"  y1="90" x2="909"  y2="722" class="life"/>
+      <line x1="1015" y1="90" x2="1015" y2="722" class="life"/>
+
+      <!-- 1 frame in -->
+      <line x1="30" y1="122" x2="84" y2="122" stroke="var(--client)" stroke-width="2" marker-end="url(#a4c)"/>
+      <text x="112" y="112" class="m sm tc">frame [cmd=101] từ client · ReadLoop → FrameReader.TryRead</text>
+
+      <!-- 2 dispatch -->
+      <line x1="87" y1="156" x2="218" y2="156" class="msg" marker-end="url(#a4i)"/>
+      <text x="154" y="148" text-anchor="middle" class="m sm">DispatchAsync(…)</text>
+
+      <!-- 3 minstate note -->
+      <rect x="152" y="172" width="220" height="22" class="note"/>
+      <text x="262" y="187" text-anchor="middle" class="m sm">tra bảng handler · State ≥ MinState ✓</text>
+
+      <!-- 4 handler -->
+      <line x1="221" y1="222" x2="352" y2="222" class="msg" marker-end="url(#a4i)"/>
+      <text x="288" y="214" text-anchor="middle" class="m sm">OnLogin(NetRequest)</text>
+
+      <!-- 5 service -->
+      <line x1="355" y1="258" x2="487" y2="258" class="msg" marker-end="url(#a4i)"/>
+      <text x="422" y="250" text-anchor="middle" class="m sm">LoginAsync(session, dto)</text>
+
+      <!-- 6 validate note -->
+      <rect x="400" y="274" width="240" height="22" class="note"/>
+      <text x="520" y="289" text-anchor="middle" class="m sm">LoginRateLimiter · Normalize(username)</text>
+
+      <!-- 7 call db -->
+      <line x1="490" y1="326" x2="617" y2="326" class="msg" marker-end="url(#a4i)"/>
+      <text x="554" y="318" text-anchor="middle" class="m sm">CallAsync(AccountGetByName)</text>
+
+      <!-- 8 dbframe out -->
+      <line x1="620" y1="362" x2="764" y2="362" stroke="var(--db)" stroke-width="2" marker-end="url(#a4d)"/>
+      <text x="692" y="354" text-anchor="middle" class="m sm td" font-weight="700">DbFrame cmd=1100 · reqId=42</text>
+      <text x="692" y="378" text-anchor="middle" class="sm dim">socket :7779 · await bắt đầu chờ</text>
+
+      <!-- 9 db dispatch -->
+      <line x1="767" y1="410" x2="906" y2="410" class="msg" marker-end="url(#a4i)"/>
+      <text x="838" y="402" text-anchor="middle" class="m sm">OnGetByName(DbRequest)</text>
+
+      <!-- 10 sql -->
+      <line x1="909" y1="444" x2="1012" y2="444" class="msg" marker-end="url(#a4i)"/>
+      <text x="962" y="436" text-anchor="middle" class="m sm">SELECT … WHERE username</text>
+
+      <!-- 11 row back -->
+      <line x1="1015" y1="476" x2="912" y2="476" class="ret" marker-end="url(#a4r)"/>
+      <text x="962" y="468" text-anchor="middle" class="sm dim">row: id, hash, salt, iterations</text>
+
+      <!-- 12 dbresult back -->
+      <line x1="909" y1="508" x2="770" y2="508" class="ret" marker-end="url(#a4r)"/>
+      <text x="838" y="500" text-anchor="middle" class="m sm dim">DbResult.Ok(AccountGetResponse)</text>
+
+      <!-- 13 dbframe back -->
+      <line x1="767" y1="540" x2="623" y2="540" stroke="var(--db)" stroke-width="2" stroke-dasharray="6 4" marker-end="url(#a4d)"/>
+      <text x="694" y="532" text-anchor="middle" class="m sm td" font-weight="700">DbFrame reqId=42</text>
+      <rect x="520" y="552" width="212" height="22" class="note"/>
+      <text x="626" y="567" text-anchor="middle" class="m sm">_pending[42].SetResult → await tỉnh dậy</text>
+
+      <!-- 14 verify note -->
+      <rect x="350" y="596" width="288" height="22" class="note"/>
+      <text x="494" y="611" text-anchor="middle" class="m sm">PasswordHasher.Verify (PBKDF2·100k) · kick session cũ</text>
+
+      <!-- 15 mark authenticated -->
+      <line x1="490" y1="648" x2="90" y2="648" class="msg" marker-end="url(#a4i)"/>
+      <text x="290" y="640" text-anchor="middle" class="m sm">MarkAuthenticated(accountId, username) → State = Authenticated</text>
+
+      <!-- 16 response chain -->
+      <line x1="490" y1="678" x2="224" y2="678" class="ret" marker-end="url(#a4r)"/>
+      <text x="356" y="670" text-anchor="middle" class="m sm dim">AuthResponse → NetResult.Ok</text>
+
+      <!-- 17 sendraw -->
+      <line x1="221" y1="706" x2="90" y2="706" class="msg" marker-end="url(#a4i)"/>
+      <text x="156" y="698" text-anchor="middle" class="m sm">SendRaw(Login, …)</text>
+      <line x1="84" y1="722" x2="32" y2="722" stroke="var(--client)" stroke-width="2" marker-end="url(#a4c)"/>
+      <text x="110" y="740" class="m sm tc">frame response về client (cùng cmd=101)</text>
+    </svg>
+    </div>
+    <figcaption>
+      Điểm mấu chốt: <code>AuthService.LoginAsync</code> <b>không tự trả lời client</b> — nó trả
+      <code>AuthResponse</code> cho handler, handler bọc thành <code>NetResult.Ok</code>, và chính
+      <code>TcpDispatcher</code> mới gửi đi (mặc định trả lời trên đúng <code>cmd</code> của request).
+      Nếu bất kỳ tầng nào ném exception, dispatcher bắt và gửi <code>NetCmd.Error</code> +
+      <code>ErrorCode</code> tương ứng — client không bao giờ bị bỏ đói response vì một bug server.
+    </figcaption>
+  </figure>
+
+  <div class="cards">
+    <div class="card">
+      <h3>Login thất bại thì sao?</h3>
+      <p>Vẫn đi đúng đường này, chỉ khác kết cục: sai mật khẩu / không có account →
+      <span class="val">AuthResponse { Success=false, Error=InvalidCredentials }</span>.
+      Cố tình dùng chung một mã lỗi + <code>BurnEquivalentTime()</code> để kẻ dò không phân biệt được
+      "sai pass" với "không tồn tại user".</p>
+    </div>
+    <div class="card">
+      <h3>DBServer chết thì sao?</h3>
+      <p><code>DbClient.CallAsync</code> ném <span class="val">DbUnavailableException</span>
+      (hoặc timeout 5s) → <code>TcpDispatcher</code> bắt được → client nhận
+      <span class="val">ErrorCode.ServiceUnavailable</span>. Vòng reconnect của DbClient tự nối lại mỗi 1s.</p>
+    </div>
+    <div class="card">
+      <h3>Đăng nhập nơi thứ hai?</h3>
+      <p><code>AuthService</code> quét <code>SessionRegistry</code>, thấy session cũ cùng
+      <code>AccountId</code> → gửi <span class="val">NetCmd.Kicked + KickedNotice</span> rồi đóng socket cũ.
+      Chính sách: người vào sau thắng.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§5</span>Chặng 3 — Response về client: cú nhảy luồng</h2>
+  <p class="sec-note">
+    Đây là chỗ dễ hiểu sai nhất. Byte từ socket <b>không</b> rơi vào main thread —
+    <code>ReadLoopAsync</code> của <code>TcpTransport</code> là một Task nền. Đụng bất kỳ Unity API nào
+    ở đó là crash hoặc lỗi câm. Vì vậy <code>NetService</code> luôn
+    <code>await UniTask.SwitchToMainThread()</code> <i>trước khi</i> dispatch.
+  </p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 900 440" role="img" aria-label="Sequence diagram: response đi từ luồng nền của TcpTransport, qua SwitchToMainThread, tới NetDispatcher, AuthNetHandler, LoginPresenter và LoginUi trên main thread" style="min-width:860px; width:100%;">
+      <defs>
+        <marker id="a5i" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--ink)"/>
+        </marker>
+        <marker id="a5m" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--mag)"/>
+        </marker>
+      </defs>
+
+      <!-- thread zones -->
+      <rect x="20"  y="10" width="330" height="420" rx="10" fill="var(--code-bg)" opacity="0.6"/>
+      <rect x="370" y="10" width="516" height="420" rx="10" fill="var(--client-bg)" opacity="0.55"/>
+      <text x="34"  y="32" class="m sm tm" font-weight="700">LUỒNG NỀN (socket)</text>
+      <text x="384" y="32" class="m sm tc" font-weight="700">MAIN THREAD (Unity)</text>
+      <line x1="360" y1="14" x2="360" y2="426" stroke="var(--mag)" stroke-width="2" stroke-dasharray="7 5"/>
+
+      <!-- headers -->
+      <rect x="45"  y="46" width="120" height="34" class="box" stroke="var(--client)"/>
+      <rect x="215" y="46" width="110" height="34" class="box" stroke="var(--client)"/>
+      <rect x="392" y="46" width="120" height="34" class="box" stroke="var(--client)"/>
+      <rect x="546" y="46" width="126" height="34" class="box" stroke="var(--client)"/>
+      <rect x="700" y="46" width="120" height="34" class="box" stroke="var(--client)"/>
+      <rect x="838" y="46" width="44"  height="34" class="box" stroke="var(--client)"/>
+      <text x="105" y="67" text-anchor="middle" class="m sm" font-weight="700">TcpTransport</text>
+      <text x="270" y="67" text-anchor="middle" class="m sm" font-weight="700">NetService</text>
+      <text x="452" y="67" text-anchor="middle" class="m sm" font-weight="700">NetDispatcher</text>
+      <text x="609" y="67" text-anchor="middle" class="m sm" font-weight="700">AuthNetHandler</text>
+      <text x="760" y="67" text-anchor="middle" class="m sm" font-weight="700">LoginPresenter</text>
+      <text x="860" y="67" text-anchor="middle" class="m sm" font-weight="700">Ui</text>
+
+      <!-- lifelines -->
+      <line x1="105" y1="80" x2="105" y2="416" class="life"/>
+      <line x1="270" y1="80" x2="270" y2="416" class="life"/>
+      <line x1="452" y1="80" x2="452" y2="416" class="life"/>
+      <line x1="609" y1="80" x2="609" y2="416" class="life"/>
+      <line x1="760" y1="80" x2="760" y2="416" class="life"/>
+      <line x1="860" y1="80" x2="860" y2="416" class="life"/>
+
+      <!-- 1 bytes in -->
+      <line x1="24" y1="116" x2="102" y2="116" stroke="var(--client)" stroke-width="2" marker-end="url(#a5i)"/>
+      <text x="130" y="106" class="m sm tc">bytes từ socket · ReadLoopAsync</text>
+
+      <!-- 2 frame -->
+      <rect x="34" y="134" width="230" height="22" class="note"/>
+      <text x="149" y="149" text-anchor="middle" class="m sm">FrameReader.TryRead → (101, payload)</text>
+
+      <!-- 3 onpacket -->
+      <line x1="105" y1="192" x2="267" y2="192" class="msg" marker-end="url(#a5i)"/>
+      <text x="186" y="184" text-anchor="middle" class="m sm">OnPacket(101, payload)</text>
+      <text x="186" y="208" text-anchor="middle" class="sm dim">vẫn ở luồng nền!</text>
+
+      <!-- 4 switch -->
+      <line x1="270" y1="248" x2="449" y2="248" stroke="var(--mag)" stroke-width="2.2" marker-end="url(#a5m)"/>
+      <text x="358" y="238" text-anchor="middle" class="m sm tm" font-weight="700">await UniTask.SwitchToMainThread()</text>
+      <text x="358" y="266" text-anchor="middle" class="sm tm">rồi mới Dispatch(NetCmd.Login, payload)</text>
+
+      <!-- 5 handler -->
+      <line x1="452" y1="304" x2="606" y2="304" class="msg" marker-end="url(#a5i)"/>
+      <text x="529" y="296" text-anchor="middle" class="m sm">HandleLogin(NetPacket)</text>
+
+      <!-- 6 event -->
+      <line x1="609" y1="344" x2="757" y2="344" class="msg" marker-end="url(#a5i)"/>
+      <text x="683" y="336" text-anchor="middle" class="m sm">OnLoginResult(AuthResponse)</text>
+      <text x="683" y="360" text-anchor="middle" class="sm dim">GetData&lt;AuthResponse&gt;() → bắn event</text>
+
+      <!-- 7 ui -->
+      <line x1="760" y1="396" x2="857" y2="396" class="msg" marker-end="url(#a5i)"/>
+      <text x="800" y="388" text-anchor="middle" class="sm">«Chào hung!»</text>
+      <rect x="640" y="404" width="238" height="22" class="note"/>
+      <text x="759" y="419" text-anchor="middle" class="m sm">hủy watchdog · SetVisible(false)</text>
+    </svg>
+    </div>
+    <figcaption>
+      Đường màu <span style="color:var(--mag); font-weight:600">tím</span> là ranh giới luồng —
+      cả dự án chỉ băng qua nó ở đúng một chỗ (<code>NetService.RaiseOnMainThread</code>).
+      Nhờ vậy mọi <code>[NetHandler]</code>, mọi event, mọi presenter <b>mặc định đã ở main thread</b>,
+      không ai phải tự lo chuyện thread nữa.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§6</span>ClientSession giữ gì — state của một kết nối</h2>
+  <p class="sec-note">
+    "Session" không phải khái niệm trừu tượng: nó là <b>một object cụ thể</b> sống cùng một kết nối TCP.
+    Toàn bộ danh tính người chơi phía server nằm trong nó — client nói gì cũng không đổi được
+    <code>AccountId</code>, chỉ có <code>MarkAuthenticated()</code> chạy sau khi kiểm tra mật khẩu mới đổi được.
+  </p>
+
+  <div class="split">
+    <figure style="margin:0;">
+      <div class="scroll">
+      <svg viewBox="0 0 560 300" role="img" aria-label="Máy trạng thái SessionState: Connected sang Authenticated qua MarkAuthenticated, quay lại qua MarkLoggedOut, InWorld dành cho phase 5, Kick đóng socket" style="min-width:520px; width:100%;">
+        <defs>
+          <marker id="a6i" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+            <polygon points="0,0 9,4 0,8" fill="var(--ink)"/>
+          </marker>
+          <marker id="a6m" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+            <polygon points="0,0 9,4 0,8" fill="var(--mag)"/>
+          </marker>
+        </defs>
+
+        <!-- states -->
+        <rect x="30" y="90" width="140" height="46" rx="23" fill="var(--server-bg)" stroke="var(--server)" stroke-width="1.6"/>
+        <text x="100" y="110" text-anchor="middle" class="m sm" font-weight="700">Connected = 0</text>
+        <text x="100" y="126" text-anchor="middle" class="sm dim">AccountId = 0</text>
+
+        <rect x="230" y="90" width="160" height="46" rx="23" fill="var(--server-bg)" stroke="var(--server)" stroke-width="1.6"/>
+        <text x="310" y="110" text-anchor="middle" class="m sm" font-weight="700">Authenticated = 1</text>
+        <text x="310" y="126" text-anchor="middle" class="sm dim">AccountId, Username</text>
+
+        <rect x="440" y="90" width="100" height="46" rx="23" fill="var(--surface)" stroke="var(--line)" stroke-dasharray="5 4"/>
+        <text x="490" y="110" text-anchor="middle" class="m sm dim" font-weight="700">InWorld = 2</text>
+        <text x="490" y="126" text-anchor="middle" class="sm dim">Phase 5</text>
+
+        <!-- transitions -->
+        <line x1="100" y1="40" x2="100" y2="87" class="msg" marker-end="url(#a6i)"/>
+        <text x="108" y="58" class="sm dim">AcceptTcpClient</text>
+
+        <line x1="170" y1="104" x2="227" y2="104" class="msg" marker-end="url(#a6i)"/>
+        <text x="198" y="94" text-anchor="middle" class="m sm">MarkAuthenticated()</text>
+
+        <path d="M 240 136 C 210 168, 190 168, 172 140" fill="none" class="msg" marker-end="url(#a6i)"/>
+        <text x="205" y="182" text-anchor="middle" class="m sm">MarkLoggedOut()</text>
+
+        <line x1="390" y1="104" x2="437" y2="104" class="ret" marker-end="url(#a6i)"/>
+
+        <path d="M 310 136 L 310 224" stroke="var(--mag)" stroke-width="1.8" fill="none" marker-end="url(#a6m)"/>
+        <rect x="222" y="228" width="180" height="40" rx="6" fill="var(--mag-bg)" stroke="var(--mag)"/>
+        <text x="312" y="245" text-anchor="middle" class="m sm tm" font-weight="700">Kick(reason)</text>
+        <text x="312" y="261" text-anchor="middle" class="sm tm">gửi Kicked → đóng socket</text>
+
+        <text x="100" y="230" text-anchor="middle" class="sm dim">Số tăng dần có chủ đích:</text>
+        <text x="100" y="248" text-anchor="middle" class="m sm dim">State ≥ MinState</text>
+        <text x="100" y="266" text-anchor="middle" class="sm dim">là đủ để gác cổng</text>
+      </svg>
+      </div>
+      <figcaption>
+        Cổng gác nằm ở <code>TcpDispatcher</code>: handler khai
+        <code>[TcpHandler(NetCmd.Logout, MinState = SessionState.Authenticated)]</code> —
+        session chưa đăng nhập mà gọi Logout sẽ tự nhận <code>ErrorCode.NotAuthenticated</code>,
+        handler không cần tự kiểm tra.
+      </figcaption>
+    </figure>
+
+    <div class="card">
+      <h3>Bên trong ClientSession</h3>
+      <ul>
+        <li><span class="val">Id</span> — số tự tăng, <span class="val">Tag = "#7"</span> tô magenta trên log</li>
+        <li><span class="val">State : SessionState</span></li>
+        <li><span class="val">AccountId / Username</span> — nguồn danh tính duy nhất, chỉ server ghi</li>
+        <li><span class="val">FrameReader</span> — ráp frame riêng cho kết nối này</li>
+        <li><span class="val">_sendQueue + SemaphoreSlim</span> — gửi từ luồng nào cũng an toàn</li>
+        <li><span class="val">RunAsync()</span> — ReadLoop + SendLoop, kết thúc là tự gỡ khỏi <code>SessionRegistry</code></li>
+      </ul>
+      <p style="margin-top:10px">Phía client, "phiên" chỉ là <span class="val">SessionToken</span>
+      (64 hex) nằm trong <code>AuthResponse</code> — server giữ bảng
+      <code>SessionTokens</code> trong RAM. <b>Cố tình không gửi AccountId cho client.</b></p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§7</span>Hai kiểu chờ response — bất đối xứng có chủ đích</h2>
+  <p class="sec-note">
+    Cùng một khái niệm "gửi request rồi nhận response" nhưng hai kênh giải quyết khác hẳn nhau.
+    Hiểu cặp này là hiểu được vì sao <code>DbFrame</code> cần <code>reqId</code> còn frame client thì không.
+  </p>
+
+  <figure>
+    <div class="scroll">
+    <svg viewBox="0 0 940 330" role="img" aria-label="So sánh: kênh client-GameServer bắn rồi quên và ghép bằng sự kiện; kênh GameServer-DBServer dùng reqId với dictionary pending để await" style="min-width:880px; width:100%;">
+      <defs>
+        <marker id="a7i" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--ink)"/>
+        </marker>
+        <marker id="a7d" markerWidth="9" markerHeight="8" refX="8" refY="4" orient="auto">
+          <polygon points="0,0 9,4 0,8" fill="var(--db)"/>
+        </marker>
+      </defs>
+
+      <!-- left panel -->
+      <rect x="20" y="16" width="440" height="296" rx="10" fill="var(--client-bg)" opacity="0.5"/>
+      <text x="40" y="44" class="m sm tc" font-weight="700">CLIENT ↔ GAMESERVER — bắn rồi quên</text>
+
+      <rect x="40"  y="66" width="120" height="34" class="box"/>
+      <rect x="300" y="66" width="120" height="34" class="box"/>
+      <text x="100" y="87" text-anchor="middle" class="m sm">NetService</text>
+      <text x="360" y="87" text-anchor="middle" class="m sm">GameServer</text>
+      <line x1="160" y1="76" x2="297" y2="76" class="msg" marker-end="url(#a7i)"/>
+      <text x="228" y="68" text-anchor="middle" class="m sm">Send(Login, dto)</text>
+      <text x="228" y="94" text-anchor="middle" class="sm dim">void — không có gì để await</text>
+
+      <line x1="300" y1="140" x2="163" y2="140" class="ret" marker-end="url(#a7i)"/>
+      <text x="230" y="132" text-anchor="middle" class="sm dim">…lúc nào đó sau này…</text>
+      <text x="230" y="158" text-anchor="middle" class="m sm">frame cmd=101 quay về</text>
+
+      <rect x="40" y="186" width="380" height="52" class="note"/>
+      <text x="230" y="206" text-anchor="middle" class="m sm">ghép bằng chính NetCmd → NetDispatcher</text>
+      <text x="230" y="224" text-anchor="middle" class="m sm">→ AuthNetHandler → event → Presenter</text>
+
+      <text x="40" y="268" class="sm dim">• Hợp với UI: mọi thứ là sự kiện, không block khung hình</text>
+      <text x="40" y="288" class="sm dim">• Lưới an toàn: watchdog 8s nằm ở LoginPresenter</text>
+
+      <!-- right panel -->
+      <rect x="480" y="16" width="440" height="296" rx="10" fill="var(--db-bg)" opacity="0.5"/>
+      <text x="500" y="44" class="m sm td" font-weight="700">GAMESERVER ↔ DBSERVER — reqId + await</text>
+
+      <rect x="500" y="66" width="110" height="34" class="box"/>
+      <rect x="770" y="66" width="110" height="34" class="box"/>
+      <text x="555" y="87" text-anchor="middle" class="m sm">DbClient</text>
+      <text x="825" y="87" text-anchor="middle" class="m sm">DBServer</text>
+      <line x1="610" y1="76" x2="767" y2="76" stroke="var(--db)" stroke-width="1.8" marker-end="url(#a7d)"/>
+      <text x="688" y="68" text-anchor="middle" class="m sm td">reqId=42</text>
+      <line x1="770" y1="140" x2="613" y2="140" stroke="var(--db)" stroke-width="1.8" stroke-dasharray="6 4" marker-end="url(#a7d)"/>
+      <text x="690" y="132" text-anchor="middle" class="m sm td">response reqId=42</text>
+
+      <rect x="500" y="186" width="380" height="52" class="note"/>
+      <text x="690" y="206" text-anchor="middle" class="m sm">_pending: { 42 → TaskCompletionSource }</text>
+      <text x="690" y="224" text-anchor="middle" class="m sm">TrySetResult(payload) → await CallAsync tỉnh dậy</text>
+
+      <text x="500" y="268" class="sm dim">• Nhiều truy vấn bay song song trên 1 kết nối duy nhất</text>
+      <text x="500" y="288" class="sm dim">• Timeout 5s / mất kết nối → DbUnavailableException</text>
+    </svg>
+    </div>
+    <figcaption>
+      Trái: client là thế giới sự kiện — response được nhận diện bằng chính <code>NetCmd</code>,
+      code UI không bao giờ đứng chờ mạng. Phải: server cần "gọi hàm từ xa" thật sự —
+      <code>await CallAsync&lt;Req, Res&gt;()</code> đọc như gọi hàm local, còn <code>DbSession</code>
+      cố tình <b>không await</b> từng request (<code>_ = ProcessAsync(...)</code>) để một truy vấn chậm
+      không chặn truy vấn sau — chính <code>reqId</code> cho phép trả lời lộn xộn thứ tự.
+    </figcaption>
+  </figure>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§8</span>Bản đồ class ↔ file — mở đúng chỗ khi giảng lại</h2>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>Bước trong hành trình</th><th>Class chịu trách nhiệm</th><th>File</th></tr></thead>
+      <tbody>
+        <tr><td>1 · Click nút</td><td><code>LoginUi</code> → <code>LoginPresenter</code></td><td class="path">Assets/Game/Scripts/Auth/</td></tr>
+        <tr><td>2 · Gom intent thành request</td><td><code>AuthApi</code></td><td class="path">Assets/Game/Scripts/Auth/AuthApi.cs</td></tr>
+        <tr><td>3 · Serialize + gửi</td><td><code>NetService</code>, <code>TcpTransport</code></td><td class="path">Assets/Game/Scripts/Network/</td></tr>
+        <tr><td>4 · Định nghĩa cmd + DTO + khung</td><td><code>NetCmd</code>, <code>AuthDto</code>, <code>PacketFrame</code>, <code>NetPayload</code>, <code>FrameReader</code></td><td class="path">Server/Shared/Net/ · Server/Shared/Dto/</td></tr>
+        <tr><td>5 · Nhận kết nối, ráp frame</td><td><code>Program</code>, <code>ClientSession</code>, <code>SessionRegistry</code></td><td class="path">Server/GameServer/</td></tr>
+        <tr><td>6 · Định tuyến theo cmd</td><td><code>TcpDispatcher</code> + <code>[TcpHandler]</code></td><td class="path">Server/GameServer/Net/TcpDispatcher.cs</td></tr>
+        <tr><td>7 · Logic nghiệp vụ auth</td><td><code>AuthHandler</code> → <code>AuthService</code> (+ <code>PasswordHasher</code>, <code>LoginRateLimiter</code>, <code>SessionTokens</code>)</td><td class="path">Server/GameServer/Handlers/ · Auth/</td></tr>
+        <tr><td>8 · Gọi DB qua TCP nội bộ</td><td><code>DbClient</code>, <code>DbFrame</code>, <code>DbCmd</code></td><td class="path">Server/GameServer/Db/DbClient.cs</td></tr>
+        <tr><td>9 · Nhận + định tuyến phía DB</td><td><code>DbSession</code>, <code>DbDispatcher</code> + <code>[DbHandler]</code></td><td class="path">Server/DBServer/ · Server/DBServer/Net/</td></tr>
+        <tr><td>10 · Truy vấn SQLite</td><td><code>AccountDbHandler</code> → <code>AccountRepository</code> → <code>Database</code>/<code>Migrator</code></td><td class="path">Server/DBServer/Handlers/ · Repositories/ · Data/</td></tr>
+        <tr><td>11 · Nhận response, về main thread</td><td><code>NetService</code> → <code>NetDispatcher</code> + <code>[NetHandler]</code></td><td class="path">Assets/Game/Scripts/Network/NetDispatcher.cs</td></tr>
+        <tr><td>12 · Bắn event, cập nhật UI</td><td><code>AuthNetHandler</code> → <code>LoginPresenter</code> → <code>LoginUi</code></td><td class="path">Assets/Game/Scripts/Network/Handlers/ · Auth/</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============================================================ -->
+<section>
+  <h2><span class="no">§9</span>Ba điều dễ quên nhất khi mở rộng</h2>
+  <div class="cards">
+    <div class="card warn">
+      <h3>1 · Handler client phải đăng ký tay</h3>
+      <p>Server quét cả assembly bằng reflection nên handler <b>static</b> mới tự chạy.
+      Handler client là method <b>instance</b> — thiếu dòng
+      <span class="val">builder.Register&lt;XNetHandler&gt;().AsSelf().As&lt;INetHandlerGroup&gt;()</span>
+      trong <code>GameLifetimeScope</code> thì object không tồn tại, lệnh rơi vào hư không
+      mà không có lỗi biên dịch nào.</p>
+    </div>
+    <div class="card warn">
+      <h3>2 · Chưa Switch thì chưa đụng Unity</h3>
+      <p>Mọi callback từ <code>TcpTransport</code> đều ở luồng nền. Đường an toàn duy nhất về
+      main thread là <span class="val">await UniTask.SwitchToMainThread()</span> —
+      trong dự án nó đã nằm sẵn ở <code>NetService</code>, đừng mở đường thứ hai.</p>
+    </div>
+    <div class="card warn">
+      <h3>3 · Client chỉ gửi ý định</h3>
+      <p>UI không tự đổi state (kể cả "đăng nhập thành công") — nó chờ
+      <span class="val">AuthResponse</span> từ server rồi mới cập nhật. Server là nguồn sự thật;
+      quy tắc này giữ nguyên cho HP, vị trí, túi đồ ở các phase sau.</p>
+    </div>
+  </div>
+</section>
+
+</main>
+
+</body>
+</html>
