@@ -121,10 +121,10 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 
 **Nguyên tắc:** doc mô tả *cái gì* và *vì sao*, kèm code đủ để chép khi bí. Nhưng gõ lại tay vẫn học được nhiều hơn chép.
 
-**Format thử nghiệm từ Phase 5:** mỗi bước trong doc chia hai tầng — *hướng làm* (mô tả + quyết định thiết kế
-+ code khung) hiện sẵn, còn *lời giải đầy đủ* nằm trong foldout `<details>` mặc định đóng ngay bên dưới.
-Owner tự nghĩ và tự code theo phần hướng trước, chạy được rồi mới mở lời giải để đối chiếu.
-Xong Phase 5 thì đánh giá hiệu quả; hợp lý mới áp dụng cho các phase sau.
+**Format doc từ Phase 5:** mỗi bước chia hai tầng — *hướng làm* (mô tả + quyết định thiết kế + code khung)
+hiện sẵn, *lời giải đầy đủ* nằm trong foldout `<details>` mặc định đóng ngay dưới. Câu hỏi "Tự kiểm tra
+hiểu bài" cũng vậy: mỗi câu một foldout `📖 Đáp án câu N` sát ngay dưới câu hỏi. Tự nghĩ và tự làm trước,
+mở lời giải/đáp án sau để đối chiếu.
 
 ---
 
@@ -137,8 +137,8 @@ Xong Phase 5 thì đánh giá hiệu quả; hợp lý mới áp dụng cho các 
 | 2 — Contract & Dispatch | ✅ xong | [`guides/PHASE-2.md`](guides/PHASE-2.md) ✅ |
 | 3 — DBServer & DAL | ✅ xong | [`guides/PHASE-3.md`](guides/PHASE-3.md) ✅ |
 | 4 — Auth | ✅ xong | [`guides/PHASE-4.md`](guides/PHASE-4.md) ✅ |
-| 5 — Vào thế giới | ⏳ đang làm | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ viết lại 2026-08: 1 tài khoản = 1 nhân vật, format hướng-làm + lời giải |
-| 6 — Game loop & movement | ⬜ chưa | ⬜ chưa viết |
+| 5 — Vào thế giới | ✅ xong | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ |
+| 6 — Game loop & movement | ⏳ đang làm | [`guides/PHASE-6.md`](guides/PHASE-6.md) ✅ |
 | 7 — Multi-player sync | ⬜ chưa | ⬜ chưa viết |
 | 8 — Map & AOI | ⬜ chưa | ⬜ chưa viết |
 | 9 — Data & Config | ⬜ chưa | ⬜ chưa viết |

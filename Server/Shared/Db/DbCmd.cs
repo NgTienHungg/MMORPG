@@ -12,12 +12,15 @@ namespace MMORPG.Shared.Db
         None = 0,
 
         #region Hệ thống (1000–1099)
+
         Ping = 1000,
         ServerMetaGet = 1001,
         ServerMetaSet = 1002,
+
         #endregion
 
         #region Account (1100–1199)
+
         /// <summary>
         /// Tìm tài khoản theo tên đăng nhập.
         /// Request: <see cref="Dto.Db.AccountGetRequest"/> · Response: <see cref="Dto.Db.AccountGetResponse"/>
@@ -35,9 +38,11 @@ namespace MMORPG.Shared.Db
         /// Request: <see cref="Dto.Db.AccountTouchLoginRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
         /// </summary>
         AccountTouchLogin = 1102,
+
         #endregion
 
         #region Character
+
         /// <summary>
         /// Lấy nhân vật của tài khoản; chưa có thì tạo với giá trị mặc định trong request.
         /// Request: <see cref="Dto.Db.CharacterGetOrCreateRequest"/> · Response: <see cref="Dto.Db.CharacterGetOrCreateResponse"/>
@@ -49,6 +54,7 @@ namespace MMORPG.Shared.Db
         /// Request: <see cref="Dto.Db.CharacterSavePositionRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
         /// </summary>
         CharacterSavePosition = 1201,
+
         #endregion
     }
 }

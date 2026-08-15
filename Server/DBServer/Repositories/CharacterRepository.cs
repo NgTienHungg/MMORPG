@@ -6,7 +6,7 @@ namespace MMORPG.DBServer.Repositories
 {
     public sealed class CharacterRepository
     {
-        private const int SQLItE_CONSTRAINT_UNIQUE = 2067;
+        private const int SQLITE_CONSTRAINT_UNIQUE = 2067;
 
         private readonly Database _database;
 
@@ -15,7 +15,7 @@ namespace MMORPG.DBServer.Repositories
             _database = database;
         }
 
-        public async Task<CharacterGetOrCreateResponse> GetOrCreateCharacter(CharacterGetOrCreateRequest request, CancellationToken ct = default)
+        public async Task<CharacterGetOrCreateResponse> GetOrCreateAsync(CharacterGetOrCreateRequest request, CancellationToken ct = default)
         {
             await using SqliteConnection connection = await _database.OpenAsync(ct);
 
@@ -48,7 +48,7 @@ namespace MMORPG.DBServer.Repositories
                 {
                     await insert.ExecuteNonQueryAsync(ct);
                 }
-                catch (SqliteException ex) when (ex.SqliteExtendedErrorCode == SQLItE_CONSTRAINT_UNIQUE)
+                catch (SqliteException ex) when (ex.SqliteExtendedErrorCode == SQLITE_CONSTRAINT_UNIQUE)
                 {
                     // Hai EnterWorld của cùng tài khoản chạy song song: cả hai SELECT thấy "chưa có"
                     // rồi cùng INSERT. UNIQUE(account_id) biến kẻ đến sau thành vô hại — chỉ việc

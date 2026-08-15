@@ -27,7 +27,6 @@ namespace MMORPG.Shared.Dto.Db
         public long AccountId { get; set; }
         public string Name { get; set; } = string.Empty;
         public int ClassId { get; set; }
-        public int Level { get; set; }
         public int MapId { get; set; }
         public float X { get; set; }
         public float Y { get; set; }

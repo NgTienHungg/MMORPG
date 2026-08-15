@@ -109,8 +109,7 @@
         </member>
         <member name="P:MMORPG.Shared.Dto.AuthResponse.SessionToken">
             <summary>
-            Token phiên, dùng cho nối lại sau khi rớt mạng (Phase 7 sẽ dùng thật).
-            Rỗng khi đăng nhập thất bại.
+            Token phiên do server cấp khi đăng nhập thành công. Rỗng khi thất bại.
             </summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.KickedNotice">
@@ -125,7 +124,7 @@
         <member name="P:MMORPG.Shared.Dto.KickedNotice.Reason">
             <summary>Chuỗi tiếng Việt hiển thị thẳng cho người chơi.</summary>
         </member>
-        <member name="T:MMORPG.Shared.Dto.Character.EnterWorldResponsive">
+        <member name="T:MMORPG.Shared.Dto.Character.EnterWorldResponse">
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
@@ -143,11 +142,11 @@
             </code>
             </remarks>
         </member>
-        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponsive.EntityId">
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.EntityId">
             <summary>Id runtime trong world. Chỉ có nghĩa tới khi rời world.</summary>
         </member>
-        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponsive.ServerTimeMs">
-            <summary>Mốc thời gian server lúc vào. Phase 6 dùng làm gốc cho đồng bộ tick.</summary>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.ServerTimeMs">
+            <summary>Mốc thời gian server (Unix ms) tại thời điểm vào world.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.Db.AccountGetRequest">
             <remarks>
@@ -230,7 +229,6 @@
             <b>long</b> AccountId<br/>
             <b>string</b> Name<br/>
             <b>int</b> ClassId<br/>
-            <b>int</b> Level<br/>
             <b>int</b> MapId<br/>
             <b>float</b> X<br/>
             <b>float</b> Y<br/>
@@ -371,7 +369,7 @@
             <summary>Mô tả cho dev. KHÔNG hiển thị thẳng cho người chơi.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.EchoRequest">
-            <summary>DTO thử của Phase 2. Xoá khi Phase 4 xong.</summary>
+            <summary>DTO thử của lệnh Echo. Không còn dùng — xoá được.</summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
@@ -380,7 +378,7 @@
             </remarks>
         </member>
         <member name="T:MMORPG.Shared.Dto.EchoResponse">
-            <summary>DTO thử của Phase 2. Xoá khi Phase 4 xong.</summary>
+            <summary>DTO thử của lệnh Echo. Không còn dùng — xoá được.</summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
@@ -400,8 +398,7 @@
         </member>
         <member name="T:MMORPG.Shared.HandshakeDto">
             <summary>
-            DTO thử để kiểm chứng đường ống Shared → Unity đã thông.
-            Phase 1 sẽ thay bằng contract thật.
+            DTO thử để kiểm chứng đường ống Shared → Unity đã thông. Không còn luồng nào dùng — xoá được.
             </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
@@ -509,8 +506,8 @@
         </member>
         <member name="F:MMORPG.Shared.Net.NetCmd.Echo">
             <summary>
-            Lệnh thử của Phase 2. Request/Response: <see cref="T:MMORPG.Shared.Dto.EchoRequest"/> / <see cref="T:MMORPG.Shared.Dto.EchoResponse"/>
-            Xoá khi Phase 4 xong.
+            Lệnh thử để kiểm đường ống request/response. Không còn dùng — xoá được (kèm handler hai bên).
+            Request/Response: <see cref="T:MMORPG.Shared.Dto.EchoRequest"/> / <see cref="T:MMORPG.Shared.Dto.EchoResponse"/>
             </summary>
         </member>
         <member name="F:MMORPG.Shared.Net.NetCmd.Kicked">

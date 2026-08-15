@@ -1,7 +1,9 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using MemoryPack;
+using MMORPG.GameServer.Handlers;
 using MMORPG.GameServer.Net;
+using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Net;
@@ -39,6 +41,10 @@ namespace MMORPG.GameServer
 
         public string Username { get; private set; } = string.Empty;
 
+        /// <summary>Entity đang điều khiển. null khi chưa vào world.</summary>
+        public PlayerEntity Entity { get; private set; }
+
+
         public ClientSession(TcpClient tcpClient)
         {
             _tcpClient = tcpClient;
@@ -74,6 +80,10 @@ namespace MMORPG.GameServer
                 // Cancel là đủ để đánh thức vòng gửi: WaitAsync(ct) huỷ ngay khi token bật.
                 linked.Cancel();
                 await Task.WhenAny(sendLoop, Task.Delay(1000, CancellationToken.None));
+
+                // Mất kết nối đột ngột cũng phải đi qua đúng đường dọn dẹp như logout chủ động.
+                if (CharacterHandler.CharacterService != null)
+                    await CharacterHandler.CharacterService.LeaveWorldAsync(this);
 
                 SessionRegistry.Remove(this);
                 _tcpClient.Dispose();
@@ -183,6 +193,18 @@ namespace MMORPG.GameServer
         {
             await Task.Delay(100);
             _tcpClient.Close();
+        }
+
+        public void MarkInWorld(PlayerEntity entity)
+        {
+            Entity = entity;
+            State = SessionState.InWorld;
+        }
+
+        public void MarkLeftWorld()
+        {
+            Entity = null;
+            State = SessionState.Authenticated;
         }
     }
 }

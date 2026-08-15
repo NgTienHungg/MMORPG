@@ -202,7 +202,7 @@ namespace MMORPG.Shared.Dto
         public float X { get; set; }
         public float Y { get; set; }
 
-        /// <summary>Mốc thời gian server lúc vào. Phase 6 dùng làm gốc cho đồng bộ tick.</summary>
+        /// <summary>Mốc thời gian server (Unix ms) tại thời điểm vào world.</summary>
         public long ServerTimeMs { get; set; }
     }
 }
@@ -391,7 +391,9 @@ namespace MMORPG.DBServer.Repositories
                 {
                     // Hai EnterWorld của cùng tài khoản chạy song song: cả hai SELECT thấy "chưa có"
                     // rồi cùng INSERT. UNIQUE(account_id) biến kẻ đến sau thành vô hại — chỉ việc
-                    // đọc lại dòng kẻ đến trước vừa tạo. Cùng bài check-then-act của Phase 4.
+                    // đọc lại dòng kẻ đến trước vừa tạo.
+                    // `when` là exception filter: chỉ bắt ĐÚNG lỗi vi phạm UNIQUE,
+                    // mọi SqliteException khác vẫn ném lên như thường.
                     created = false;
                 }
             }
@@ -533,10 +535,8 @@ using MMORPG.Shared.Dto.Db;
 namespace MMORPG.GameServer.World
 {
     /// <summary>
-    /// Một nhân vật đang sống trong world. Tồn tại từ EnterWorld tới lúc rời world, không lâu hơn.
-    ///
-    /// Phase 6 thêm vận tốc và lịch sử input, Phase 8 thêm ô lưới AOI, Phase 11 thêm HP và mục tiêu.
-    /// Bây giờ chỉ cần đủ để biết ai đang ở đâu.
+    /// Một nhân vật đang sống trong world: định danh runtime + bản sao RAM của dữ liệu character
+    /// đang được chơi. Tồn tại từ EnterWorld tới lúc rời world, không lâu hơn.
     /// </summary>
     public sealed class PlayerEntity
     {
@@ -554,7 +554,7 @@ namespace MMORPG.GameServer.World
         public float X { get; set; }
         public float Y { get; set; }
 
-        /// <summary>Session đang điều khiển entity này. null nghĩa là NPC/quái (Phase 11).</summary>
+        /// <summary>Session đang điều khiển entity này.</summary>
         public ClientSession Owner { get; }
 
         public PlayerEntity(int entityId, CharacterRow row, ClientSession owner)
@@ -584,17 +584,18 @@ using MMORPG.Shared.Dto.Db;
 namespace MMORPG.GameServer.World
 {
     /// <summary>
-    /// Sổ đăng ký entity đang sống. Phase 8 sẽ chia theo map và ô lưới AOI;
-    /// bây giờ một dictionary phẳng là đủ và không che mất bài học nào.
+    /// Sổ đăng ký mọi entity đang sống trong world: cấp entityId, spawn, despawn, tra cứu.
     /// </summary>
     public sealed class WorldService
     {
-        /// <summary>Giá trị cho nhân vật tạo lần đầu. Phase 9 sẽ đọc từ bảng config.</summary>
+        /// <summary>Giá trị khởi tạo cho nhân vật được tạo trong lần vào world đầu tiên.</summary>
         public const int DEFAULT_CLASS_ID = 1;
         public const int DEFAULT_MAP_ID = 1;
         public const float SPAWN_X = 0f;
         public const float SPAWN_Y = 0f;
 
+        // Hai sổ tra cứu: theo entityId (đường chính) và theo accountId (kiểm "tài khoản này đã có
+        // entity chưa"). ConcurrentDictionary vì Spawn/Despawn chạy từ handler của nhiều session song song.
         private readonly ConcurrentDictionary<int, PlayerEntity> _entities = new();
         private readonly ConcurrentDictionary<long, int> _entityIdByAccount = new();
 
@@ -604,6 +605,9 @@ namespace MMORPG.GameServer.World
 
         public PlayerEntity Spawn(CharacterRow row, ClientSession owner)
         {
+            // Interlocked.Increment: cộng 1 và đọc kết quả trong MỘT thao tác nguyên tử.
+            // `_nextEntityId++` trần là ba bước đọc–cộng–ghi: hai handler chạy song song
+            // có thể cùng đọc một giá trị và hai entity nhận trùng id.
             int entityId = Interlocked.Increment(ref _nextEntityId);
             var entity = new PlayerEntity(entityId, row, owner);
 
@@ -633,6 +637,8 @@ namespace MMORPG.GameServer.World
         {
             entity = null;
 
+            // Tra hai bước: accountId → entityId → entity. `&&` đoản mạch nên bước một trượt
+            // thì bước hai không chạy và `entity` giữ nguyên null.
             return _entityIdByAccount.TryGetValue(accountId, out int entityId) &&
                    _entities.TryGetValue(entityId, out entity);
         }
@@ -1076,9 +1082,7 @@ using UnityEngine;
 namespace MMORPG.Client.World
 {
     /// <summary>
-    /// Dựng biểu diễn hình ảnh của entity. Phase 7 sẽ thêm entity của người khác,
-    /// Phase 8 dùng <c>com.hungnt.objectpool</c> vì AOI spawn/despawn liên tục.
-    /// Bây giờ chỉ một nhân vật, <c>Instantiate</c> là đủ.
+    /// Dựng và gỡ biểu diễn hình ảnh (GameObject) cho nhân vật của chính mình, trỏ camera bám theo.
     /// </summary>
     public sealed class WorldSpawner : MonoBehaviour
     {
@@ -1142,6 +1146,8 @@ namespace MMORPG.Client.World
             if (_target == null)
                 return;
 
+            // SmoothDamp cần một biến vận tốc do NÓ tự quản giữa các frame — truyền bằng `ref`
+            // để nó đọc/ghi thẳng vào field; code của mình không bao giờ tự sửa _velocity.
             transform.position = Vector3.SmoothDamp(
                 transform.position, _target.position + _offset, ref _velocity, _smoothTime);
         }
@@ -1312,24 +1318,127 @@ có ý nghĩa thật (di chuyển → rớt mạng → vào lại đúng chỗ).
 
 ## Tự kiểm tra hiểu bài
 
-1. Nêu một thứ chỉ có ở `Entity`, một thứ chỉ có ở `Character`, và giải thích vì sao thứ đầu không nên vào DB.
-2. Vì sao `entityId` là `int` cấp lúc chạy chứ không dùng thẳng `character.id`? Nêu **ba** lý do khác nhau.
-3. Bản thiết kế cũ có `EnterWorldRequest { CharacterId }` và kèm theo nó là một lỗ hổng bảo mật phải nhớ
-   kiểm thủ công. Bản này client không gửi gì cả. Lỗ hổng đó biến đi đâu?
-4. `EnterWorld` là lệnh riêng — vì sao không nhét luôn dữ liệu world vào `AuthResponse` cho đỡ một round-trip?
-   (Gợi ý: Phase 8 đổi map, client cần thời gian load scene, và `Logout` không cắt TCP.)
-5. `GetOrCreateAsync` không dùng transaction mà vẫn an toàn trước hai request song song. Cái gì đang gánh
-   vai trò "khoá"? Chuỗi sự kiện cụ thể khi hai INSERT đua nhau là gì?
-6. `MinState = Authenticated` không chặn được `EnterWorld` gọi hai lần. Vì sao? Và vì sao ta chọn so `>=`
-   trong dispatcher thay vì so `==`?
-7. `LeaveWorldAsync` nuốt `DbUnavailableException` thay vì để nó ném lên, trong khi repo cấm nuốt lỗi.
-   Vì sao ở **đây** thì nuốt là đúng?
-8. Quan hệ Account↔Character là 1-1 nhưng vẫn tách hai bảng. Nêu hai lợi ích cụ thể của việc tách,
-   và một chi phí phải trả.
-9. `LocalPlayer` chỉ có setter private và một hàm `Apply`. Nếu mở setter công khai cho tiện thì golden rule
-   nào bị phá, và triệu chứng đầu tiên sẽ xuất hiện ở phase nào?
-10. Logout khi đang trong world phải gọi `LeaveWorldAsync` trước `AuthService.Logout`. Nếu đảo thứ tự
-    (logout trước, rời world sau) thì hỏng ở đâu? (Gợi ý: `MarkLoggedOut` đặt `AccountId = 0`.)
+Tự trả lời từng câu xong mới mở đáp án của câu đó.
+
+**Câu 1.** Nêu một thứ chỉ có ở `Entity`, một thứ chỉ có ở `Character`, và giải thích vì sao thứ đầu
+không nên vào DB.
+<details>
+<summary>📖 Đáp án câu 1</summary>
+
+Chỉ có ở `Entity`: `Owner` (session đang điều khiển), `EntityId`. Chỉ có ở `Character`: `Exp`
+(bản ghi bền). Thứ của Entity không nên vào DB vì nó chỉ có nghĩa **khi đang online** — `Owner` là tham
+chiếu tới một kết nối TCP, restart server là vô nghĩa; ghi xuống đĩa vừa tốn vừa tạo ra dữ liệu không bao
+giờ đọc lại được một cách đúng đắn.
+
+</details>
+
+**Câu 2.** Vì sao `entityId` là `int` cấp lúc chạy chứ không dùng thẳng `character.id`?
+Nêu **ba** lý do khác nhau.
+<details>
+<summary>📖 Đáp án câu 2</summary>
+
+(1) `int` gọn hơn `long` trên gói tin lặp 20 lần/giây tới nhiều người xem; (2) quái/NPC về sau cũng
+cần entity id mà chúng không có dòng `character` nào; (3) không lộ khoá DB thật của người khác ra ngoài.
+Nền của cả ba: `entityId` reset mỗi lần restart server nên `int` không bao giờ gần tràn — kiểu chọn theo
+**vòng đời**, id bền = `long`, id tạm = `int`.
+
+</details>
+
+**Câu 3.** Bản thiết kế cũ có `EnterWorldRequest { CharacterId }` và kèm theo nó là một lỗ hổng bảo mật
+phải nhớ kiểm thủ công. Bản này client không gửi gì cả. Lỗ hổng đó biến đi đâu?
+<details>
+<summary>📖 Đáp án câu 3</summary>
+
+Nó biến mất **về mặt cấu trúc**, không phải "được vá". Không còn trường nào để client nói "tôi muốn
+vào nhân vật X" — server tự tra từ `session.AccountId`, thứ do server gán lúc đăng nhập và client không
+kiểm soát được. Lỗ hổng cần một trường để giả mạo; trường không tồn tại thì không có gì để quên kiểm.
+
+</details>
+
+**Câu 4.** `EnterWorld` là lệnh riêng — vì sao không nhét luôn dữ liệu world vào `AuthResponse` cho đỡ
+một round-trip? (Gợi ý: client cần thời gian load scene, và `Logout` không cắt TCP.)
+<details>
+<summary>📖 Đáp án câu 4</summary>
+
+(a) Hai mối quan tâm khác nhau: đăng nhập là chuyện danh tính, vào world là chuyện gameplay;
+(b) client cần thời gian dựng scene giữa hai bước — nhét world data vào `AuthResponse` là ép client nhận
+snapshot khi chưa sẵn sàng dùng; (c) `Logout` không cắt TCP, đăng nhập lại trên cùng kết nối cần một lệnh
+vào world gọi lại được; (d) về sau rời world / đổi map rồi vào lại mà không phải đăng nhập lại.
+
+</details>
+
+**Câu 5.** `GetOrCreateAsync` không dùng transaction mà vẫn an toàn trước hai request song song. Cái gì
+đang gánh vai trò "khoá"? Chuỗi sự kiện cụ thể khi hai INSERT đua nhau là gì?
+<details>
+<summary>📖 Đáp án câu 5</summary>
+
+`UNIQUE(account_id)` là trọng tài — DB serialize các INSERT vào cùng bảng. Chuỗi đua: A SELECT
+(0 dòng) → B SELECT (0 dòng) → A INSERT thành công → B INSERT vi phạm UNIQUE (`SqliteExtendedErrorCode
+== 2067`) → filter `when` bắt đúng lỗi đó → B SELECT lại → nhận về dòng A vừa tạo. Kết quả: hai request,
+một dòng, không transaction, không lock tự chế.
+
+</details>
+
+**Câu 6.** `MinState = Authenticated` không chặn được `EnterWorld` gọi hai lần. Vì sao? Và vì sao ta chọn
+so `>=` trong dispatcher thay vì so `==`?
+<details>
+<summary>📖 Đáp án câu 6</summary>
+
+`InWorld (2) >= Authenticated (1)` nên lần gọi thứ hai vẫn lọt qua cửa `MinState` — phải tự chặn
+bằng `session.Entity != null`. Dispatcher so `>=` thay vì `==` vì trạng thái là **mức đặc quyền tăng dần**:
+lệnh cấp thấp (Ping, Logout) phải chạy được ở mọi trạng thái cao hơn; nếu so `==` thì Ping khi đang
+InWorld sẽ bị từ chối — mỗi lệnh sẽ phải liệt kê đủ mọi trạng thái được phép, thay vì một mức sàn.
+
+</details>
+
+**Câu 7.** `LeaveWorldAsync` nuốt `DbUnavailableException` thay vì để nó ném lên, trong khi repo cấm
+nuốt lỗi. Vì sao ở **đây** thì nuốt là đúng?
+<details>
+<summary>📖 Đáp án câu 7</summary>
+
+Vì hàm này nằm trên **đường dọn dẹp** (chạy cả trong `finally` khi mất kết nối). Để exception ném
+xuyên qua thì session không dọn xong, entity ma kẹt trong `WorldService` vĩnh viễn và tài khoản đó dính
+`CharacterInUse` mãi — hư hại lớn, lan rộng, không tự hết. Mất một lần lưu vị trí là hư hại nhỏ, cục bộ.
+Đây là nuốt **có chủ đích, có log, bắt đúng một loại exception** — khác hẳn `catch (Exception) { }` nuốt mù.
+
+</details>
+
+**Câu 8.** Quan hệ Account↔Character là 1-1 nhưng vẫn tách hai bảng. Nêu hai lợi ích cụ thể của việc tách,
+và một chi phí phải trả.
+<details>
+<summary>📖 Đáp án câu 8</summary>
+
+Lợi: (a) hai loại dữ liệu có vòng đời khác nhau nằm đúng chỗ — đổi mật khẩu, ban, mốc đăng nhập
+không đụng bảng gameplay và ngược lại; (b) mở rộng rẻ — muốn nhiều nhân vật chỉ bỏ `UNIQUE(account_id)`,
+inventory về sau FK thẳng vào `character`. Chi phí: lúc cần cả hai phía phải JOIN hoặc hai query, và thêm
+một bảng phải migrate.
+
+</details>
+
+**Câu 9.** `LocalPlayer` chỉ có setter private và một hàm `Apply`. Nếu mở setter công khai cho tiện thì
+golden rule nào bị phá, và triệu chứng đầu tiên sẽ xuất hiện khi nào?
+<details>
+<summary>📖 Đáp án câu 9</summary>
+
+Golden rule #2 — server là source of truth. Mở setter công khai thì sớm muộn có chỗ viết
+`_localPlayer.X = ...` ngay trong code input thay vì chờ server confirm. Triệu chứng đầu tiên xuất hiện
+khi làm di chuyển authoritative: vị trí client tự trôi khỏi vị trí server giữ, và mọi phép reconciliation
+tính từ một gốc đã sai.
+
+</details>
+
+**Câu 10.** Logout khi đang trong world phải gọi `LeaveWorldAsync` trước `AuthService.Logout`. Nếu đảo
+thứ tự (logout trước, rời world sau) thì hỏng ở đâu? (Gợi ý: `MarkLoggedOut` đặt `AccountId = 0`.)
+<details>
+<summary>📖 Đáp án câu 10</summary>
+
+`MarkLoggedOut` xoá danh tính (`AccountId = 0`, `State = Connected`) — mà mọi việc của
+`LeaveWorldAsync` đều cần danh tính: lưu vị trí về đúng `CharacterId`, gỡ sổ `_entityIdByAccount` theo
+`AccountId`. Chạy sau logout là chạy với danh tính đã mất → dọn sót, entity ma ở lại world; đồng thời
+giữa hai bước tồn tại trạng thái vô lý "Connected nhưng vẫn có entity trong world". Rời world phải xong
+**khi session còn biết mình là ai**.
+
+</details>
 
 ---
 

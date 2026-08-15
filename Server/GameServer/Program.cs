@@ -6,6 +6,7 @@ using MMORPG.GameServer.Auth;
 using MMORPG.GameServer.Db;
 using MMORPG.GameServer.Handlers;
 using MMORPG.GameServer.Net;
+using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
 
 Console.OutputEncoding = Encoding.UTF8;
@@ -20,6 +21,10 @@ dbClient.Start();
 
 SystemHandler.DbClient = dbClient;
 AuthHandler.AuthService = new AuthService(dbClient, new LoginRateLimiter());
+
+var worldService = new WorldService();
+CharacterHandler.CharacterService = new CharacterService(dbClient, worldService);
+
 TcpDispatcher.RegisterAll();
 
 var listener = new TcpListener(IPAddress.Any, PORT);

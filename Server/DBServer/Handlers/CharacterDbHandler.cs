@@ -6,7 +6,7 @@ using MMORPG.Shared.Dto.Db;
 
 namespace MMORPG.DBServer.Handlers
 {
-    public class CharacterDbHandler
+    public static class CharacterDbHandler
     {
         public static CharacterRepository Repository { get; set; }
 
@@ -14,7 +14,7 @@ namespace MMORPG.DBServer.Handlers
         public static async Task<DbResult> OnGetOrCreate(DbRequest req)
         {
             var request = req.GetData<CharacterGetOrCreateRequest>();
-            var response = await Repository.GetOrCreateCharacter(request);
+            var response = await Repository.GetOrCreateAsync(request);
 
             if (response.Created)
                 Log.Info($"account:{request.AccountId} tạo nhân vật '{request.Name}' id:{response.Character.CharacterId}");

@@ -1,11 +1,10 @@
-using System;
 using MemoryPack;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.Shared.Dto.Character
 {
     [MemoryPackable]
-    public partial class EnterWorldResponsive
+    public partial class EnterWorldResponse
     {
         public bool Success { get; set; }
 

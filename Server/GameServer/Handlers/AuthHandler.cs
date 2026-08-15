@@ -33,9 +33,11 @@ namespace MMORPG.GameServer.Handlers
         }
 
         [TcpHandler(NetCmd.Logout, MinState = SessionState.Authenticated)]
-        public static Task<NetResult> OnLogout(NetRequest req)
+        public static async Task<NetResult> OnLogout(NetRequest req)
         {
-            return Task.FromResult(NetResult.Ok(AuthService.Logout(req.Session)));
+            // Logout khi đang trong world: rời world trước, cùng một đường dọn dẹp với mất kết nối.
+            await CharacterHandler.CharacterService.LeaveWorldAsync(req.Session);
+            return NetResult.Ok(AuthService.Logout(req.Session));
         }
     }
 }
