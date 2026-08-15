@@ -87,5 +87,22 @@ namespace MMORPG.Shared.Net
         EnterWorld = 200,
 
         #endregion
+
+        #region World / Movement (300–399)
+
+        /// <summary>
+        /// Ý định di chuyển: hướng đang bấm + số thứ tự. Fire-and-forget — không có response riêng,
+        /// server trả lời gộp bằng <see cref="MoveState"/> mỗi tick.
+        /// Request: <see cref="Dto.World.MoveInputRequest"/>
+        /// </summary>
+        MoveInput = 300,
+
+        /// <summary>
+        /// Vị trí authoritative của chính người chơi, server đẩy mỗi tick.
+        /// Payload: <see cref="Dto.World.MoveStateResponse"/>
+        /// </summary>
+        MoveState = 301,
+
+        #endregion
     }
 }

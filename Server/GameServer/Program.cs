@@ -27,6 +27,7 @@ CharacterHandler.CharacterService = new CharacterService(dbClient, worldService)
 
 TcpDispatcher.RegisterAll();
 
+
 var listener = new TcpListener(IPAddress.Any, PORT);
 listener.Start();
 Log.Info($"Lắng nghe trên {$"0.0.0.0:{PORT}".Green()}");
@@ -38,6 +39,10 @@ Console.CancelKeyPress += (_, e) =>
     e.Cancel = true; // chặn hành vi kill mặc định
     cts.Cancel();
 };
+
+// run game loop
+var gameLoop = new GameLoop(worldService);
+_ = gameLoop.RunAsync(cts.Token);
 
 try
 {

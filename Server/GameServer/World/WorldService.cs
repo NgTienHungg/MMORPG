@@ -1,6 +1,8 @@
 using System.Collections.Concurrent;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Dto.Db;
+using MMORPG.Shared.Dto.World;
+using MMORPG.Shared.Net;
 
 namespace MMORPG.GameServer.World
 {
@@ -59,6 +61,22 @@ namespace MMORPG.GameServer.World
 
             return _entityIdByAccount.TryGetValue(accountId, out int entityId) &&
                    _entities.TryGetValue(entityId, out entity);
+        }
+
+        /// <summary>Game loop gọi mỗi tick: mô phỏng mọi entity rồi báo vị trí cho chính chủ.</summary>
+        public void Tick(float dt)
+        {
+            foreach (PlayerEntity entity in _entities.Values)
+            {
+                entity.Integrate(dt);
+
+                entity.Owner?.SendData(NetCmd.MoveState, new MoveStateResponse
+                {
+                    LastInputSeq = entity.LastInputSeq,
+                    X = entity.X,
+                    Y = entity.Y,
+                });
+            }
         }
     }
 }
