@@ -9,8 +9,8 @@ using MMORPG.Shared.Net;
 namespace MMORPG.GameServer
 {
     /// <summary>
-    /// Một kết nối client: vòng đọc, vòng gửi, và vòng đời.
-    /// Phase 1 chưa gắn với người chơi nào — chỉ echo. Phase 4 sẽ gắn account, Phase 5 gắn nhân vật.
+    /// Một kết nối client: vòng đọc, vòng gửi, và vòng đời. Sau khi đăng nhập, session mang danh tính
+    /// (AccountId / Username) — nguồn duy nhất cho biết kết nối này là ai.
     /// </summary>
     public sealed class ClientSession
     {
@@ -118,18 +118,30 @@ namespace MMORPG.GameServer
         /// </summary>
         public void Send(int cmd, ReadOnlySpan<byte> payload)
         {
+            // Producer: đóng frame hoàn chỉnh, xếp vào hàng đợi, rồi cộng 1 vào semaphore để đánh thức
+            // vòng gửi. KHÔNG WriteAsync thẳng ở đây — hai luồng cùng ghi một NetworkStream sẽ trộn
+            // byte của hai frame vào nhau và phía nhận không tách gói được nữa.
             _sendQueue.Enqueue(PacketFrame.Encode(cmd, payload));
             _sendSignal.Release();
         }
 
+        /// <summary>
+        /// Consumer duy nhất của hàng đợi gửi: ngủ chờ tín hiệu, thức dậy thì vét sạch hàng đợi ra socket.
+        /// </summary>
         private async Task SendLoopAsync(CancellationToken ct)
         {
             try
             {
                 while (!ct.IsCancellationRequested)
                 {
+                    // Semaphore là bộ đếm tín hiệu: mỗi Send() cộng 1 (Release), mỗi WaitAsync trừ 1.
+                    // Đếm về 0 thì dòng này NGỦ — không có gói nào chờ thì vòng gửi không ngốn CPU.
                     await _sendSignal.WaitAsync(ct);
 
+                    // Thức dậy thì vét cạn: TryDequeue rút từng frame (đã đóng gói sẵn từ Send)
+                    // và WriteAsync đẩy nguyên khối byte đó xuống TCP. Một lượt thức có thể vét được
+                    // NHIỀU frame dù chỉ tiêu một tín hiệu — các tín hiệu thừa còn lại chỉ khiến vòng
+                    // lặp thức thêm vài lượt với hàng đợi rỗng rồi ngủ tiếp, vô hại.
                     while (_sendQueue.TryDequeue(out byte[] frame))
                         await _stream.WriteAsync(frame, 0, frame.Length, ct);
                 }

@@ -147,9 +147,14 @@ Chi tiết đầy đủ: [`.claude/docs/CONVENTIONS.md`](.claude/docs/CONVENTION
 **Mọi định danh trong code là tiếng Anh.** Tiếng Việt chỉ dùng cho: comment, XML doc, và chuỗi hiển thị cho người chơi.
 
 ### Comment
-Comment khi logic **không tự giải thích** (vì sao chọn cấu trúc này, race condition, edge case, workaround).
-Giải thích **tại sao**, không mô tả lại từng dòng. Không comment kiểu "trước đây… giờ là…" — code phải đọc như
-thể luôn được viết như vậy.
+- **Summary (`///`) mô tả đúng hiện tại** — chính xác class/hàm làm gì tại thời điểm viết, không hơn.
+  **Cấm nhắc phase trong code** (kiểu "Phase 7 sẽ dùng", "bài của Phase 4"): người đọc code không có bối cảnh
+  roadmap. Kế hoạch tương lai thuộc về tài liệu phase; khi phase sau đổi hành vi thì update summary lúc đó.
+- **Comment dày trong thân hàm** (phong cách vo-lam-genz): mọi câu lệnh/idiom không hiển nhiên với người
+  chưa theo dự án từ đầu đều đáng được giải thích ngay tại chỗ — semaphore `Wait`/`Release`, `Interlocked`,
+  exception filter `when`, vòng drain queue, `ref` param... Nói rõ **nó làm gì và vì sao cần ở đây**.
+  Dòng tự hiển nhiên (gán thuần, `i++`) thì không comment.
+- Không comment kiểu "trước đây… giờ là…" — code phải đọc như thể luôn được viết như vậy.
 
 ### Log — không dùng `Debug.Log` / `Console.WriteLine` trần
 

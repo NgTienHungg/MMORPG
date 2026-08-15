@@ -52,7 +52,9 @@ namespace MMORPG.DBServer.Repositories
                 {
                     // Hai EnterWorld của cùng tài khoản chạy song song: cả hai SELECT thấy "chưa có"
                     // rồi cùng INSERT. UNIQUE(account_id) biến kẻ đến sau thành vô hại — chỉ việc
-                    // đọc lại dòng kẻ đến trước vừa tạo. Cùng bài check-then-act của Phase 4.
+                    // đọc lại dòng kẻ đến trước vừa tạo.
+                    // `when` là exception filter: chỉ bắt ĐÚNG lỗi vi phạm UNIQUE,
+                    // mọi SqliteException khác vẫn ném lên như thường.
                     created = false;
                 }
             }

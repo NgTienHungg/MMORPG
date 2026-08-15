@@ -35,8 +35,7 @@ namespace MMORPG.Shared.Dto
         public string Username { get; set; } = string.Empty;
 
         /// <summary>
-        /// Token phiên, dùng cho nối lại sau khi rớt mạng (Phase 7 sẽ dùng thật).
-        /// Rỗng khi đăng nhập thất bại.
+        /// Token phiên do server cấp khi đăng nhập thành công. Rỗng khi thất bại.
         /// </summary>
         public string SessionToken { get; set; } = string.Empty;
     }

@@ -110,7 +110,8 @@ namespace MMORPG.Client.Auth
             this.Log($"Đăng nhập thành công: {response.Username.Color("cyan")} — token {response.SessionToken.Length.ToString().Bold()} ký tự");
             _loginUi.ShowMessage($"Xin chào, {response.Username}!", isError: false);
 
-            // Phase 5 sẽ thay bằng: mở màn hình chọn nhân vật.
+            // Ẩn UI là hết việc của panel này — bước vào world do phần world đảm nhiệm
+            // khi nghe cùng sự kiện đăng nhập thành công.
             _loginUi.SetVisible(false);
         }
 

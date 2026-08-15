@@ -5,7 +5,7 @@ namespace MMORPG.DBServer.Repositories
 {
     /// <summary>
     /// Truy cập bảng <c>server_meta</c>. Repository là nơi DUY NHẤT có chuỗi SQL —
-    /// đó chính là thứ khiến Phase 15 (đổi sang MySQL) chỉ phải sửa tầng này.
+    /// đó chính là thứ cho phép đổi database engine mà chỉ phải sửa tầng này.
     /// </summary>
     public sealed class ServerMetaRepository
     {
@@ -22,7 +22,7 @@ namespace MMORPG.DBServer.Repositories
             await using SqliteCommand cmd = connection.CreateCommand();
 
             // Tham số hoá, không nội suy chuỗi. Ở đây `key` do GameServer đưa nên tưởng như an toàn,
-            // nhưng thói quen phải đúng từ query đầu tiên — Phase 4 sẽ có chuỗi do NGƯỜI CHƠI gõ.
+            // nhưng thói quen phải đúng từ query đầu tiên — nhiều query khác nhận chuỗi do NGƯỜI CHƠI gõ.
             cmd.CommandText = "SELECT value FROM server_meta WHERE key = $key;";
             cmd.Parameters.AddWithValue("$key", key);
 

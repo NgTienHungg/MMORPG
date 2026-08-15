@@ -35,14 +35,14 @@ namespace MMORPG.Shared.Dto
         public string Detail { get; set; } = string.Empty;
     }
 
-    /// <summary>DTO thử của Phase 2. Xoá khi Phase 4 xong.</summary>
+    /// <summary>DTO thử của lệnh Echo. Không còn dùng — xoá được.</summary>
     [MemoryPackable]
     public partial class EchoRequest
     {
         public string Message { get; set; } = string.Empty;
     }
 
-    /// <summary>DTO thử của Phase 2. Xoá khi Phase 4 xong.</summary>
+    /// <summary>DTO thử của lệnh Echo. Không còn dùng — xoá được.</summary>
     [MemoryPackable]
     public partial class EchoResponse
     {

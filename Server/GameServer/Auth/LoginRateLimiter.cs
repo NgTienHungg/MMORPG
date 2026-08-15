@@ -6,7 +6,7 @@ namespace MMORPG.GameServer.Auth
     /// Giới hạn số lần đăng nhập sai. Không có nó thì một script thử vài trăm nghìn mật khẩu mỗi phút.
     ///
     /// Đếm theo session id là mức tối thiểu — kẻ tấn công chỉ cần nối lại là có bộ đếm mới.
-    /// Bản thật phải đếm theo địa chỉ IP; ghi vào Phase 16 cùng với TLS và structured logging.
+    /// Bản thật phải đếm theo địa chỉ IP.
     /// </summary>
     public sealed class LoginRateLimiter
     {

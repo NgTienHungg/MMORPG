@@ -12,7 +12,7 @@ namespace MMORPG.GameServer
         /// <summary>Đã đăng nhập, chưa chọn nhân vật.</summary>
         Authenticated = 1,
 
-        /// <summary>Đã vào thế giới (Phase 5).</summary>
+        /// <summary>Đã vào thế giới, đang điều khiển một entity.</summary>
         InWorld = 2,
     }
 }

@@ -41,7 +41,7 @@ namespace MMORPG.DBServer.Data
             // WAL: cho phép đọc song song với một lượt ghi. Mặc định (journal DELETE) thì
             // một lượt ghi khoá toàn bộ file, mọi lượt đọc phải xếp hàng.
             // foreign_keys: SQLite mặc định TẮT ràng buộc khoá ngoại — không bật thì
-            // "ON DELETE CASCADE" ở Phase 5 sẽ im lặng không chạy.
+            // "ON DELETE CASCADE" khai trong schema sẽ im lặng không chạy.
             cmd.CommandText = """
                               PRAGMA journal_mode = WAL;
                               PRAGMA synchronous = NORMAL;

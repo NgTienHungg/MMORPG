@@ -3,8 +3,7 @@ using MemoryPack;
 namespace MMORPG.Shared;
 
 /// <summary>
-/// DTO thử để kiểm chứng đường ống Shared → Unity đã thông.
-/// Phase 1 sẽ thay bằng contract thật.
+/// DTO thử để kiểm chứng đường ống Shared → Unity đã thông. Không còn luồng nào dùng — xoá được.
 /// </summary>
 [MemoryPackable]
 public partial class HandshakeDto

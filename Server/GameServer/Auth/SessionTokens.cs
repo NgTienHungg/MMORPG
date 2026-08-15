@@ -4,7 +4,7 @@ using System.Security.Cryptography;
 namespace MMORPG.GameServer.Auth
 {
     /// <summary>
-    /// Token phiên, giữ trong RAM. Phase 7 dùng để nối lại sau khi rớt mạng mà không phải gõ mật khẩu.
+    /// Token phiên, giữ trong RAM — cấp khi đăng nhập, thu hồi khi đăng xuất.
     ///
     /// Server restart là mất hết token — đúng như mong muốn ở giai đoạn này: người chơi đăng nhập lại,
     /// không có gì hỏng. Muốn token sống qua restart thì phải lưu DB, và lúc đó phải nghĩ tới hạn dùng

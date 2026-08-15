@@ -28,7 +28,7 @@ namespace MMORPG.Shared.Dto.Character
 
         public float Y { get; set; }
 
-        /// <summary>Mốc thời gian server lúc vào. Phase 6 dùng làm gốc cho đồng bộ tick.</summary>
+        /// <summary>Mốc thời gian server (Unix ms) tại thời điểm vào world.</summary>
         public long ServerTimeMs { get; set; }
     }
 }
