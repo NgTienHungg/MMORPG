@@ -102,6 +102,24 @@ namespace MMORPG.Shared.Net
         /// Payload: <see cref="Dto.World.MoveStateResponse"/>
         /// </summary>
         MoveState = 301,
+        
+        /// <summary>
+        /// Một entity xuất hiện trong tầm quan sát. Chỉ server gửi.
+        /// Payload: <see cref="Dto.World.EntitySpawnNotice"/>
+        /// </summary>
+        EntitySpawn = 302,
+
+        /// <summary>
+        /// Một entity rời tầm quan sát. Chỉ server gửi.
+        /// Payload: <see cref="Dto.World.EntityDespawnNotice"/>
+        /// </summary>
+        EntityDespawn = 303,
+
+        /// <summary>
+        /// Vị trí của các entity KHÁC đang quan sát được, server đẩy mỗi tick.
+        /// Payload: <see cref="Dto.World.WorldSnapshotNotice"/>
+        /// </summary>
+        WorldSnapshot = 304,
 
         #endregion
     }
