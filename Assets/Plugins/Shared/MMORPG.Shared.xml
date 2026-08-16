@@ -396,6 +396,36 @@
             </code>
             </remarks>
         </member>
+        <member name="T:MMORPG.Shared.Dto.World.MoveInputRequest">
+            <summary>
+            Trạng thái phím đang bấm tại một bước dự đoán của client. Cố tình KHÔNG có trường thời gian:
+            server tích phân bằng TICK_DT của chính nó — dt mà đi trên gói tin thì dt là chỗ hack tốc độ.
+            </summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> Seq<br/>
+            <b>float</b> DirX<br/>
+            <b>float</b> DirY<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.MoveInputRequest.Seq">
+            <summary>Số thứ tự client tự đánh, tăng dần. Server echo lại để client biết mình đã được xử tới đâu.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.World.MoveStateResponse">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> LastInputSeq<br/>
+            <b>float</b> X<br/>
+            <b>float</b> Y<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.MoveStateResponse.LastInputSeq">
+            <summary>Input cuối cùng server đã nhận trước tick này. Client xoá pending ≤ số này rồi replay phần còn lại.</summary>
+        </member>
         <member name="T:MMORPG.Shared.HandshakeDto">
             <summary>
             DTO thử để kiểm chứng đường ống Shared → Unity đã thông. Không còn luồng nào dùng — xoá được.
@@ -543,6 +573,19 @@
             Client chủ động gửi ngay sau khi đăng nhập thành công.
             </summary>
         </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.MoveInput">
+            <summary>
+            Ý định di chuyển: hướng đang bấm + số thứ tự. Fire-and-forget — không có response riêng,
+            server trả lời gộp bằng <see cref="F:MMORPG.Shared.Net.NetCmd.MoveState"/> mỗi tick.
+            Request: <see cref="T:MMORPG.Shared.Dto.World.MoveInputRequest"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.MoveState">
+            <summary>
+            Vị trí authoritative của chính người chơi, server đẩy mỗi tick.
+            Payload: <see cref="T:MMORPG.Shared.Dto.World.MoveStateResponse"/>
+            </summary>
+        </member>
         <member name="T:MMORPG.Shared.Net.NetPayload">
              <summary>
              Chuyển DTO ↔ mảng byte của payload, kèm nén tuỳ chọn.
@@ -602,6 +645,24 @@
         <member name="M:MMORPG.Shared.Net.PacketFrame.Encode(System.Int32,System.ReadOnlySpan{System.Byte})">
             <summary>
             Đóng khung một gói hoàn chỉnh, sẵn sàng ghi thẳng lên socket.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.MovementRules">
+            <summary>
+            Hằng số và công thức di chuyển dùng CHUNG: server mô phỏng thật, client dự đoán trước.
+            Hai bên phải ra cùng kết quả từ cùng input — vì vậy công thức chỉ tồn tại ở đây, một nơi.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.MOVE_SPEED">
+            <summary>Tốc độ chạy, đơn vị world/giây.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.WORLD_HALF_EXTENT">
+            <summary>Nửa cạnh vùng đi lại: map tạm là hình vuông [-E, +E] quanh gốc, chưa có va chạm.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.Step(System.Single,System.Single,System.Single,System.Single,System.Single)">
+            <summary>
+            Một bước mô phỏng: dịch theo hướng rồi kẹp trong biên map.
+            dir phải đã chuẩn hoá (độ dài ≤ 1) — người gọi chịu trách nhiệm, hàm này không kiểm lại.
             </summary>
         </member>
     </members>

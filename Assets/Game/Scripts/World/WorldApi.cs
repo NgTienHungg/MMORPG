@@ -1,6 +1,7 @@
 using HungNT;
 using MMORPG.Client.Network;
 using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.Client.World
@@ -21,6 +22,12 @@ namespace MMORPG.Client.World
         {
             this.Log("Enter World");
             _netService.Send(NetCmd.EnterWorld, new EmptyRequest());
+        }
+        
+        public void Move(int seq, float dirX, float dirY)
+        {
+            // Không log ở đây — 20 lần/giây, log là dìm chết console.
+            _netService.Send(NetCmd.MoveInput, new MoveInputRequest { Seq = seq, DirX = dirX, DirY = dirY });
         }
     }
 }

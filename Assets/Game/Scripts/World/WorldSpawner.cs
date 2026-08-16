@@ -1,6 +1,8 @@
 using HungNT;
+using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto.Character;
 using UnityEngine;
+using VContainer;
 
 namespace MMORPG.Client.World
 {
@@ -13,7 +15,17 @@ namespace MMORPG.Client.World
         [SerializeField] private Transform _entityRoot;
         [SerializeField] private CameraFollow _cameraFollow;
 
+        private WorldApi _worldApi;
+        private WorldNetHandler _worldNetHandler;
+
         private GameObject _localPlayerObject;
+        
+        [Inject]
+        public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler)
+        {
+            _worldApi = worldApi;
+            _worldNetHandler = worldNetHandler;
+        }
 
         public void SpawnLocalPlayer(EnterWorldResponse response)
         {
@@ -22,6 +34,10 @@ namespace MMORPG.Client.World
 
             _localPlayerObject = Instantiate(_playerPrefab, new Vector3(response.X, response.Y), Quaternion.identity, _entityRoot);
             _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
+            
+            // Prefab sinh lúc runtime — VContainer không tự inject. Đưa phụ thuộc vào tay.
+            var motor = _localPlayerObject.GetComponent<PlayerMotor>();
+            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y));
 
             _cameraFollow.SetTarget(_localPlayerObject.transform);
 
