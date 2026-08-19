@@ -426,6 +426,52 @@
         <member name="P:MMORPG.Shared.Dto.World.MoveStateResponse.LastInputSeq">
             <summary>Input cuối cùng server đã nhận trước tick này. Client xoá pending ≤ số này rồi replay phần còn lại.</summary>
         </member>
+        <member name="T:MMORPG.Shared.Dto.World.EntitySpawnNotice">
+            <summary>
+            Phần BẤT BIẾN của một entity — gửi đúng một lần lúc nó xuất hiện.
+            Thứ đổi theo tick (vị trí) đi trong snapshot, không lặp lại ở đây mỗi tick.
+            </summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> EntityId<br/>
+            <b>string</b> Name<br/>
+            <b>int</b> ClassId<br/>
+            <b>float</b> X<br/>
+            <b>float</b> Y<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.EntitySpawnNotice.X">
+            <summary>Vị trí lúc xuất hiện — mồi đầu tiên cho buffer nội suy phía client.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.World.EntityDespawnNotice">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> EntityId<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.World.EntityState">
+            <summary>Trạng thái một entity tại một tick. Cố tình chỉ có thứ thay đổi theo tick.</summary>
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> EntityId<br/>
+            <b>float</b> X<br/>
+            <b>float</b> Y<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="T:MMORPG.Shared.Dto.World.WorldSnapshotNotice">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>MMORPG.Shared.Dto.World.EntityState[]</b> States<br/>
+            </code>
+            </remarks>
+        </member>
         <member name="T:MMORPG.Shared.HandshakeDto">
             <summary>
             DTO thử để kiểm chứng đường ống Shared → Unity đã thông. Không còn luồng nào dùng — xoá được.
@@ -584,6 +630,24 @@
             <summary>
             Vị trí authoritative của chính người chơi, server đẩy mỗi tick.
             Payload: <see cref="T:MMORPG.Shared.Dto.World.MoveStateResponse"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.EntitySpawn">
+            <summary>
+            Một entity xuất hiện trong tầm quan sát. Chỉ server gửi.
+            Payload: <see cref="T:MMORPG.Shared.Dto.World.EntitySpawnNotice"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.EntityDespawn">
+            <summary>
+            Một entity rời tầm quan sát. Chỉ server gửi.
+            Payload: <see cref="T:MMORPG.Shared.Dto.World.EntityDespawnNotice"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.WorldSnapshot">
+            <summary>
+            Vị trí của các entity KHÁC đang quan sát được, server đẩy mỗi tick.
+            Payload: <see cref="T:MMORPG.Shared.Dto.World.WorldSnapshotNotice"/>
             </summary>
         </member>
         <member name="T:MMORPG.Shared.Net.NetPayload">

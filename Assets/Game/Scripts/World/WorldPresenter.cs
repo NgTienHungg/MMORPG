@@ -35,7 +35,7 @@ namespace MMORPG.Client.World
             _authNetHandler.OnLoginResult += OnLoggedIn;
             _authNetHandler.OnLogoutResult += OnLoggedOut;
             _authNetHandler.OnKicked += OnKicked;
-            _worldNetHandler.OnEnteredWorld += OnEnteredWorld;
+            _worldNetHandler.OnEnterWorldResult += OnEnterWorldResult;
         }
 
         private void OnDestroy()
@@ -46,7 +46,7 @@ namespace MMORPG.Client.World
             _authNetHandler.OnLoginResult -= OnLoggedIn;
             _authNetHandler.OnLogoutResult -= OnLoggedOut;
             _authNetHandler.OnKicked -= OnKicked;
-            _worldNetHandler.OnEnteredWorld -= OnEnteredWorld;
+            _worldNetHandler.OnEnterWorldResult -= OnEnterWorldResult;
         }
 
         private void OnLoggedIn(AuthResponse response)
@@ -57,7 +57,7 @@ namespace MMORPG.Client.World
             _worldApi.EnterWorld();
         }
 
-        private void OnEnteredWorld(EnterWorldResponse response)
+        private void OnEnterWorldResult(EnterWorldResponse response)
         {
             if (!response.Success)
             {

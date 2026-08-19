@@ -50,7 +50,7 @@ namespace MMORPG.Client.World
             _worldNetHandler = worldNetHandler;
             _simPos = spawnPos;
 
-            _worldNetHandler.OnMoveState += OnMoveState;
+            _worldNetHandler.OnMoveStateResult += OnMoveStateResult;
         }
 
         private void OnDestroy()
@@ -60,7 +60,7 @@ namespace MMORPG.Client.World
             _inputActions?.Dispose();
 
             if (_worldNetHandler != null)
-                _worldNetHandler.OnMoveState -= OnMoveState;
+                _worldNetHandler.OnMoveStateResult -= OnMoveStateResult;
         }
 
         private void Update()
@@ -106,7 +106,7 @@ namespace MMORPG.Client.World
         /// Đối chiếu với server: vị trí server + replay các input server chưa xử = vị trí "đáng lẽ".
         /// Dự đoán đúng thì kết quả trùng cái đang có; sai thì bị kéo về — đó là cú giật rubber-band.
         /// </summary>
-        private void OnMoveState(MoveStateResponse state)
+        private void OnMoveStateResult(MoveStateResponse state)
         {
             _pending.RemoveAll(p => p.Seq <= state.LastInputSeq);
 
