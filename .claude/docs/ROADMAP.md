@@ -1,6 +1,6 @@
 # ROADMAP — Dựng lại một MMORPG từ số 0
 
-> **Mục tiêu dự án:** tự tay dựng lại một game MMORPG 2D top-down đơn giản (Unity client + GameServer + DBServer),
+> **Mục tiêu dự án:** tự tay dựng lại một game MMORPG 2D (Unity client + GameServer + DBServer),
 > lấy kiến trúc tham chiếu sát nhất từ `vo-lam-genz` nhưng viết sạch theo chuẩn `com.hungnt`.
 > Học bằng cách **tự làm và tự gỡ lỗi**, không phải đọc code có sẵn.
 >
@@ -14,19 +14,22 @@
 | Hạng mục | Chốt | Lý do |
 |----------|------|-------|
 | Kiến trúc tầng | **3-tier ngay từ đầu**: Client ↔ GameServer ↔ DBServer | Giống vo-lam-genz. Hiểu ngay từ sớm vì sao DB phải là process riêng |
-| Database | **SQLite trước → MySQL ở Phase 15** | SQLite = 0 setup, chạy được ngay. Đổi sang MySQL sau chính là bài test xem tầng DAL có trừu tượng đủ tốt không |
+| Database | **SQLite trước → MySQL ở Phase 18** | SQLite = 0 setup, chạy được ngay. Đổi sang MySQL sau chính là bài test xem tầng DAL có trừu tượng đủ tốt không |
 | Serialize | **MemoryPack + project `Shared` dùng chung** | Đúng phần sạch nhất của vo-lam-genz. Contract 1 nguồn → không bao giờ lệch |
 | Nén | LZ4, chỉ khi payload > 4KB | Copy nguyên tắc của vo-lam-genz (`MemoryPackUtility`) |
-| Thể loại | 2D top-down, map tilemap, di chuyển tự do | Sát vo-lam-genz nhất → phần map/AOI/sorting đối chiếu được |
+| Thể loại | **2D platformer góc nhìn ngang** (kiểu Ninja School / Ngọc Rồng Online) | Chốt ở Phase 7. Asset nhân vật/map góc nhìn ngang dễ kiếm hơn top-down nhiều. Đổi lại phải viết motor có trọng lực + nhảy chạy **giống hệt nhau ở 2 bên** — xem Phase 8 |
+| Motor di chuyển | **Kinematic tự viết, đặt trong `Shared`. Cấm `Rigidbody2D` cho nhân vật** | Physics của Unity không tồn tại trên server .NET. Hai bên tính khác nhau = rubber-band vĩnh viễn. Đây là "contract 1 nguồn" áp lên *hành vi* chứ không chỉ lên *dữ liệu* |
 | Unity | 6000.2.9f1, URP 2D, DI = VContainer | Theo `BaseCode_Test` |
 | Assembly client | **Không dùng asmdef** — code game nằm hết trong `Assembly-CSharp` | Assembly do asmdef định nghĩa không tham chiếu được `Assembly-CSharp-firstpass`, mà DOTween Pro nằm ở đó dưới dạng `.cs` không asmdef → mất API Pro. Đổi lại phải compile lại toàn bộ mỗi lần sửa; cỡ dự án này vẫn dưới vài giây. Tách asmdef sau, chỉ cho phần không đụng DOTween |
 | Nhân vật | **1 tài khoản = 1 nhân vật**, tự tạo trong lần vào world đầu (kiểu Ngọc Rồng Online) | Bản học ưu tiên đơn giản — bỏ màn hình chọn nhân vật. Bảng `character` vẫn tách khỏi `account` nên nâng lên nhiều nhân vật sau này chỉ là bỏ `UNIQUE(account_id)` + thêm UI chọn |
-| Repo | **1 repo duy nhất** chứa cả client + server + shared, tới hết Phase 12 | Đổi contract là sửa cả 2 bên — cùng 1 repo thì gói gọn trong 1 commit, `git checkout` commit cũ luôn cho ra cặp client/server khớp nhau. Tách repo (hoặc submodule) buộc phải commit 2 lần mỗi lần đổi contract; quên bước 2 thì 2 bên lệch mà git không báo gì |
-| Tách repo server | **Phase 16**, khi deploy thật | Lúc đó mới có lý do thật: đẩy server lên VPS không cần kéo theo vài GB asset Unity. Tách trước thời điểm đó là chịu chi phí mà chưa nhận được lợi ích |
+| Phân phối asset | **Addressables** (không dùng AssetBundle API trần) | Addressables *chính là* AssetBundle + tầng quản lý ở trên: catalog, hash, dependency graph, content update workflow. vo-lam-genz dùng bundle trần vì thời đó Addressables chưa chín; dự án này đã cài sẵn Addressables 2.9 cho Unity 6 |
+| Hot update logic | **Lua trên server trước** (Phase 17); client hot update để phase mở rộng | Lua server rẻ và dạy đủ khái niệm: script layer, binding C#↔Lua, sandbox, hot reload. Client hot update (xLua hoặc HybridCLR) nặng hơn nhiều — làm sau khi đã hiểu cơ chế |
+| Repo | **1 repo duy nhất** chứa cả client + server + shared, tới hết Phase 14 | Đổi contract là sửa cả 2 bên — cùng 1 repo thì gói gọn trong 1 commit, `git checkout` commit cũ luôn cho ra cặp client/server khớp nhau. Tách repo (hoặc submodule) buộc phải commit 2 lần mỗi lần đổi contract; quên bước 2 thì 2 bên lệch mà git không báo gì |
+| Tách repo server | **Phase 19**, khi deploy thật | Lúc đó mới có lý do thật: đẩy server lên VPS không cần kéo theo vài GB asset Unity. Tách trước thời điểm đó là chịu chi phí mà chưa nhận được lợi ích |
 
 ---
 
-## 1. Bản đồ 17 phase
+## 1. Bản đồ 20 phase
 
 Nhóm thành 5 chặng. **Không nhảy cóc** — mỗi phase dựa trên phase trước.
 
@@ -48,34 +51,46 @@ Nhóm thành 5 chặng. **Không nhảy cóc** — mỗi phase dựa trên phase
 | **4** | **Đăng ký / Đăng nhập** | UI login trong Unity, tài khoản lưu SQLite, sai mật khẩu báo đúng lỗi | PBKDF2 hash · token session · không bao giờ tin client · chống login trùng |
 | **5** | **Vào thế giới** | Đăng nhập xong vào thẳng world: nhân vật tự tạo lần đầu (1 tài khoản = 1 nhân vật), xuất hiện đúng vị trí cũ, camera bám | Account ≠ Character ≠ Entity · get-or-create idempotent · UNIQUE thay cho check-then-act · snapshot khởi tạo |
 
-### Chặng C — Thế giới sống (Phase 6–9)
-> Kết thúc chặng: 2 client chạy song song, thấy nhau di chuyển mượt trên map, server kiểm soát mọi thứ.
+### Chặng C — Thế giới sống (Phase 6–10)
+> Kết thúc chặng: 2 client chạy song song, thấy nhau chạy/nhảy mượt trên map có tường và sàn,
+> chỉ thấy nhau khi ở gần, và mọi con số đều là dữ liệu chứ không phải hằng số trong code.
 
 | # | Phase | Kết quả cụ thể | Học được gì |
 |---|-------|----------------|-------------|
 | **6** | **Game loop server & di chuyển authoritative** | Server chạy tick cố định, client gửi ý định move, server quyết vị trí | Fixed tick · client prediction + reconciliation · chống speed hack |
 | **7** | **Đồng bộ nhiều người chơi** | Mở 2 client (ParrelSync), thấy nhau chạy mượt, không giật | Snapshot theo tick · interpolation buffer · vì sao không gửi mỗi frame |
-| **8** | **Map & AOI** | Map tilemap có va chạm; chỉ nhận gói của người chơi trong tầm nhìn | Spatial grid · interest management · vì sao MMO không broadcast toàn map |
-| **9** | **Data & Config** | Bảng config (tốc độ, map, spawn) load được cả 2 bên, sửa không cần build lại | Data-driven · 1 nguồn config · hot reload |
+| **8** | **Motor platformer** 🆕 | Đổi từ di chuyển 2 trục tự do sang trọng lực + nhảy + đứng trên sàn. Cả prediction lẫn mô phỏng server dùng **chung một hàm** trong `Shared` | Vì sao không dùng được `Rigidbody2D` khi có server authoritative · entity có **vận tốc + trạng thái grounded** chứ không chỉ vị trí · reconciliation khi state phức tạp hơn 1 vector |
+| **9** | **Map & AOI** | Map tile có va chạm + sàn xuyên-một-chiều; chỉ nhận gói của người chơi trong tầm nhìn | Spatial partition · interest management theo zone + trục X · vì sao MMO không broadcast toàn map |
+| **10** | **Data & Config** | Bảng config (tốc độ, trọng lực, spawn) load được, sửa không cần build lại. Phân biệt rõ **config loại A** (chỉ server đọc) và **config loại B** (bảng dữ liệu 2 bên cùng đọc) | Data-driven · 1 nguồn config · hot reload · vì sao "copy file sang cả 2 bên" là bẫy |
 
-### Chặng D — Nội dung game (Phase 10–12)
-> Kết thúc chặng: có một vòng gameplay đủ nhỏ nhưng đầy đủ: đánh quái → rơi đồ → vào túi → lưu DB.
-
-| # | Phase | Kết quả cụ thể | Học được gì |
-|---|-------|----------------|-------------|
-| **10** | **Feature dọc đầu tiên: Túi đồ** | Nhặt/dùng/vứt item, thoát game vào lại vẫn còn | Quy trình chuẩn thêm feature MMO (DB → DAL → logic → packet → UI) · cache RAM + dirty flag |
-| **11** | **Monster, chiến đấu & drop** | Quái spawn, đánh nhau, chết, rơi đồ | Entity ngoài player · AI tick · damage formula authoritative |
-| **12** | **Chat** | Chat kênh thế giới / bản đồ / riêng, có chống spam | Broadcast có filter · rate limit · vì sao chat cũng phải đi qua server |
-
-### Chặng E — Hạ tầng & vận hành (Phase 13–16)
-> Kết thúc chặng: build được ra bản chạy thật, đổi máy chủ chỉ bằng sửa config.
+### Chặng D — Nội dung game (Phase 11–14)
+> Kết thúc chặng: có một vòng gameplay đủ nhỏ nhưng đầy đủ: mặc đồ → đánh quái → nhận exp và đồ rơi → vào túi → lưu DB.
 
 | # | Phase | Kết quả cụ thể | Học được gì |
 |---|-------|----------------|-------------|
-| **13** | **Tách package `com.hungnt.network`** | Phần network client thành package riêng, publish được | Thiết kế API tái dùng · tách phần game-specific khỏi infra · versioning |
-| **14** | **AssetBundle / Addressables + CDN** | Sửa asset → build bundle → client tự tải bản mới, không build lại app | Hot update pipeline · manifest + MD5 per-file · host CDN |
-| **15** | **SQLite → MySQL** | Đổi provider, dữ liệu cũ migrate được | DAL trừu tượng đúng chưa · migration · connection pool |
-| **16** | **Vận hành: build, log, deploy** | Client build ra chạy trên máy khác, trỏ IP máy bạn; server có log + đo tick | Config ngoài code · structured logging · graceful shutdown · deploy VPS |
+| **11** | **Feature dọc đầu tiên: Túi đồ & item** | Nhặt/dùng/vứt item, thoát game vào lại vẫn còn. **Đang mở túi mà nhận/mất đồ thì UI tự đúng ngay** | Quy trình chuẩn thêm feature MMO (DB → DAL → logic → packet → UI) · cache RAM + dirty flag · **delta vs snapshot** · bảng item = config loại B đầu tiên · `itemId` (instance) ≠ `templateId` (loại đồ) |
+| **12** | **Chỉ số nhân vật & bảng thông tin** 🆕 | Nhân vật có bộ chỉ số đầy đủ; mặc/cởi trang bị là chỉ số đổi ngay. UI bảng thông tin liệt kê chỉ số theo nhóm | **Pipeline tính lại chỉ số**: `base(class, level) + điểm cộng + trang bị + buff → recompute → đẩy client` · chỉ số gốc vs dẫn xuất · vì sao client không bao giờ tự cộng |
+| **13** | **Quái, chiến đấu, sát thương & EXP** | Quái spawn, đánh nhau (PvE và PvP), chết, rơi đồ, lên level | Entity ngoài player · AI tick · **công thức sát thương authoritative** (trừ thẳng vs tỉ lệ, crit, kháng, random, sàn tối thiểu) · đường cong EXP · phạt chênh lệch level · exp lưu DB lúc nào |
+| **14** | **Chat** | Chat kênh thế giới / bản đồ / riêng, có chống spam | Broadcast có filter · rate limit · vì sao chat cũng phải đi qua server |
+
+### Chặng E — Hạ tầng & vận hành (Phase 15–19)
+> Kết thúc chặng: build được ra bản chạy thật, cập nhật nội dung không cần build lại app, đổi máy chủ chỉ bằng sửa config.
+
+| # | Phase | Kết quả cụ thể | Học được gì |
+|---|-------|----------------|-------------|
+| **15** | **Tách package `com.hungnt.network`** | Phần network client thành package riêng, publish được | Thiết kế API tái dùng · tách phần game-specific khỏi infra · versioning |
+| **16** | **Addressables + CDN** | Sửa asset → build content update → client tự tải bản mới, không build lại app. **Bảng config loại B đi cùng đường này**, kèm kiểm tra version lúc login | Hot update pipeline · remote catalog + hash per-file · host CDN · **chống lệch dữ liệu client/server bằng version check** |
+| **17** | **Lua scripting & hot update logic** 🆕 | Công thức sát thương / drop rate / AI quái ra file `.lua`; sửa file, gõ 1 phím trong console server là có hiệu lực, **không restart** | Script layer là gì và vì sao game thật cần nó · binding C# ↔ Lua · sandbox (script không được đụng file/network) · hot reload an toàn giữa lúc đang chạy · giới hạn: cái gì nên ra script, cái gì phải giữ trong C# |
+| **18** | **SQLite → MySQL** | Đổi provider, dữ liệu cũ migrate được | DAL trừu tượng đúng chưa · migration · connection pool |
+| **19** | **Vận hành: build, log, deploy** | Client build ra chạy trên máy khác, trỏ IP máy bạn; server có log + đo tick | Config ngoài code · structured logging · graceful shutdown · deploy VPS |
+
+### Để dành sau Phase 19
+
+| Việc | Vì sao chưa xếp vào roadmap |
+|------|------------------------------|
+| **Hot update logic phía client** (xLua / ToLua, hoặc **HybridCLR** hot update C# thật trên IL2CPP) | Đây mới là thứ vo-lam-genz làm. Nhưng nó nặng (binding, IL2CPP, GC, debug khổ) và chỉ có nghĩa khi đã có app build ra thật + CDN chạy được (Phase 16, 19). Sau Phase 17 bạn đã hiểu đủ khái niệm để tự đánh giá nên chọn Lua hay HybridCLR |
+| Skill / chiêu thức, buff-debuff có thời hạn | Biến thể của Phase 12 (nguồn chỉ số) + Phase 13 (công thức). Tự làm được khi đã vững |
+| Party / tổ đội, chia exp theo đội | Biến thể của Phase 13 |
 
 ---
 
@@ -86,13 +101,13 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 | Dải | Nhóm | Phase |
 |-----|------|-------|
 | `0` | `None` — giá trị vô hiệu, không dùng | — |
-| `1–99` | **Hệ thống**: ping, handshake, disconnect, error | 1–2 |
+| `1–99` | **Hệ thống**: ping, handshake, disconnect, error, version check | 1–2, 16 |
 | `100–199` | **Auth**: register, login, logout, token | 4 |
-| `200–299` | **Character**: enter world (mở rộng sau: list, create, delete nếu quay lại nhiều nhân vật) | 5 |
-| `300–399` | **World / Movement**: move, snapshot, spawn, despawn | 6–8 |
-| `400–499` | **Inventory / Item** | 10 |
-| `500–599` | **Combat / Monster** | 11 |
-| `600–699` | **Chat** | 12 |
+| `200–299` | **Character**: enter world, **chỉ số nhân vật, cộng điểm, trang bị** (mở rộng sau: list, create, delete nếu quay lại nhiều nhân vật) | 5, 12 |
+| `300–399` | **World / Movement**: move, snapshot, spawn, despawn | 6–9 |
+| `400–499` | **Inventory / Item** | 11 |
+| `500–599` | **Combat / Monster**: đánh, sát thương, chết, drop, exp/level | 13 |
+| `600–699` | **Chat** | 14 |
 | `700–999` | *(trống — feature sau)* | |
 
 **`DbCmd`** — protocol nội bộ GameServer ↔ DBServer, **client không bao giờ thấy**. Enum riêng, dải riêng:
@@ -101,12 +116,28 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 |-----|------|-------|
 | `1000–1099` | **Hệ thống**: ping, server_meta | 3 |
 | `1100–1199` | **Account** | 4 |
-| `1200–1299` | **Character** | 5 |
-| `1300–1399` | **Inventory** | 10 |
-| `1400–1499` | **Combat / Monster** | 11 |
+| `1200–1299` | **Character** (gồm chỉ số, điểm cộng, exp/level) | 5, 12, 13 |
+| `1300–1399` | **Inventory** (gồm trang bị đang mặc) | 11 |
+| `1400–1499` | **Combat / Monster** | 13 |
 | `1500+` | *(trống — feature sau)* | |
 
 **Quy tắc:** thêm lệnh mới → luôn thêm vào **cuối dải của feature**, không chèn giữa. Không tái sử dụng số đã xoá.
+
+---
+
+## 2b. Hai loại config — phân biệt từ Phase 10
+
+Bệnh của vo-lam-genz **không phải** là "gen file byte rồi copy sang cả 2 bên". Copy chỉ là triệu chứng.
+Bệnh thật là: **không ai kiểm tra 2 bản có khớp nhau không**. Copy thiếu một lần → client hiển thị item A,
+server xử lý item B; không lỗi biên dịch, không log, chỉ có bug câm.
+
+| | **Loại A — tham số vận hành** | **Loại B — bảng dữ liệu** |
+|---|---|---|
+| Ví dụ | `moveSpeed`, `gravity`, `jumpForce`, điểm spawn | bảng item, bảng quái, chỉ số gốc theo class, drop table |
+| Ai cần | server xử lý logic; client chỉ cần vài giá trị để dự đoán | **cả 2 bên đều đọc**: server tính logic, client hiển thị tên / icon / mô tả |
+| Cách chữa | **Chỉ server đọc file.** Giá trị nào client cần thì đi trong `EnterWorldResponse` | **Schema** (kiểu C#) đặt ở `Server/Shared/` → 1 nguồn định nghĩa. **Dữ liệu** có 1 bản gốc duy nhất, client kéo về qua Addressables/CDN — **không commit bản copy trong `Assets/`** |
+| Chống lệch bằng gì | Client luôn chạy đúng số của server nó đang nối vào, kể cả 2 server cấu hình khác nhau | Server gửi **hash/version của bảng** lúc login; client lệch version thì **bị chặn vào world** cho tới khi tải bản mới |
+| Làm ở phase nào | Phase 10 | Schema + bảng item: Phase 11 · đường phân phối + version check: Phase 16 |
 
 ---
 
@@ -116,7 +147,8 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 2. Bạn tự code theo doc. Gặp `✅ CHECKPOINT` thì phải chạy được mới đi tiếp.
 3. Kẹt ở đâu → hỏi Claude bằng **triệu chứng cụ thể** ("gửi được nhưng server không nhận", kèm log),
    đừng hỏi "sửa hộ".
-4. Làm xong phase → báo Claude để: (a) review chỗ lệch so với doc, (b) viết chi tiết phase kế tiếp.
+4. Làm xong phase → báo Claude để: (a) review chỗ lệch so với doc, (b) viết chi tiết phase kế tiếp,
+   (c) **cập nhật `README.md` gốc** — mục tính năng đã làm + tech stack nếu có công nghệ mới.
 5. Khi phát hiện code có tính hạ tầng, tái dùng cao → ghi vào `CANDIDATE-PACKAGES.md` để cân nhắc tách package.
 
 **Nguyên tắc:** doc mô tả *cái gì* và *vì sao*, kèm code đủ để chép khi bí. Nhưng gõ lại tay vẫn học được nhiều hơn chép.
@@ -138,17 +170,20 @@ mở lời giải/đáp án sau để đối chiếu.
 | 3 — DBServer & DAL | ✅ xong | [`guides/PHASE-3.md`](guides/PHASE-3.md) ✅ |
 | 4 — Auth | ✅ xong | [`guides/PHASE-4.md`](guides/PHASE-4.md) ✅ |
 | 5 — Vào thế giới | ✅ xong | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ |
-| 6 — Game loop & movement | ⏳ đang làm | [`guides/PHASE-6.md`](guides/PHASE-6.md) ✅ |
-| 7 — Multi-player sync | ⬜ chưa | [`guides/PHASE-7.md`](guides/PHASE-7.md) ✅ |
-| 8 — Map & AOI | ⬜ chưa | [`guides/PHASE-8.md`](guides/PHASE-8.md) ✅ |
-| 9 — Data & Config | ⬜ chưa | [`guides/PHASE-9.md`](guides/PHASE-9.md) ✅ |
-| 10 — Inventory | ⬜ chưa | ⬜ chưa viết |
-| 11 — Monster & Combat | ⬜ chưa | ⬜ chưa viết |
-| 12 — Chat | ⬜ chưa | ⬜ chưa viết |
-| 13 — Package network | ⬜ chưa | ⬜ chưa viết |
-| 14 — AssetBundle & CDN | ⬜ chưa | ⬜ chưa viết |
-| 15 — MySQL | ⬜ chưa | ⬜ chưa viết |
-| 16 — Vận hành | ⬜ chưa | ⬜ chưa viết |
+| 6 — Game loop & movement | ✅ xong | [`guides/PHASE-6.md`](guides/PHASE-6.md) ✅ |
+| 7 — Multi-player sync | ⏳ đang làm — server xong (Bước 1–2), client chưa làm (Bước 3–4) | [`guides/PHASE-7.md`](guides/PHASE-7.md) ✅ |
+| 8 — Motor platformer 🆕 | ⬜ chưa | ⬜ chưa viết |
+| 9 — Map & AOI | ⬜ chưa | [`guides/PHASE-9.md`](guides/PHASE-9.md) ⚠️ *doc đang mang số cũ (PHASE-8.md), cần đổi tên + sửa phần va chạm cho platformer* |
+| 10 — Data & Config | ⬜ chưa | [`guides/PHASE-10.md`](guides/PHASE-10.md) ⚠️ *doc đang mang số cũ (PHASE-9.md), cần thêm mục config loại B* |
+| 11 — Túi đồ & item | ⬜ chưa | ⬜ chưa viết |
+| 12 — Chỉ số nhân vật 🆕 | ⬜ chưa | ⬜ chưa viết |
+| 13 — Quái, chiến đấu & EXP | ⬜ chưa | ⬜ chưa viết |
+| 14 — Chat | ⬜ chưa | ⬜ chưa viết |
+| 15 — Package network | ⬜ chưa | ⬜ chưa viết |
+| 16 — Addressables & CDN | ⬜ chưa | ⬜ chưa viết |
+| 17 — Lua & hot update logic 🆕 | ⬜ chưa | ⬜ chưa viết |
+| 18 — MySQL | ⬜ chưa | ⬜ chưa viết |
+| 19 — Vận hành | ⬜ chưa | ⬜ chưa viết |
 
 ---
 
@@ -160,8 +195,10 @@ Ghi lại để sau này không tự hỏi "sao mình không làm cái này":
 |--------|--------|-------------|
 | Mã hoá / xáo byte gói tin | Che giấu không phải bảo mật; ưu tiên hiểu framing sạch trước | Khi có người thật chơi |
 | Cross-server (KuaFu) | vo-lam-genz có, nhưng chỉ có nghĩa khi đã nhiều server | Rất xa |
-| Anti-cheat nâng cao | Đã có nền tảng đúng (server authoritative) là đủ chống 90% | Phase 16+ |
-| gRPC / WebSocket | TCP thuần dạy được nhiều nhất về framing | Có thể thử ở Phase 13 như 1 transport thay thế |
+| Anti-cheat nâng cao | Đã có nền tảng đúng (server authoritative) là đủ chống 90% | Phase 19+ |
+| gRPC / WebSocket | TCP thuần dạy được nhiều nhất về framing | Có thể thử ở Phase 15 như 1 transport thay thế |
 | ECS / DOTS | Thêm 1 tầng khó không liên quan bài học chính | Không |
-| Guild / Quest / Skill tree | Đều là biến thể của Phase 10 (feature dọc) | Tự làm khi đã vững |
+| `Rigidbody2D` cho nhân vật | Physics Unity không chạy được trên server .NET → 2 bên tính khác nhau → rubber-band. Vẫn dùng `Rigidbody2D`/`Collider2D` cho thứ **không cần đồng bộ** (hiệu ứng, vật trang trí) | Không bao giờ, cho entity có server authority |
+| Guild / Quest / Skill tree | Đều là biến thể của Phase 11 (feature dọc) + Phase 12 (nguồn chỉ số) | Tự làm khi đã vững |
 | Nhiều nhân vật / màn hình chọn nhân vật | 1 tài khoản = 1 nhân vật (kiểu NRO) đủ cho mọi bài học của dự án; màn hình chọn chỉ thêm UI chứ không thêm kiến thức server | Khi muốn làm chuẩn thể loại — bỏ `UNIQUE(account_id)`, thêm CharacterList/Create/Delete; bản thiết kế 3-slot cũ còn trong git history của `PHASE-5.md` |
+| Hot update logic phía client (xLua / HybridCLR) | Nặng và chỉ có nghĩa sau khi đã có CDN + app build thật. Phase 17 (Lua server) dạy đủ khái niệm để tự đánh giá | Sau Phase 19 — xem bảng "Để dành" ở §1 |

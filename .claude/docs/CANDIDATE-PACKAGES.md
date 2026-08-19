@@ -17,10 +17,12 @@
 
 | Ứng viên | Xuất hiện ở | Tiêu chí đạt | Ghi chú |
 |----------|-------------|--------------|---------|
-| **`com.hungnt.network`** — `ITransport`, `TcpTransport`, `NetDispatcher`, `NetHandlerAttribute` | Phase 1–2 | 1 ✅ · 2 ⬜ (đang dính `NetCmd` của `MMORPG.Shared`) · 3 ⬜ · 4 ⬜ | Ứng viên mạnh nhất. Để tách được phải làm dispatcher generic theo kiểu enum, hoặc dùng `int` ở tầng package. **Kế hoạch: Phase 13.** |
+| **`com.hungnt.network`** — `ITransport`, `TcpTransport`, `NetDispatcher`, `NetHandlerAttribute` | Phase 1–2 | 1 ✅ · 2 ⬜ (đang dính `NetCmd` của `MMORPG.Shared`) · 3 ⬜ · 4 ⬜ | Ứng viên mạnh nhất. Để tách được phải làm dispatcher generic theo kiểu enum, hoặc dùng `int` ở tầng package. **Kế hoạch: Phase 15.** |
 | **Interpolation buffer** cho vị trí entity | Phase 7 | ⬜ | Nếu viết đủ tổng quát (buffer snapshot theo timestamp + nội suy) thì dùng lại được ở mọi game multiplayer |
-| **Spatial grid / AOI** | Phase 8 | ⬜ | Chia lưới không gian 2D + truy vấn hàng xóm — thuần thuật toán, không dính Unity. Có thể là package chung cho cả client và server (netstandard) |
+| **Spatial grid / AOI** | Phase 9 | ⬜ | Chia không gian 2D thành ô + truy vấn hàng xóm — thuần thuật toán, không dính Unity. Có thể là package chung cho cả client và server (netstandard) |
 | **Fixed tick loop** server | Phase 6 | ⬜ | Nhỏ, có thể chỉ là 1 file — cân nhắc gộp vào `com.hungnt.network` thay vì package riêng |
+| **Motor kinematic 2D** (trọng lực, nhảy, va chạm tile) trong `Shared` | Phase 8 | ⬜ | Thuần toán, netstandard, chạy được cả 2 bên. Nếu viết đủ tổng quát thì là nền cho mọi game platformer có server authoritative |
+| **Stat pipeline** (base + điểm cộng + trang bị + buff → recompute) | Phase 12 | ⬜ | Khuôn mẫu này lặp lại ở mọi game có chỉ số. Tách được nếu không hard-code tên chỉ số |
 
 ---
 

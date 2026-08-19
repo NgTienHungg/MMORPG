@@ -217,7 +217,7 @@ Muốn xem chi tiết: `git submodule foreach --quiet 'echo "== $name"; git stat
 
 | File | Nội dung |
 |------|----------|
-| [`.claude/docs/ROADMAP.md`](.claude/docs/ROADMAP.md) | **Bản đồ toàn dự án** — 17 phase, mục tiêu & thứ tự |
+| [`.claude/docs/ROADMAP.md`](.claude/docs/ROADMAP.md) | **Bản đồ toàn dự án** — 20 phase, mục tiêu & thứ tự |
 | [`.claude/docs/VOLAMGENZ-REFERENCE.md`](.claude/docs/VOLAMGENZ-REFERENCE.md) | Chắt lọc từ vo-lam-genz: bê gì, tránh gì, file nào đọc để hiểu |
 | [`.claude/docs/CONVENTIONS.md`](.claude/docs/CONVENTIONS.md) | Naming, style, quy ước đặt số CMD, layout thư mục |
 | [`.claude/docs/guides/PHASE-N.md`](.claude/docs/guides/) | Hướng dẫn từng bước, có code đầy đủ + CHECKPOINT |

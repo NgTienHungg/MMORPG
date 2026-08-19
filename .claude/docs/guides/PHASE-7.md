@@ -661,5 +661,7 @@ mới yêu cầu — AOI là trường hợp (b), và nó ở ngay phase sau.
 ---
 
 **Xong Phase 7.** Thế giới đã thật sự "multi": nhiều người, một sự thật, mỗi màn hình một góc nhìn trễ
-vài phần trăm giây. [PHASE-8](PHASE-8.md) cho thế giới một **hình dạng**: map có tường thật (server
-kiểm va chạm — hết xuyên tường), và AOI để chỉ những ai gần nhau mới tốn băng thông của nhau.
+vài phần trăm giây. [PHASE-8](PHASE-8.md) đổi **luật di chuyển**: từ hai trục tự do sang trọng lực +
+nhảy + đứng trên sàn — và bài học đắt nhất của nó là vì sao có server authoritative thì không dùng được
+`Rigidbody2D`. Phần nội suy bạn vừa viết ở phase này không phải sửa một dòng nào: nó nội suy *vị trí*,
+không quan tâm vị trí ấy sinh ra từ luật nào.

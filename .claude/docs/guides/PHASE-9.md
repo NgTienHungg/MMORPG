@@ -1,331 +1,494 @@
-# PHASE 9 — Data & Config: số ra khỏi code
+# PHASE 9 — Map & AOI: thế giới có hình dạng và tầm nhìn
 
-> **Kết quả cuối Phase 9:** tốc độ chạy, điểm spawn, danh sách nghề... nằm trong file `game.json` —
-> sửa file, restart server (không build lại gì), giá trị mới có hiệu lực **ở cả server lẫn client**.
-> Thêm hot reload: gõ `R` trong console server là nạp lại config không cần restart.
+> **Kết quả cuối Phase 9:** map có tường thật — client sửa kiểu gì cũng không xuyên được, đi sát tường
+> thì **trượt** dọc theo nó chứ không dính cứng. Và AOI (Area of Interest): chỉ nhận gói tin của những
+> người ở gần; hai người đi xa nhau thì biến mất khỏi màn hình của nhau, lại gần thì hiện ra.
 >
 > **Điều kiện:** xong [`PHASE-8.md`](PHASE-8.md) tới CHECKPOINT B và cả 3 thử nghiệm.
 >
-> **Bài học chính:** config cũng phải có **đúng một nguồn** — và nguồn đó là *server*. Client không đọc
-> file config nào cả: giá trị nó cần được server **gửi xuống lúc vào world**. Đổi số liệu game là việc
-> của server; client chỉ là màn hình.
+> **Bài học chính:** (1) va chạm là **luật chơi** nên phải nằm ở server — và vì client cũng dự đoán,
+> dữ liệu map phải là contract 1 nguồn y như `NetCmd`; (2) MMO không broadcast toàn map — spatial grid
+> + so-sánh-tầm-nhìn-mỗi-tick biến `EntitySpawn`/`EntityDespawn` từ "sự kiện" thành "hệ quả của tầm nhìn".
+>
+> ⚠️ **Doc này viết khi dự án còn là top-down (lúc đó là Phase 8).** Sau khi chốt thể loại platformer
+> ngang, hai chỗ cần viết lại trước khi làm: (1) phần va chạm — thêm **sàn xuyên-một-chiều** và bỏ
+> nhánh trượt dọc tường theo trục Y; (2) phần AOI — tầm nhìn tính theo **zone + khoảng cách trục X**
+> thay vì ô lưới 2D. Phần diff-tầm-nhìn-mỗi-tick và toàn bộ lập luận thì giữ nguyên giá trị.
+
 
 Format như trước: **hướng làm** hiện sẵn, **📖 Lời giải** trong foldout.
 
 ---
 
-## Vì sao client không được đọc file config
+## Hai việc, một nguyên tắc
 
-Trực giác đầu tiên của mọi người: "để hai bên cùng đọc `game.json` cho đồng bộ". Nghe giống contract
-1 nguồn — nhưng là bẫy, vì **file giống nhau không có nghĩa là giá trị đang chạy giống nhau**:
+Phase này làm hai việc nhìn ngoài chẳng liên quan — tường và tầm nhìn — nhưng chung một nguyên tắc:
+**thế giới được chia thành lưới ô, và mọi câu hỏi không gian trả lời bằng toạ độ ô.**
 
-- Client build ra mang bản copy của file tại thời điểm build. Server sửa config → mọi client ngoài kia
-  đang chạy số cũ. Đây chính xác là bug "chép tay NetCmd" ở dạng dữ liệu.
-- Người chơi sửa được file trong máy họ. Với giá trị chỉ-hiển-thị thì vô hại; với `moveSpeed` mà client
-  dùng để dự đoán thì là mời họ tự chỉnh — server vẫn thắng (Phase 6), nhưng họ tự gây rubber-band và
-  đi report "game lag".
+- **Va chạm**: "ô này đứng được không?" — lưới ô 1×1 unit, mỗi ô là sàn hoặc tường.
+- **AOI**: "ai đứng gần ai?" — lưới ô to hơn (8×8 unit), mỗi entity thuộc một ô; "gần" nghĩa là trong
+  9 ô quanh mình. Không bao giờ phải tính khoảng cách từng cặp người chơi (O(n²)) — chỉ tra ô.
 
-Cách đúng rẻ hơn nhiều: **chỉ server đọc file**; giá trị nào client cần cho dự đoán/hiển thị thì đi
-trong `EnterWorldResponse`. Client luôn chạy đúng số của server nó đang nối vào — kể cả khi hai server
-khác nhau cấu hình khác nhau. Hằng số `MOVE_SPEED` trong `MovementRules` vì thế phải "giáng cấp" từ
-hằng số thành **tham số**.
+Map ở phase này định nghĩa **bằng code trong `Shared`** — một mảng chuỗi, `#` là tường, `.` là sàn.
+Nghe thô, nhưng nó cho đúng thứ cần nhất: server (va chạm thật), client (va chạm dự đoán) và client
+(vẽ hình) cùng đọc **một** định nghĩa — không tồn tại khả năng map hai bên lệch nhau. Phase 10 sẽ đưa
+map ra file; hôm nay học cơ chế trước, học đường ống dữ liệu sau.
 
 ```
-Config/game.json ──► GameServer đọc lúc boot (hot reload: phím R)
-                          │
-                          ├─► WorldService / CharacterService dùng trực tiếp
-                          └─► EnterWorldResponse { MoveSpeed, ... } ──► client dùng cho dự đoán
+Shared: MapGrid ("#..#...")  ──┬──► GameServer: Step() né tường (sự thật)
+                               ├──► Client: Step() né tường (dự đoán — CÙNG hàm, không rubber-band)
+                               └──► Client: MapRenderer vẽ tilemap từ đúng lưới đó
 ```
-
-Cái gì **không** vào config phase này: `TICK_RATE` (đổi nó là đổi nhịp của mọi phép tính prediction —
-để yên), dữ liệu map (`Maps.Map1` giữ trong code — đưa map ra file + gửi qua mạng là bài riêng, phần
-"Để dành" cuối doc), và các giá trị thuần client (màu sắc, âm lượng — đó là đất của `com.hungnt.datasave`
-/ ScriptableObject, không liên quan server).
 
 ---
 
-## Bước 1 — Shared: schema + `Step` nhận speed từ ngoài
+## Bước 1 — Shared: MapGrid + va chạm trong `Step`
 
 ### Hướng làm
 
-**File mới `Server/Shared/World/GameConfig.cs`** — POCO thuần mô tả *hình dạng* config (schema nằm trong
-Shared để sau này ai cần cũng nói cùng một ngôn ngữ; còn việc *đọc file* là của riêng server):
+**File mới `Server/Shared/World/MapGrid.cs`**:
 
-```csharp
-public sealed class GameConfig
-{
-    public float MoveSpeed { get; set; } = 5f;
-    public int SpawnMapId { get; set; } = 1;
-    public float SpawnX { get; set; }
-    public float SpawnY { get; set; }
-    public int DefaultClassId { get; set; } = 1;
-}
+- `MapGrid.Parse(string[] rows)` → đối tượng giữ `bool[,]` walkable. Hàng **đầu tiên** của mảng chuỗi là
+  mép **trên** của map (cho dễ "vẽ" trong code), nên khi parse phải lật trục Y — quyết định rồi ghi
+  comment, không thì ba tháng sau chính bạn vẽ map mới sẽ ngửa mặt hỏi vì sao map lộn ngược.
+- Map đặt **giữa** gốc toạ độ (spawn `(0,0)` của Phase 5 nằm giữa map): ô `(cx, cy)` chiếm vùng world
+  `[cx*CELL - W/2, ...]`. Viết `IsWalkableWorld(float x, float y)`: đổi toạ độ world → ô, **ngoài rìa
+  map = không đi được** (tường bao ngầm định — không cần WORLD_HALF_EXTENT nữa).
+- **File mới `Server/Shared/World/Maps.cs`**: `public static readonly MapGrid Map1 = MapGrid.Parse(...)`
+  — map ~40×16 ô, viền `#` kín, thêm vài cụm tường bên trong để có gì mà né. Map phải **to hơn tầm nhìn
+  AOI** (Bước 3 dùng 3×3 ô × 8 unit = 24×24) thì mới thấy được cảnh người biến mất khi đi xa.
+
+**Sửa `MovementRules.Step`** — nhận thêm `MapGrid map`, thay `Math.Clamp` bằng va chạm **tách trục**:
+
+```
+thử đi cả (nx, ny)      → được thì đi
+thử đi ngang (nx, y)    → được thì trượt ngang
+thử đi dọc  (x, ny)     → được thì trượt dọc
+                        → không thì đứng yên
 ```
 
-Mỗi property có **giá trị mặc định hợp lệ** — file thiếu trường nào thì trường đó về mặc định thay vì
-nổ. Đó là chính sách "config hỏng một phần, game vẫn đứng dậy được".
+Tách trục chính là thứ tạo cảm giác "trượt dọc tường" khi đi chéo vào tường — chuẩn hành vi 2D top-down.
+Nhân vật coi như **một điểm** (chưa có bán kính thân) — chấp nhận ở bản học, ghi chú lại.
 
-**Sửa `MovementRules`**: xoá `const MOVE_SPEED`, `Step` nhận thêm `float speed`. Compile sẽ đỏ ở mọi
-chỗ gọi — tốt, trình biên dịch đang lập danh sách việc hộ bạn: server truyền từ config, client truyền
-từ giá trị server gửi xuống (Bước 3).
-
-**Sửa `EnterWorldResponse`**: thêm `float MoveSpeed` — giá trị server đang dùng, cấp cho client ngay
-lúc vào world.
+Hai chỗ gọi `Step` (server `Integrate`, client `PlayerMotor`) truyền thêm `Maps.Map1`. `WorldService`
+kiểm spawn point: ô spawn phải walkable — `assert` lúc khởi động còn hơn nhân vật chôn trong tường.
 
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
 
-**`Server/Shared/World/GameConfig.cs`**:
+**`Server/Shared/World/MapGrid.cs`**:
+
+```csharp
+using System;
+
+namespace MMORPG.Shared.World
+{
+    /// <summary>
+    /// Bản đồ dạng lưới ô vuông 1×1: mỗi ô là sàn hoặc tường. Là nguồn DUY NHẤT về hình dạng map —
+    /// server va chạm thật, client va chạm dự đoán và vẽ hình đều đọc từ đây.
+    /// </summary>
+    public sealed class MapGrid
+    {
+        public const float CELL_SIZE = 1f;
+
+        public int Width { get; }
+        public int Height { get; }
+
+        private readonly bool[,] _walkable;
+
+        private MapGrid(bool[,] walkable, int width, int height)
+        {
+            _walkable = walkable;
+            Width = width;
+            Height = height;
+        }
+
+        /// <summary>
+        /// Dựng từ mảng chuỗi: '#' tường, mọi ký tự khác là sàn. Hàng ĐẦU của mảng là mép TRÊN map
+        /// (để code đọc như bản vẽ) — nên trục Y phải lật khi nạp vào lưới: hàng cuối là cy = 0.
+        /// </summary>
+        public static MapGrid Parse(string[] rows)
+        {
+            int height = rows.Length;
+            int width = rows[0].Length;
+
+            var walkable = new bool[width, height];
+
+            for (int rowIndex = 0; rowIndex < height; rowIndex++)
+            {
+                if (rows[rowIndex].Length != width)
+                    throw new ArgumentException($"Hàng {rowIndex} dài {rows[rowIndex].Length}, các hàng phải cùng {width} ký tự.");
+
+                for (int cx = 0; cx < width; cx++)
+                {
+                    int cy = height - 1 - rowIndex; // lật trục Y
+                    walkable[cx, cy] = rows[rowIndex][cx] != '#';
+                }
+            }
+
+            return new MapGrid(walkable, width, height);
+        }
+
+        public bool IsWalkable(int cx, int cy)
+        {
+            // Ngoài rìa map là tường ngầm định — không cần viền clamp riêng nữa.
+            if (cx < 0 || cx >= Width || cy < 0 || cy >= Height)
+                return false;
+
+            return _walkable[cx, cy];
+        }
+
+        /// <summary>Map đặt GIỮA gốc toạ độ: world (0,0) là tâm map — khớp spawn point mặc định.</summary>
+        public bool IsWalkableWorld(float x, float y)
+        {
+            // Floor chứ không phải cast (int): cast cắt về 0 nên -0.5 thành 0 — âm dương
+            // hai bên gốc toạ độ sẽ rơi vào cùng một ô và va chạm lệch nửa ô ở phần map bên trái.
+            int cx = (int)MathF.Floor(x / CELL_SIZE + Width / 2f);
+            int cy = (int)MathF.Floor(y / CELL_SIZE + Height / 2f);
+
+            return IsWalkable(cx, cy);
+        }
+    }
+}
+```
+
+**`Server/Shared/World/Maps.cs`**:
 
 ```csharp
 namespace MMORPG.Shared.World
 {
     /// <summary>
-    /// Hình dạng của config game. Chỉ server đọc file; client nhận giá trị nó cần qua mạng
-    /// (EnterWorldResponse) — nhờ vậy client luôn chạy đúng số của server đang nối vào.
-    /// Mọi trường đều có mặc định hợp lệ: file thiếu trường nào thì trường đó về mặc định.
+    /// Các map của game, định nghĩa bằng chữ: '#' tường, '.' sàn.
+    /// Đọc như bản vẽ — hàng đầu là mép trên map.
     /// </summary>
-    public sealed class GameConfig
+    public static class Maps
     {
-        /// <summary>Tốc độ chạy, đơn vị world/giây.</summary>
-        public float MoveSpeed { get; set; } = 5f;
-
-        public int SpawnMapId { get; set; } = 1;
-        public float SpawnX { get; set; }
-        public float SpawnY { get; set; }
-
-        /// <summary>Nghề gán cho nhân vật tạo lần đầu.</summary>
-        public int DefaultClassId { get; set; } = 1;
+        public static readonly MapGrid Map1 = MapGrid.Parse(new[]
+        {
+            "########################################",
+            "#......................................#",
+            "#......####............####............#",
+            "#......#..................#............#",
+            "#......#..................#............#",
+            "#......................................#",
+            "#..........#####.......................#",
+            "#..............#.......................#",
+            "#..............#..........####.........#",
+            "#..............#..........#............#",
+            "#..........................#...........#",
+            "#......................................#",
+            "#......####............................#",
+            "#......................................#",
+            "#......................................#",
+            "########################################",
+        });
     }
 }
 ```
 
-**`MovementRules.cs`** — bỏ `MOVE_SPEED`, `Step` thành:
+> Map của bạn cứ tự vẽ theo ý — chỉ cần: viền `#` kín, mọi hàng cùng độ dài, **hai cạnh là số chẵn**
+> (map trên là 16×40 — xem ghi chú phép chia ở `MapRenderer`),
+> vùng quanh tâm map (spawn) là sàn, và có vài cụm tường bên trong để có gì mà né.
+> `Parse` ném lỗi ngay lúc khởi động nếu các hàng lệch độ dài — đó là hàng rào của bạn.
+
+**`MovementRules.Step`** — bản mới (thay hẳn bản clamp, xoá `WORLD_HALF_EXTENT`):
 
 ```csharp
-        public static (float X, float Y) Step(float x, float y, float dirX, float dirY,
-                                              float speed, float dt, MapGrid map)
+        /// <summary>
+        /// Một bước mô phỏng có va chạm. Tách trục để trượt dọc tường: đi chéo vào tường thì
+        /// thành phần song song với tường vẫn đi tiếp, chỉ thành phần đâm vào tường bị chặn.
+        /// Nhân vật coi như một điểm, chưa có bán kính thân.
+        /// </summary>
+        public static (float X, float Y) Step(float x, float y, float dirX, float dirY, float dt, MapGrid map)
         {
-            float nx = x + dirX * speed * dt;
-            float ny = y + dirY * speed * dt;
-            // ... phần va chạm tách trục giữ nguyên ...
+            float nx = x + dirX * MOVE_SPEED * dt;
+            float ny = y + dirY * MOVE_SPEED * dt;
+
+            if (map.IsWalkableWorld(nx, ny))
+                return (nx, ny);
+
+            if (map.IsWalkableWorld(nx, y))
+                return (nx, y);
+
+            if (map.IsWalkableWorld(x, ny))
+                return (x, ny);
+
+            return (x, y);
         }
 ```
 
-**`EnterWorldResponse`** — thêm:
-
-```csharp
-        /// <summary>Tốc độ chạy server đang áp dụng. Client dùng đúng số này để dự đoán.</summary>
-        public float MoveSpeed { get; set; }
-```
+Hai chỗ gọi sửa thành `MovementRules.Step(..., Maps.Map1)`:
+- `PlayerEntity.Integrate` (server)
+- `PlayerMotor.Step` và vòng replay trong `OnMoveState` (client)
 
 </details>
 
 ---
 
-## Bước 2 — Server: đọc file, phát giá trị, hot reload
+## Bước 2 — Client: vẽ map từ chính MapGrid
 
 ### Hướng làm
 
-**File config `Config/game.json`** đặt ở **gốc repo** (cạnh `Server/`, `Assets/` — nó là dữ liệu vận
-hành, không phải source của riêng process nào):
+**File mới `Assets/Game/Scripts/World/MapRenderer.cs`** — MonoBehaviour cầm một `Tilemap` (URP 2D:
+GameObject → 2D Object → Tilemap → Rectangular) và hai `TileBase` (sàn / tường — hai sprite vuông trơn
+khác màu là đủ; tạo Tile asset từ sprite bằng Create → 2D → Tiles → Rule/hoặc Tile thường).
 
-```json
-{
-  "MoveSpeed": 5.0,
-  "SpawnMapId": 1,
-  "SpawnX": 0,
-  "SpawnY": 0,
-  "DefaultClassId": 1
-}
-```
+`Start()`: duyệt toàn bộ ô của `Maps.Map1`, `SetTile` sàn hoặc tường. Điểm sống còn: phép đổi
+**ô → world** của renderer phải trùng khớp `IsWalkableWorld` (map đặt giữa gốc toạ độ) — lệch nửa ô là
+nhân vật "đụng tường vô hình" cạnh tường thấy được. Cách chắc ăn: đặt `Tilemap` tại gốc, `SetTile` theo
+`cx - Width/2, cy - Height/2` với anchor mặc định của Grid (cell size 1).
 
-Cho GameServer thấy file: trong `GameServer.csproj` thêm `ItemGroup` copy `..\..\Config\game.json`
-vào output (`CopyToOutputDirectory=PreserveNewest`, `Link=Config\game.json`) — chạy từ Rider hay
-`dotnet run` đều tìm thấy ở `Config/game.json` cạnh exe.
+Vẽ map bằng code từ MapGrid thay vì tự paint tilemap bằng tay — vì paint tay là **chép tay contract**:
+đúng loại anti-pattern số 1 của repo, chỉ khác chỗ nạn nhân là map thay vì enum.
 
-**File mới `Server/GameServer/ConfigService.cs`**:
+### ✅ CHECKPOINT A — tường là thật
 
-- `Load()`: đọc + parse JSON (`System.Text.Json`), lỗi gì (file thiếu, JSON hỏng) → log Warn và dùng
-  `new GameConfig()` mặc định — **config hỏng không được giết server**, nhưng phải la lớn trong log.
-- `Current` — property trả `GameConfig` hiện hành. Hot reload là **thay nguyên object**
-  (`_current = mới`), không sửa từng field trên object cũ: ai đã cầm reference cũ vẫn thấy một bộ giá
-  trị nhất quán; gán reference là nguyên tử nên không cần lock. Đây là bài "immutable swap" — cùng họ
-  với cách xử input đa luồng ở Phase 6.
-- Vòng đọc phím trong `Program.cs`: `R` → `Load()` lại + log giá trị mới.
+1. Vào world: thấy map có sàn/tường, spawn giữa map.
+2. Đi thẳng vào tường: dừng **sát mép ô tường**, không rung, không rubber-band (client và server cùng
+   một `Step` — dự đoán trùng sự thật tuyệt đối).
+3. Đi **chéo** vào tường: trượt mượt dọc theo tường.
+4. Thử hack xuyên tường: sửa tạm client bỏ qua va chạm trong dự đoán (truyền map "trống" vào `Step`
+   phía client) → nhân vật lao vào tường trên máy mình rồi bị **kéo giật lại** liên tục — server không
+   cho qua. Trả code về như cũ. Đây là "thử nghiệm 1 Phase 6" phiên bản có tường.
 
-**Ai dùng config ở đâu:**
+---
 
-- `CharacterService.EnterWorldAsync`: defaults khi tạo nhân vật (`DefaultClassId`, `SpawnMapId/X/Y` —
-  thay các `const` của `WorldService`, xoá chúng đi) và gắn `MoveSpeed` vào response.
-- **Chốt speed vào entity lúc spawn**: `PlayerEntity.MoveSpeed` gán một lần từ config — `Integrate`
-  dùng nó, KHÔNG đọc `Current` mỗi tick. Vì client dự đoán bằng số nhận lúc vào world; nếu server đổi
-  số giữa chừng qua hot reload thì người đang online sẽ lệch dự đoán → rubber-band oan. Luật: **hot
-  reload áp dụng cho người vào sau**; người đang online giữ số cũ tới lần vào world sau. (Muốn đổi
-  nóng cho người đang chơi thì phải đẩy gói báo số mới — ghi vào "Để dành".)
+## Bước 3 — Server: AOI — tầm nhìn quyết định mọi thứ
 
-### ✅ CHECKPOINT A
+### Hướng làm
 
-1. Server boot log: `Config: MoveSpeed=5 Spawn=(0,0)@map1 ...`.
-2. Sửa `MoveSpeed` thành `8` trong file → **không** build lại, restart server → log số mới → vào game
-   chạy nhanh hơn rõ rệt, **không rubber-band** (client nhận 8 qua EnterWorld).
-3. Xoá tạm file `game.json` khỏi output → server vẫn boot, log Warn + dùng mặc định.
-4. Đang chạy: sửa file thành `6`, gõ `R` trong console server → log reload. Người đang online **vẫn
-   chạy 8** (đúng thiết kế); relog → chạy 6.
+Tư tưởng quan trọng nhất phase: **`EntitySpawn`/`EntityDespawn` không còn là "sự kiện vào/ra world"
+nữa — chúng là hệ quả của việc ai đó VÀO/RA TẦM NHÌN của bạn.** Người mới vào world chỉ là một cách để
+lọt vào tầm nhìn; đi bộ lại gần là cách khác — một cơ chế phục vụ cả hai, và **client không phải sửa
+một dòng nào** (phần thưởng của thiết kế message-driven Phase 7).
+
+Sửa `WorldService`:
+
+**1. Xoá broadcast trong `Spawn`/`Despawn`** (phần thêm ở Phase 7 Bước 2 — bỏ cả vòng "gửi danh sách
+người có mặt cho người mới"). Từ giờ mọi thông báo xuất hiện/biến mất đều do vòng tick phát ra.
+
+**2. `PlayerEntity` thêm `HashSet<int> Visible`** — tập entityId đang nằm trong tầm nhìn của người này.
+Chỉ luồng tick đọc/ghi → không cần lock (ghi comment ranh giới luồng như đã làm với input).
+
+**3. `Tick` thêm pha tầm nhìn**, sau pha tích phân, trước pha gửi:
+
+- Dựng chỉ mục ô: `Dictionary<(int, int), List<PlayerEntity>>` — ô AOI của entity =
+  `(Floor(X / AOI_CELL), Floor(Y / AOI_CELL))` với `AOI_CELL = 8f`. **Dựng lại từ đầu mỗi tick** —
+  O(n), đơn giản tuyệt đối, không có trạng thái để sai.
+- Với từng entity: gom mọi entity trong **9 ô** quanh ô của mình (trừ chính mình) → `visibleNow`.
+- So với `entity.Visible`:
+  - có trong `visibleNow` mà chưa có trong `Visible` → gửi chủ nhân `EntitySpawn` của người đó;
+  - có trong `Visible` mà biến mất khỏi `visibleNow` → gửi `EntityDespawn`.
+- Thay `Visible` bằng `visibleNow`; snapshot bây giờ chỉ chứa `visibleNow` (hết O(n²) toàn server).
+
+**Câu hỏi phải tự trả lời trước khi code:** người chơi ở góc dưới-trái ô AOI thì tầm nhìn thực về phía
+dưới-trái chỉ còn 8 unit, về phía trên-phải tới 16 unit — tầm nhìn "vuông và lệch". Có sao không? —
+Không, miễn là **bán kính bảo đảm** (8 unit ở trường hợp xấu nhất) lớn hơn màn hình nhìn thấy. Đổi lấy
+điều đó: tra 9 ô thay vì tính n² khoảng cách. Đây là đánh đổi kinh điển của spatial grid.
+
+### ✅ CHECKPOINT B — mục tiêu cuối Phase 9
+
+1. Hai client vào world cạnh nhau → thấy nhau (như Phase 7, giờ qua đường tầm nhìn).
+2. Một người chạy xa (map 40 ô ngang đủ chỗ) → tới ranh giới ~16–24 unit, người kia **biến mất** khỏi
+   màn hình; console hiện `EntityDespawn`.
+3. Chạy ngược lại → hiện ra lại đúng vị trí, đi tiếp mượt (buffer nội suy mồi lại từ `EntitySpawn`).
+4. Đứng gần nhau, một người thoát hẳn → người kia vẫn thấy despawn (đường cũ nay do diff đảm nhiệm:
+   entity rời sổ → rời `visibleNow` → despawn).
+5. Log tạm kích thước snapshot: đứng cạnh nhau = 1 state, đi xa = 0 state — băng thông tỉ lệ với
+   **mật độ quanh mình**, không phải tổng người online. Đó là câu trả lời cho "vì sao MMO gánh được
+   nghìn người".
 
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
 
-**`Server/GameServer/GameServer.csproj`** — thêm:
-
-```xml
-  <ItemGroup>
-    <None Include="..\..\Config\game.json" Link="Config\game.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-```
-
-**`Server/GameServer/ConfigService.cs`**:
+**`PlayerEntity.cs`** — thêm:
 
 ```csharp
-using System.Text.Json;
-using MMORPG.ServerCore;
-using MMORPG.Shared.World;
+        /// <summary>
+        /// Tập entityId đang trong tầm nhìn của người này — bộ nhớ để tick sau so ra ai vừa
+        /// xuất hiện / vừa rời đi. Chỉ luồng tick đọc/ghi, vì vậy không cần lock.
+        /// </summary>
+        public HashSet<int> Visible { get; } = new();
+```
 
-namespace MMORPG.GameServer
+**`WorldService.cs`** — xoá hai đoạn broadcast thêm ở Phase 7 trong `Spawn`/`Despawn` (giữ nguyên phần
+ghi sổ + log), rồi thay `Tick`:
+
+```csharp
+        /// <summary>Cạnh ô lưới AOI. Tầm nhìn = 9 ô quanh mình → bán kính bảo đảm tối thiểu 1 ô.</summary>
+        private const float AOI_CELL = 8f;
+
+        public void Tick(float dt)
+        {
+            // Pha 1: tích phân tất cả.
+            foreach (PlayerEntity entity in _entities.Values)
+                entity.Integrate(dt);
+
+            // Pha 2: dựng chỉ mục ô AOI — làm lại từ đầu mỗi tick. O(n) và không có trạng thái
+            // để sai; bản cập-nhật-tại-chỗ nhanh hơn nhưng phải đúng ở mọi đường vào/ra — chưa đáng.
+            var byCell = new Dictionary<(int, int), List<PlayerEntity>>();
+
+            foreach (PlayerEntity entity in _entities.Values)
+            {
+                (int, int) cell = CellOf(entity);
+
+                if (!byCell.TryGetValue(cell, out List<PlayerEntity> list))
+                {
+                    list = new List<PlayerEntity>();
+                    byCell[cell] = list;
+                }
+
+                list.Add(entity);
+            }
+
+            // Pha 3: với từng người — tầm nhìn mới, so với tầm nhìn cũ, phát spawn/despawn, gửi snapshot.
+            foreach (PlayerEntity viewer in _entities.Values)
+            {
+                if (viewer.Owner == null)
+                    continue;
+
+                List<PlayerEntity> visibleNow = CollectVisible(viewer, byCell);
+
+                // Ai mới lọt vào tầm nhìn → giới thiệu họ với viewer.
+                foreach (PlayerEntity seen in visibleNow)
+                {
+                    if (!viewer.Visible.Contains(seen.EntityId))
+                        viewer.Owner.SendData(NetCmd.EntitySpawn, ToSpawnNotice(seen));
+                }
+
+                // Ai vừa rời tầm nhìn → báo biến mất. Duyệt bản sao vì sắp sửa chính Visible.
+                viewer.Visible.RemoveWhere(id =>
+                {
+                    bool stillVisible = visibleNow.Exists(e => e.EntityId == id);
+
+                    if (!stillVisible)
+                        viewer.Owner.SendData(NetCmd.EntityDespawn, new EntityDespawnNotice { EntityId = id });
+
+                    return !stillVisible;
+                });
+
+                foreach (PlayerEntity seen in visibleNow)
+                    viewer.Visible.Add(seen.EntityId);
+
+                // Pha 4: gửi trạng thái — MoveState cho chính mình, snapshot CHỈ những ai trong tầm.
+                viewer.Owner.SendData(NetCmd.MoveState, new MoveStateResponse
+                {
+                    LastInputSeq = viewer.LastInputSeq,
+                    X = viewer.X,
+                    Y = viewer.Y,
+                });
+
+                var states = new EntityState[visibleNow.Count];
+                for (int i = 0; i < visibleNow.Count; i++)
+                {
+                    states[i] = new EntityState
+                    {
+                        EntityId = visibleNow[i].EntityId,
+                        X = visibleNow[i].X,
+                        Y = visibleNow[i].Y,
+                    };
+                }
+
+                viewer.Owner.SendData(NetCmd.WorldSnapshot, new WorldSnapshotNotice { States = states });
+            }
+        }
+
+        private static (int, int) CellOf(PlayerEntity entity)
+        {
+            // Floor chứ không phải cast: toạ độ âm phải rơi về ô bên trái, không gom về ô 0.
+            return ((int)MathF.Floor(entity.X / AOI_CELL), (int)MathF.Floor(entity.Y / AOI_CELL));
+        }
+
+        /// <summary>Mọi entity trong 9 ô quanh viewer, trừ chính viewer.</summary>
+        private static List<PlayerEntity> CollectVisible(
+            PlayerEntity viewer, Dictionary<(int, int), List<PlayerEntity>> byCell)
+        {
+            var result = new List<PlayerEntity>();
+            (int cx, int cy) = CellOf(viewer);
+
+            for (int dx = -1; dx <= 1; dx++)
+            {
+                for (int dy = -1; dy <= 1; dy++)
+                {
+                    if (!byCell.TryGetValue((cx + dx, cy + dy), out List<PlayerEntity> cell))
+                        continue;
+
+                    foreach (PlayerEntity entity in cell)
+                    {
+                        if (entity.EntityId != viewer.EntityId)
+                            result.Add(entity);
+                    }
+                }
+            }
+
+            return result;
+        }
+```
+
+(`Broadcast` helper của Phase 7 không còn ai gọi — xoá luôn cho sạch, cần thì git history còn.)
+
+**`Assets/Game/Scripts/World/MapRenderer.cs`**:
+
+```csharp
+using MMORPG.Shared.World;
+using UnityEngine;
+using UnityEngine.Tilemaps;
+
+namespace MMORPG.Client.World
 {
     /// <summary>
-    /// Nạp và giữ config game. Nguồn duy nhất về "giá trị đang chạy" trong toàn server.
+    /// Vẽ tilemap từ MapGrid trong Shared. Vẽ bằng code chứ không paint tay — paint tay là chép tay
+    /// contract, sớm muộn hình một đằng va chạm một nẻo.
     /// </summary>
-    public sealed class ConfigService
+    public sealed class MapRenderer : MonoBehaviour
     {
-        private const string CONFIG_PATH = "Config/game.json";
+        [SerializeField] private Tilemap _tilemap;
+        [SerializeField] private TileBase _floorTile;
+        [SerializeField] private TileBase _wallTile;
 
-        // Hot reload = THAY nguyên object, không sửa field trên object cũ. Gán reference là
-        // nguyên tử: ai đang cầm bản cũ vẫn thấy một bộ giá trị nhất quán, không cần lock.
-        private volatile GameConfig _current = new();
-
-        public GameConfig Current => _current;
-
-        public void Load()
+        private void Start()
         {
-            try
-            {
-                string json = File.ReadAllText(CONFIG_PATH);
-                GameConfig loaded = JsonSerializer.Deserialize<GameConfig>(json);
+            MapGrid map = Maps.Map1;
 
-                // Deserialize trả null khi file chứa đúng chữ "null" — hiếm nhưng rẻ để chặn.
-                _current = loaded ?? new GameConfig();
-            }
-            catch (Exception ex) when (ex is IOException or JsonException)
+            for (int cx = 0; cx < map.Width; cx++)
             {
-                // Config hỏng không được giết server — nhưng phải la lớn, vì chạy bằng số
-                // mặc định trong khi vận hành tưởng là số trong file mới là thảm hoạ âm thầm.
-                Log.Warn($"Không đọc được {CONFIG_PATH} ({ex.GetType().Name}: {ex.Message}) — dùng mặc định.");
-                _current = new GameConfig();
+                for (int cy = 0; cy < map.Height; cy++)
+                {
+                    // Cùng phép dời tâm với IsWalkableWorld: ô (cx,cy) đặt tại world (cx - W/2, cy - H/2).
+                    var cell = new Vector3Int(cx - map.Width / 2, cy - map.Height / 2, 0);
+                    _tilemap.SetTile(cell, map.IsWalkable(cx, cy) ? _floorTile : _wallTile);
+                }
             }
-
-            GameConfig c = _current;
-            Log.Info($"Config: MoveSpeed={c.MoveSpeed.ToString().Green()} " +
-                     $"Spawn=({c.SpawnX},{c.SpawnY})@map{c.SpawnMapId} DefaultClass={c.DefaultClassId}");
         }
     }
 }
 ```
 
-**`Program.cs`** — sau phần tạo services:
+> Lưu ý phép chia: `Width / 2` trong `MapRenderer` là chia **nguyên**, còn `Width / 2f` trong
+> `IsWalkableWorld` là chia **thực** — với map cạnh chẵn hai phép cho cùng kết quả; map cạnh lẻ sẽ lệch
+> nửa ô. Giữ cạnh map là số **chẵn**, hoặc thống nhất cả hai về `/ 2f` + `Mathf.FloorToInt`.
 
-```csharp
-var configService = new ConfigService();
-configService.Load();
-```
-
-truyền `configService` vào `CharacterService` (constructor thêm tham số), và thêm vòng đọc phím
-(trước vòng accept, chạy nền):
-
-```csharp
-// Console điều khiển: R = nạp lại config. Chạy trên thread riêng vì Console.ReadKey chặn.
-_ = Task.Run(() =>
-{
-    while (!cts.IsCancellationRequested)
-    {
-        if (Console.ReadKey(intercept: true).Key == ConsoleKey.R)
-            configService.Load();
-    }
-});
-```
-
-**`PlayerEntity`** — thêm:
-
-```csharp
-        /// <summary>
-        /// Tốc độ chạy, chốt MỘT lần lúc spawn từ config — không đọc config mỗi tick.
-        /// Client dự đoán bằng đúng số nhận lúc vào world; server mà đổi số giữa phiên
-        /// thì dự đoán của họ lệch và rubber-band oan. Hot reload chỉ áp dụng cho người vào sau.
-        /// </summary>
-        public float MoveSpeed { get; }
-```
-
-(gán trong constructor — constructor nhận thêm `float moveSpeed`; `Integrate` truyền `MoveSpeed` vào
-`Step`.)
-
-**`CharacterService`** — nhận `ConfigService` qua constructor; trong `EnterWorldAsync`:
-
-```csharp
-            GameConfig config = _configService.Current;
-```
-
-dùng `config.DefaultClassId / SpawnMapId / SpawnX / SpawnY` cho `CharacterGetOrCreateRequest` (xoá các
-`const` tương ứng trong `WorldService`), truyền `config.MoveSpeed` vào `_worldService.Spawn(...)` →
-constructor entity, và response thêm:
-
-```csharp
-                MoveSpeed = entity.MoveSpeed,
-```
+Trong Editor: tạo Grid + Tilemap (cell size 1, tại gốc toạ độ), hai Tile asset từ hai sprite vuông,
+gắn `MapRenderer`, kéo tham chiếu. Xoá Grid/Tilemap "vẽ vài ô sàn" của Phase 5 nếu còn.
 
 </details>
 
 ---
 
-## Bước 3 — Client: dùng số server đưa
+## Bước 4 — Ba thử nghiệm bắt buộc
 
-### Hướng làm
+**1. Hack xuyên tường "thông minh".** Sửa client gửi thẳng input hướng vào tường liên tục (không cần bỏ
+dự đoán — cứ ép `dir` đâm vào tường). Server trượt/chặn — nhân vật đứng sát tường, không bao giờ lọt qua,
+kể cả khe tường 1 ô. Vì kiểm tra nằm trong `Step` của server, không phải trong thiện chí của client.
 
-Ba chỗ, đều nhỏ:
+**2. Nhảy múa ở ranh giới AOI.** Hai người đứng hai bên ranh giới ô AOI, một người bước qua-lại quanh
+ranh giới → người kia thấy bạn mình **nhấp nháy** hiện/biến. Đây là flicker kinh điển của AOI không có
+hysteresis (vào và ra cùng một ngưỡng). Không sửa ở phase này — nhưng phải **thấy nó bằng mắt** và trả
+lời được câu 7 bên dưới về cách sửa.
 
-- `LocalPlayer`: thêm `MoveSpeed { get; private set; }`, gán trong `Apply` — cache server-confirmed,
-  đúng luật cũ.
-- `WorldSpawner.SpawnLocalPlayer`: truyền speed vào `motor.Init(...)`.
-- `PlayerMotor`: nhận `float moveSpeed` trong `Init`, dùng nó ở **cả ba** chỗ: bước dự đoán, vòng replay
-  trong `OnMoveState`, và tốc độ `MoveTowards` hiển thị. Sót chỗ nào là rubber-band ở đúng chỗ đó —
-  compile lỗi (vì `Step` đổi chữ ký) sẽ chỉ tận nơi.
-
-Client **không đọc file nào**, không copy `game.json` vào build — đó là toàn bộ ý của phase.
-
-### ✅ CHECKPOINT B — mục tiêu cuối Phase 9
-
-1. `MoveSpeed = 8` trong json, restart server, client **không build lại** → chạy nhanh hơn, mượt,
-   không rubber-band.
-2. Hai client cùng online, server hot reload sang `6` → cả hai vẫn chạy 8 (số chốt theo phiên);
-   một người relog → người đó chạy 6, người kia vẫn 8 — hai người khác tốc độ nhưng **không ai
-   rubber-band**, vì ai cũng dự đoán bằng đúng số server dùng cho mình.
-3. Đổi `SpawnX/SpawnY` trong json → tài khoản **mới** spawn ở chỗ mới (tài khoản cũ vào lại vẫn ở vị trí
-   đã lưu của họ — hiểu vì sao: spawn config chỉ dùng lúc *tạo* nhân vật).
-
----
-
-## Ba thử nghiệm bắt buộc
-
-**1. Config rác.** Ghi `"MoveSpeed": "nhanh lắm"` vào json → restart: server sống, log Warn, dùng mặc
-định. Ghi JSON hỏng hẳn (thiếu dấu `}`): như trên. Server không bao giờ được chết vì file người vận hành
-gõ tay.
-
-**2. Client cứng đầu.** Sửa tạm client bỏ qua `response.MoveSpeed`, dự đoán bằng số tự chọn (10) →
-rubber-band liên tục, server thắng — kết luận của Phase 6 vẫn nguyên giá trị khi số thành dữ liệu.
-Trả lại code.
-
-**3. Giá trị vô lý.** `MoveSpeed: -5` hoặc `0` trong file — chuyện gì xảy ra? (Đi lùi input! / đứng
-liệt.) Thêm một lớp kiểm hợp lệ vào `Load()`: giá trị ngoài khoảng chấp nhận (`<= 0` hoặc `> 50`) →
-Warn + dùng mặc định cho trường đó. Config đến từ con người; con người gõ nhầm.
+**3. Đo cái AOI mua được.** Log tạm tổng số `EntityState` server gửi mỗi giây. Hai client đứng cạnh
+nhau: ~40/giây (20 tick × 2 người × 1 state). Đi xa nhau: **0**. Với broadcast Phase 7 con số này không
+bao giờ về 0 dù map to cỡ nào — và tăng theo bình phương tổng người online thay vì theo mật độ cục bộ.
 
 ---
 
@@ -333,13 +496,16 @@ Warn + dùng mặc định cho trường đó. Config đến từ con người; 
 
 | Triệu chứng | Nguyên nhân | Xử lý |
 |-------------|-------------|-------|
-| Server báo không đọc được config dù file có | Chạy từ thư mục khác (working dir ≠ cạnh exe) hoặc csproj chưa copy | Kiểm `bin/Debug/net8.0/Config/game.json` tồn tại |
-| Sửa json mà số không đổi | Sửa file ở gốc repo nhưng bản copy trong `bin/` chưa cập nhật (chỉ copy lúc build) — hot reload `R` đọc bản trong `bin/` | Build lại (copy chạy), hoặc sửa thẳng bản trong `bin/` khi thử nghiệm nhanh |
-| Rubber-band sau khi đổi speed | Client còn chỗ dùng số cũ/hằng số cũ (một trong ba chỗ của `PlayerMotor`) | Tìm mọi lời gọi `Step` + `MoveTowards` |
-| Người online bị rubber-band ngay khi bấm `R` | `Integrate` đọc `Current` mỗi tick thay vì dùng `entity.MoveSpeed` chốt lúc spawn | Đọc lại comment trên `PlayerEntity.MoveSpeed` |
-| `JsonException` property không khớp | Tên trường json khác tên property (JSON mặc định phân biệt hoa thường theo cấu hình serializer) | Giữ tên trường trùng property PascalCase, hoặc bật `PropertyNameCaseInsensitive` |
-| Nhân vật mới spawn trong tường sau khi đổi SpawnX/Y | Config trỏ vào ô `#` — người gõ config không nhìn map | Thêm kiểm `IsWalkableWorld(spawn)` lúc `Load()`: Warn + giữ mặc định |
-| Client build lỗi thiếu `MOVE_SPEED` | DLL Shared mới nhưng code client chưa sửa hết theo chữ ký `Step` mới | Đó là danh sách việc — sửa từng chỗ đỏ |
+| Đụng "tường vô hình" cạnh tường thật, lệch ~nửa ô | Phép ô→world của `MapRenderer` lệch với `IsWalkableWorld` (chia nguyên vs chia thực, map cạnh lẻ) | Xem ghi chú cuối lời giải Bước 3; giữ cạnh map chẵn |
+| Va chạm sai hết ở nửa map bên trái/dưới | Dùng cast `(int)` thay `MathF.Floor` với toạ độ âm | Đọc comment trong `IsWalkableWorld` / `CellOf` |
+| Map hiển thị lộn ngược so với chuỗi trong code | Quên lật trục Y trong `Parse` | Hàng đầu của mảng = mép trên map |
+| Rubber-band khi đi sát tường | Client và server không cùng một `Step` (một bên còn bản clamp cũ) | Build lại Shared, kiểm cả replay trong `OnMoveState` cũng truyền map |
+| `Parse` ném lỗi lúc khởi động | Các hàng map lệch độ dài (thiếu một dấu chấm) | Đó là hàng rào hoạt động đúng — sửa map |
+| Spawn chôn trong tường | Ô quanh (0,0) là `#`, hoặc map cạnh lẻ làm tâm lệch | Chừa sàn quanh tâm map |
+| Người kia không bao giờ biến mất dù đi rất xa | Vẫn còn broadcast của Phase 7 trong `Spawn`, hoặc snapshot vẫn build từ toàn bộ `_entities` | Mọi thông báo phải đi từ pha diff của `Tick` |
+| Người kia biến mất rồi không hiện lại | `Visible` không được cập nhật đúng (xoá mà không thêm lại) | So thứ tự ba thao tác: spawn-mới → despawn-cũ → cập nhật tập |
+| Nhấp nháy hiện/biến ở một khoảng cách nhất định | Flicker ranh giới AOI — hành vi đã biết | Thử nghiệm 2; sửa thật thì cần hysteresis (câu 7) |
+| Client crash `NullReference` trong `SetTile` | Tile asset chưa kéo vào Inspector | Kiểm `_floorTile`/`_wallTile` |
 
 ---
 
@@ -347,97 +513,110 @@ Warn + dùng mặc định cho trường đó. Config đến từ con người; 
 
 Tự trả lời từng câu xong mới mở đáp án của câu đó.
 
-**Câu 1.** Vì sao "client và server cùng đọc chung một file config" nghe giống contract 1 nguồn nhưng
-thực ra là bẫy? Nêu hai kịch bản cụ thể nó hỏng.
+**Câu 1.** Vì sao dữ liệu map phải nằm trong `Shared` chứ không phải "server giữ map, client tự vẽ
+tilemap giống giống là được"?
 <details>
 <summary>📖 Đáp án câu 1</summary>
 
-Vì thứ cần đồng bộ là **giá trị đang chạy**, không phải nội dung file. (1) Client build mang bản copy
-tại thời điểm build — server sửa file xong, mọi client ngoài kia chạy số cũ, lệch mà không ai báo;
-(2) file nằm trong máy người chơi thì người chơi sửa được — với giá trị tham gia dự đoán là tự gây
-rubber-band, với giá trị hiển thị là hiện sai thông tin. Server phát giá trị qua mạng thì cả hai kịch
-bản biến mất về mặt cấu trúc.
+Vì **ba** bên tiêu thụ cùng một sự thật: server va chạm thật, client va chạm dự đoán, client vẽ hình.
+Client tự vẽ tay là chép tay contract — giống hệt chép tay `NetCmd`: không lỗi biên dịch, chỉ có
+"tường nhìn thấy mà đi xuyên được" và "tường vô hình" xuất hiện dần theo mỗi lần sửa map một bên.
+Riêng va chạm dự đoán mà lệch server là rubber-band vĩnh viễn tại đúng chỗ lệch.
 
 </details>
 
-**Câu 2.** Vì sao `MoveSpeed` chốt vào `PlayerEntity` lúc spawn thay vì `Integrate` đọc
-`ConfigService.Current` mỗi tick — "tươi" hơn cơ mà?
+**Câu 2.** Va chạm tách trục (thử cả hai → thử ngang → thử dọc) tạo ra hành vi gì mà kiểm tra
+"đi được cả hai trục hay đứng yên" không có? Vì sao hành vi đó đáng giá?
 <details>
 <summary>📖 Đáp án câu 2</summary>
 
-Vì bên kia đầu dây có một client đang **dự đoán bằng số nó nhận lúc vào world**. Server đổi số giữa
-phiên (hot reload) thì mọi dự đoán của người đang online lệch ngay lập tức → rubber-band hàng loạt,
-oan (họ không làm gì sai). Tốc độ là một phần của *hợp đồng phiên chơi*: chốt lúc vào, đổi thì phải
-thông báo (đẩy gói số mới) — chưa làm cơ chế thông báo thì chưa được đổi ngầm.
+Trượt dọc tường: đi chéo vào tường thì thành phần song song vẫn tiến, chỉ thành phần đâm vào bị chặn.
+Không tách trục thì chạm tường là **dính cứng** — muốn đi dọc tường phải nhả phím chéo và bấm lại đúng
+trục, cảm giác điều khiển tệ đi rõ rệt. Điều khiển mượt ở sát tường quan trọng vì tường là nơi người
+chơi ở cạnh thường xuyên nhất.
 
 </details>
 
-**Câu 3.** Config hỏng → server dùng mặc định và chạy tiếp, trong khi CLAUDE.md cấm nuốt lỗi. Biện minh
-— và điểm nào trong cách xử lý là bắt buộc để nó không thành "nuốt lỗi"?
+**Câu 3.** Vì sao `IsWalkableWorld` và `CellOf` phải dùng `Floor` chứ không phải ép kiểu `(int)`?
+Mô tả bug cụ thể nếu dùng cast.
 <details>
 <summary>📖 Đáp án câu 3</summary>
 
-Lựa chọn thật là: chết ngay lúc boot vì một dấu phẩy, hay đứng dậy bằng bộ giá trị an toàn đã biết.
-Với dữ liệu do người vận hành gõ tay, phương án hai đúng hơn — *miễn là* (1) chỉ bắt đúng loại lỗi
-dự kiến (`IOException`, `JsonException` — bug code vẫn ném lên), và (2) **log Warn to rõ**: chạy bằng
-mặc định trong khi vận hành tưởng là số trong file mới là thảm hoạ âm thầm. Nuốt lỗi bị cấm là nuốt
-*không dấu vết, không chủ đích* — đây là xử lý có chính sách.
+Cast cắt **về phía 0**: `-0.7` thành `0`, trong khi `Floor(-0.7) = -1`. Mọi toạ độ trong khoảng
+`(-1, 1)` bị gom về ô 0 — ô cạnh gốc toạ độ "rộng gấp đôi", và toàn bộ phần map toạ độ âm bị lệch một ô:
+va chạm sai đúng nửa map, AOI xếp người vào nhầm ô ở nửa map đó. Bug đối xứng lệch kiểu này rất khó nhìn
+ra bằng chơi thử vì nửa map còn lại hoàn toàn bình thường.
 
 </details>
 
-**Câu 4.** Hot reload thay nguyên object `GameConfig` thay vì sửa từng field trên object đang dùng.
-Cơ chế nào làm cách này an toàn đa luồng mà không cần lock, và nó cùng họ với bài nào ở Phase 6?
+**Câu 4.** Vì sao chuyển `EntitySpawn`/`EntityDespawn` từ "broadcast lúc vào/ra world" sang "hệ quả của
+diff tầm nhìn mỗi tick" lại khiến client **không phải sửa gì**? Thiết kế nào của Phase 7 mua được điều đó?
 <details>
 <summary>📖 Đáp án câu 4</summary>
 
-Gán một reference là thao tác **nguyên tử** — luồng khác hoặc thấy trọn object cũ, hoặc trọn object
-mới, không bao giờ thấy nửa nọ nửa kia; object cũ bất biến từ lúc phát hành nên ai đang cầm cứ dùng
-tiếp một bộ giá trị nhất quán. Sửa từng field trên object sống thì luồng đọc có thể thấy
-`MoveSpeed` mới + `SpawnX` cũ. Cùng họ với đáp án câu 9 Phase 6: nhiều giá trị phải nhất quán như một
-khối → gói vào object bất biến, trao đổi bằng một phép gán reference.
+Client Phase 7 được viết theo **message**, không theo **nguyên nhân**: nó chỉ biết "có gói bảo X xuất
+hiện thì dựng X, có gói bảo X biến mất thì dọn X" — không quan tâm vì sao. Server đổi hoàn toàn logic
+phát sinh các gói đó (từ sự kiện vào/ra world sang diff tầm nhìn) mà contract không đổi, nên client cũ
+chạy nguyên. Đây là phần thưởng cụ thể của việc tách "điều đã xảy ra" (message) khỏi "vì sao nó xảy ra"
+(logic server).
 
 </details>
 
-**Câu 5.** Đổi `SpawnX/SpawnY` trong config, người chơi cũ vào lại vẫn đứng chỗ cũ của họ. Đây là bug
-hay tính năng? Nó tiết lộ gì về hai loại dữ liệu trong bảng `character`?
+**Câu 5.** Spatial grid trả lời "ai gần ai" bằng cách tra 9 ô. So với tính khoảng cách mọi cặp (O(n²)),
+nó đánh đổi cái gì? Tầm nhìn "vuông và lệch theo vị trí trong ô" vì sao chấp nhận được?
 <details>
 <summary>📖 Đáp án câu 5</summary>
 
-Tính năng. Spawn config là giá trị **khởi tạo** — chỉ dùng đúng một lần lúc *tạo* nhân vật; từ đó vị
-trí là **trạng thái của người chơi**, thuộc về họ, lưu trong DB, config không có quyền đè. Ranh giới
-này (giá trị khởi tạo vs trạng thái tích luỹ) chính là ranh giới giữa "dữ liệu game design" và "dữ
-liệu người chơi" — nhầm bên là hoặc reset đồ người ta (đè trạng thái bằng config), hoặc không tài nào
-cân bằng lại game (trạng thái hoá thứ đáng lẽ là config).
+Đổi **độ chính xác hình học** lấy **độ phức tạp**: tầm nhìn không phải hình tròn bán kính r mà là vùng
+9 ô — vuông, và lệch tuỳ bạn đứng đâu trong ô (bảo đảm tối thiểu 1 cạnh ô, tối đa 2). Chấp nhận được vì
+tầm nhìn chỉ cần một tính chất: **bán kính bảo đảm ≥ những gì màn hình thấy** — dư ra bao nhiêu không ai
+nhận biết (thứ ngoài màn hình có được sync sớm một chút cũng vô hại). Trong khi cái mua được là mỗi tick
+chỉ tra vài ô thay vì n² phép so — chính là thứ cho phép nghìn người online.
 
 </details>
 
-**Câu 6.** `TICK_RATE` cố tình không vào config. Điều gì gãy nếu người vận hành đổi nó từ 20 thành 30
-trong file?
+**Câu 6.** Dựng lại chỉ mục ô từ đầu mỗi tick (O(n)) thay vì cập nhật khi entity đổi ô. Lập luận cho
+lựa chọn này, và khi nào nó không còn đúng?
 <details>
 <summary>📖 Đáp án câu 6</summary>
 
-`TICK_DT` ăn theo (`1/TICK_RATE`) — toàn bộ nhịp prediction/reconciliation của client xây trên giả
-định hai bên cùng nhịp: client bơm input 20 bước/giây trong khi server tiêu 30 tick/giây, replay của
-client tính mỗi input một `TICK_DT` khác server → dự đoán lệch hệ thống, rubber-band toàn dân. Nó không
-phải "số liệu game" mà là **hằng số của giao thức** — cùng đẳng cấp với format khung gói tin; đổi nó là
-đổi protocol, phải đổi bằng build có chủ đích ở cả hai phía, không phải bằng file text lúc nửa đêm.
+Bản dựng-lại không có trạng thái sống qua tick → không có lớp bug "chỉ mục lệch thực tế" (quên gỡ ô cũ,
+quên thêm ô mới, entity chết còn trong ô...). Giá của nó là O(n) + cấp phát mỗi tick — với vài trăm
+entity ở 20Hz là không đáng kể. Nó hết đúng khi n lớn tới mức đo được chi phí (nhiều nghìn entity kèm
+GC pressure) — lúc đó chuyển sang cập-nhật-tại-chỗ *kèm* một bản kiểm tra đối chiếu định kỳ, vì lớp bug
+kia sẽ quay lại cùng hiệu năng.
+
+</details>
+
+**Câu 7.** Flicker ở ranh giới AOI (thử nghiệm 2): nguyên nhân chính xác là gì và hysteresis sửa nó
+thế nào?
+<details>
+<summary>📖 Đáp án câu 7</summary>
+
+Vào và ra tầm nhìn dùng **cùng một ngưỡng** (ranh giới ô), nên người đứng ngay ranh giới chỉ cần dao
+động 1cm là đổi trạng thái — mỗi lần đổi là một cặp gói spawn/despawn và một lần dựng/huỷ GameObject.
+Hysteresis tách hai ngưỡng: **vào** tầm nhìn ở bán kính nhỏ (ví dụ 9 ô), chỉ **ra** khỏi tầm nhìn khi
+vượt bán kính lớn hơn (ví dụ 5×5 ô) — người đứng giữa hai ngưỡng giữ nguyên trạng thái hiện có. Dao động
+nhỏ quanh một điểm không còn đổi trạng thái được nữa; giá phải trả là tầm "ra" rộng hơn tầm "vào" một
+vành đai.
+
+</details>
+
+**Câu 8.** Sau AOI, băng thông server tỉ lệ với đại lượng nào thay vì tổng số người online? Vì sao đó
+là câu trả lời cho "MMO gánh nghìn người kiểu gì"?
+<details>
+<summary>📖 Đáp án câu 8</summary>
+
+Tỉ lệ với `số người × mật độ trung bình quanh mỗi người` — tức **mật độ cục bộ**, thứ bị giới hạn bởi
+diện tích màn hình/tầm nhìn chứ không phải bởi tổng dân số. Nghìn người rải trên map lớn thì mỗi người
+chỉ trả tiền cho vài chục người quanh mình; tổng chi phí tăng tuyến tính theo dân số thay vì bình
+phương. (Và khi nghìn người cố tình dồn vào một ô — sự kiện, boss chung — thì mật độ cục bộ nổ, đó chính
+là lý do MMO thật lag ở chỗ đông dù server "gánh nghìn người" ngon lành khi họ tản ra.)
 
 </details>
 
 ---
 
-## Để dành (ghi lại, chưa làm)
-
-- **Đẩy config nóng cho người đang online**: gói `ConfigUpdate` server broadcast khi reload → client
-  cập nhật speed đang dùng + entity server đổi theo. Làm khi có nhu cầu thật.
-- **Map ra file + gửi qua mạng lúc EnterWorld**: map là payload lớn đầu tiên (> 4KB) — dịp để đường nén
-  LZ4 của Phase 2 chạy thật. Kèm bài toán cache client (hash map, chỉ tải khi đổi) — chạm vào tư duy
-  của Phase 14 (hot update asset).
-- **Config từ Google Sheet** (pipeline của `com.hungnt.dataconfig`): xuất sheet → json. Đáng làm khi
-  bảng số bắt đầu dày (Phase 10–11: item, quái, damage).
-
----
-
-**Xong Phase 9 → hết Chặng C.** Thế giới sống: nhiều người thấy nhau, map có hình, số liệu là dữ liệu.
-Chặng D bắt đầu vòng gameplay thật — [PHASE-10](PHASE-10.md): túi đồ, feature dọc đầu tiên đi đủ
-DB → DAL → logic → packet → UI, khuôn mẫu cho mọi feature về sau. (Viết khi bạn báo xong Phase 9.)
+**Xong Phase 9 → thế giới có tường, có tầm nhìn, băng thông theo mật độ.** [PHASE-10](PHASE-10.md) trả nốt
+món nợ rải khắp ba phase vừa qua: các con số (tốc độ, spawn, map) đang nằm cứng trong code — đưa chúng
+ra dữ liệu, sửa không cần build lại, và hiểu vì sao config cũng phải có đúng một nguồn.
