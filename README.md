@@ -145,17 +145,19 @@ Danh sách những thứ được cài **bằng tay** trong dự án này, khôn
 | **Client prediction + reconciliation** | Nhân vật phản hồi tức thì dù server ở xa; khi server bất đồng thì kéo về đúng và **phát lại** các input chưa xác nhận | 6 |
 | **Interpolation buffer** | Người chơi khác chạy mượt dù gói tin chỉ đến 20 lần/giây — render ở quá khứ ~150ms thay vì đoán tương lai | 7 |
 | **Kinematic motor dùng chung** | Trọng lực + nhảy chạy **cùng một hàm** ở client và server → prediction không lệch. (Vì sao không dùng `Rigidbody2D`: physics Unity không tồn tại trên server .NET) | 8 |
-| **Spatial partition + AOI** | Chỉ gửi gói tin của những người ở gần → băng thông theo mật độ, không theo tổng số người online | 9 |
-| **Diff tầm nhìn mỗi tick** | Biến `EntitySpawn`/`EntityDespawn` từ "sự kiện rời rạc" thành *hệ quả* của tầm nhìn — client không phải sửa một dòng nào | 9 |
-| **Config data-driven + hot reload** | Đổi số liệu game không cần build lại; client luôn chạy đúng số của server nó đang nối vào | 10 |
-| **Cache RAM + dirty flag** | Túi đồ không ghi DB mỗi thao tác, gom lại flush định kỳ | 11 |
-| **Đồng bộ delta thay vì snapshot** | UI đang mở mà đồ thay đổi vẫn hiện đúng, không phải gửi lại toàn bộ túi mỗi lần | 11 |
-| **Pipeline tính lại chỉ số** | `base(class, level) + điểm cộng + trang bị + buff → recompute` — mặc đồ vào là chỉ số đổi ngay, và client không bao giờ tự cộng | 12 |
-| **Công thức sát thương theo tỉ lệ** | `atk × 100/(100+def)` thay vì `atk - def` — giáp giảm dần đều, không bao giờ tạo ra bất tử | 13 |
-| **Đường cong EXP + phạt chênh lệch level** | Chống farm quái rác | 13 |
-| **Addressables content update** | Sửa asset → build bản vá → client tải phần thay đổi, không build lại app | 16 |
-| **Version check bảng dữ liệu** | Client lệch bản config thì bị chặn vào world — chữa đúng cái bệnh "hai bên đọc hai bản khác nhau mà không ai biết" | 16 |
-| **Lua hot reload** | Sửa công thức chiến đấu, nạp lại ngay, không restart server | 17 |
+| **State machine hai tầng** | Locomotion client tự suy từ motor (0 byte trên dây); action (`attack`, `hurt`, `die`) do **server** quyết và đi trong snapshot — client không bao giờ tự bật | 9 |
+| **Spatial partition + AOI** | Chỉ gửi gói tin của những người ở gần → băng thông theo mật độ, không theo tổng số người online | 10 |
+| **Diff tầm nhìn mỗi tick** | Biến `EntitySpawn`/`EntityDespawn` từ "sự kiện rời rạc" thành *hệ quả* của tầm nhìn — client không phải sửa một dòng nào | 10 |
+| **Config data-driven + hot reload** | Đổi số liệu game không cần build lại; client luôn chạy đúng số của server nó đang nối vào | 11 |
+| **Cache RAM + dirty flag** | Túi đồ không ghi DB mỗi thao tác, gom lại flush định kỳ | 12 |
+| **Đồng bộ delta thay vì snapshot** | UI đang mở mà đồ thay đổi vẫn hiện đúng, không phải gửi lại toàn bộ túi mỗi lần | 12 |
+| **Pipeline tính lại chỉ số** | `base(class, level) + điểm cộng + trang bị + buff → recompute` — mặc đồ vào là chỉ số đổi ngay, và client không bao giờ tự cộng | 13 |
+| **Công thức sát thương theo tỉ lệ** | `atk × 100/(100+def)` thay vì `atk - def` — giáp giảm dần đều, không bao giờ tạo ra bất tử | 14 |
+| **Projectile là entity của server** | Fireball có vị trí, bay theo tick, va chạm ở server — không phải particle của client tự vẽ rồi tự báo trúng | 14 |
+| **Đường cong EXP + phạt chênh lệch level** | Chống farm quái rác | 14 |
+| **Addressables content update** | Sửa asset → build bản vá → client tải phần thay đổi, không build lại app | 17 |
+| **Version check bảng dữ liệu** | Client lệch bản config thì bị chặn vào world — chữa đúng cái bệnh "hai bên đọc hai bản khác nhau mà không ai biết" | 17 |
+| **Lua hot reload** | Sửa công thức chiến đấu, nạp lại ngay, không restart server | 18 |
 
 ---
 
@@ -171,19 +173,20 @@ Danh sách những thứ được cài **bằng tay** trong dự án này, khôn
 - [x] Đăng ký / đăng nhập / đăng xuất, mật khẩu băm PBKDF2, chống login trùng, chống dò mật khẩu
 - [x] Vào thế giới: nhân vật tự tạo lần đầu, hồi sinh đúng vị trí lần trước thoát, camera bám
 - [x] Game loop tick cố định trên server, di chuyển authoritative + client prediction
+- [x] Đồng bộ nhiều người chơi: thấy nhau spawn/despawn, chạy mượt bằng interpolation buffer
 
 **Đang làm**
 
-- [ ] Đồng bộ nhiều người chơi — *server đã đẩy spawn/despawn/snapshot; client đang làm phần nội suy*
+- [ ] Motor platformer — *trọng lực, nhảy, coyote time & jump buffer; cùng một hàm chạy ở cả hai bên*
 
 **Kế hoạch**
 
-- [ ] Motor platformer: trọng lực, nhảy, sàn xuyên-một-chiều
-- [ ] Map có va chạm + AOI (chỉ thấy người ở gần)
+- [ ] State machine trạng thái nhân vật: idle/walk/jump/crouch + attack/hurt/die do server quyết
+- [ ] Map tile có va chạm, sàn xuyên-một-chiều + AOI (chỉ thấy người ở gần)
 - [ ] Config data-driven, hot reload
 - [ ] Túi đồ & item, đồng bộ UI theo thời gian thực
 - [ ] Hệ chỉ số nhân vật + trang bị + bảng thông tin
-- [ ] Quái, chiến đấu, sát thương, EXP, rơi đồ
+- [ ] Quái, PvP, fireball, sát thương, EXP, rơi đồ
 - [ ] Chat nhiều kênh, chống spam
 - [ ] Tách package `com.hungnt.network`
 - [ ] Addressables + CDN, hot update nội dung
@@ -262,7 +265,7 @@ Host/port phía client chỉnh trong Inspector của `GameLifetimeScope` (scene 
 |---|---|
 | 🎨 [**Hành trình một gói tin Login**](docs/packet-journey.html) | Theo chân một cú click nút Đăng nhập đi qua đủ 3 tiến trình rồi quay về UI — sơ đồ vẽ tay, tô màu theo tiến trình. *(Clone repo rồi mở bằng trình duyệt)* |
 | 📄 [Bản Markdown của tài liệu trên](docs/README.md) | Cùng nội dung, đọc được ngay trên GitHub |
-| 🗺️ [ROADMAP](.claude/docs/ROADMAP.md) | Bản đồ 20 phase — mục tiêu, thứ tự, và mọi quyết định nền đã chốt kèm lý do |
+| 🗺️ [ROADMAP](.claude/docs/ROADMAP.md) | Bản đồ 21 phase — mục tiêu, thứ tự, và mọi quyết định nền đã chốt kèm lý do |
 | 📐 [CONVENTIONS](.claude/docs/CONVENTIONS.md) | Quy ước đặt tên, style, cách đánh số mã lệnh |
 | 📚 [Guides theo phase](.claude/docs/guides/) | Hướng dẫn từng bước cho mỗi phase, kèm checkpoint và câu hỏi tự kiểm tra |
 | 📦 [CANDIDATE-PACKAGES](.claude/docs/CANDIDATE-PACKAGES.md) | Sổ theo dõi đoạn code nào đủ chín để tách thành package tái dùng |
