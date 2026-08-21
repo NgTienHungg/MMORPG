@@ -1271,5 +1271,4 @@ thì phase này sẽ phải sửa nó — vì đoán theo đường thẳng trê
 Nhân vật giờ có *vận tốc* và *đang-đứng-đất* — hai thứ mà bước 5 mới chỉ dùng tạm bằng vài dòng `if`.
 [PHASE-9](PHASE-9.md) biến chúng thành một **state machine tử tế**, rồi thêm tầng thứ hai mà client
 không được phép tự quyết: `attack`, `hurt`, `die`. Đó là lần đầu tiên trong dự án một thứ thuần "hình
-ảnh" phải xin phép server — và là nền để Phase 14 chỉ việc gắn sát thương lên trên. (Viết khi bạn báo
-xong Phase 8.)
+ảnh" phải xin phép server — và là nền để Phase 14 chỉ việc gắn sát thương lên trên.

@@ -37,7 +37,8 @@ Nhóm thành 5 chặng. **Không nhảy cóc** — mỗi phase dựa trên phase
 
 > 📌 **Đã đánh số lại một lần** (sau khi chốt thể loại platformer, và lần nữa khi tách Phase 9). Phase 8
 > "Motor platformer" và Phase 9 "State machine" là hai phase **mới chèn vào**; Map & AOI và Data & Config
-> bị đẩy xuống 10 và 11. Doc của chúng đã đổi tên theo. Nếu gặp doc nào còn nhắc số cũ thì đó là sót — báo lại.
+> bị đẩy xuống 10 và 11. Doc của chúng đã đổi số **và viết lại theo hướng platformer** (2026-08-21) —
+> không còn phần nào sót lại từ bản top-down. Nếu gặp doc nào còn nhắc số cũ thì đó là sót — báo lại.
 
 ### Chặng A — Đường ống mạng (Phase 0–2)
 > Kết thúc chặng: client và server nói chuyện được với nhau bằng gói tin có kiểu, không dùng if/else.
@@ -108,7 +109,7 @@ Chốt ngay từ đầu để không phải dời số sau (bài học từ vo-l
 | Dải | Nhóm | Phase |
 |-----|------|-------|
 | `0` | `None` — giá trị vô hiệu, không dùng | — |
-| `1–99` | **Hệ thống**: ping, handshake, disconnect, error, version check | 1–2, 17 |
+| `1–99` | **Hệ thống**: ping, handshake, disconnect, error, version check | 1–2, 11, 17 |
 | `100–199` | **Auth**: register, login, logout, token | 4 |
 | `200–299` | **Character**: enter world, **chỉ số nhân vật, cộng điểm, trang bị** (mở rộng sau: list, create, delete nếu quay lại nhiều nhân vật) | 5, 13 |
 | `300–399` | **World / Movement**: move, snapshot, spawn, despawn, **trạng thái hành động** | 6–10 |
@@ -144,7 +145,7 @@ server xử lý item B; không lỗi biên dịch, không log, chỉ có bug câ
 | Ai cần | server xử lý logic; client chỉ cần vài giá trị để dự đoán | **cả 2 bên đều đọc**: server tính logic, client hiển thị tên / icon / mô tả |
 | Cách chữa | **Chỉ server đọc file.** Giá trị nào client cần thì đi trong `EnterWorldResponse` | **Schema** (kiểu C#) đặt ở `Server/Shared/` → 1 nguồn định nghĩa. **Dữ liệu** có 1 bản gốc duy nhất, client kéo về qua Addressables/CDN — **không commit bản copy trong `Assets/`** |
 | Chống lệch bằng gì | Client luôn chạy đúng số của server nó đang nối vào, kể cả 2 server cấu hình khác nhau | Server gửi **hash/version của bảng** lúc login; client lệch version thì **bị chặn vào world** cho tới khi tải bản mới |
-| Làm ở phase nào | Phase 11 | Schema + bảng item: Phase 12 · đường phân phối + version check: Phase 17 |
+| Làm ở phase nào | Phase 11 | **Bản đồ** (loại B đầu tiên) + trường version: Phase 11 · schema + bảng item: Phase 12 · đường phân phối qua CDN: Phase 17 |
 
 ---
 
@@ -180,9 +181,9 @@ mở lời giải/đáp án sau để đối chiếu.
 | 6 — Game loop & movement | ✅ xong | [`guides/PHASE-6.md`](guides/PHASE-6.md) ✅ |
 | 7 — Multi-player sync | ✅ xong | [`guides/PHASE-7.md`](guides/PHASE-7.md) ✅ |
 | **8 — Motor platformer** 🆕 | ⏳ **làm tiếp theo** | [`guides/PHASE-8.md`](guides/PHASE-8.md) ✅ |
-| 9 — State machine trạng thái 🆕 | ⬜ chưa | ⬜ chưa viết |
-| 10 — Map & AOI | ⬜ chưa | [`guides/PHASE-10.md`](guides/PHASE-10.md) ⚠️ *viết thời top-down — cần sửa va chạm (sàn xuyên-một-chiều) + AOI theo trục X trước khi làm* |
-| 11 — Data & Config | ⬜ chưa | [`guides/PHASE-11.md`](guides/PHASE-11.md) ⚠️ *viết thời top-down — cần thêm số của Phase 8/9 + mục config loại B* |
+| 9 — State machine trạng thái 🆕 | ⬜ chưa | [`guides/PHASE-9.md`](guides/PHASE-9.md) ✅ |
+| 10 — Map & AOI | ⬜ chưa | [`guides/PHASE-10.md`](guides/PHASE-10.md) ✅ |
+| 11 — Data & Config | ⬜ chưa | [`guides/PHASE-11.md`](guides/PHASE-11.md) ✅ |
 | 12 — Túi đồ & item | ⬜ chưa | ⬜ chưa viết |
 | 13 — Chỉ số nhân vật 🆕 | ⬜ chưa | ⬜ chưa viết |
 | 14 — Quái, PvP & EXP | ⬜ chưa | ⬜ chưa viết |
