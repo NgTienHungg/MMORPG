@@ -121,11 +121,12 @@ namespace MMORPG.GameServer.World
                 if (entity.Owner == null)
                     continue;
 
+                // Gửi nguyên State: thêm trường vào MoveState sau này là tự động lên dây,
+                // không phải nhớ quay lại đây chép thêm một dòng.
                 entity.Owner.SendData(NetCmd.MoveState, new MoveStateResponse
                     {
                         LastInputSeq = entity.LastInputSeq,
-                        X = entity.X,
-                        Y = entity.Y,
+                        State = entity.State,
                     }
                 );
 

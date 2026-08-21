@@ -3,6 +3,7 @@ using MMORPG.Client.Network;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
+using MMORPG.Shared.World;
 
 namespace MMORPG.Client.World
 {
@@ -23,11 +24,12 @@ namespace MMORPG.Client.World
             this.Log("Enter World");
             _netService.Send(NetCmd.EnterWorld, new EmptyRequest());
         }
-        
-        public void Move(int seq, float dirX, float dirY)
+
+        /// <summary>Gửi đúng cái intent vừa dùng để dự đoán — không dàn nó ra thành từng tham số rồi ráp lại.</summary>
+        public void Move(int seq, MoveIntent intent)
         {
             // Không log ở đây — 20 lần/giây, log là dìm chết console.
-            _netService.Send(NetCmd.MoveInput, new MoveInputRequest { Seq = seq, DirX = dirX, DirY = dirY });
+            _netService.Send(NetCmd.MoveInput, new MoveInputRequest { Seq = seq, Intent = intent });
         }
     }
 }

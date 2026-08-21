@@ -3,9 +3,7 @@ using Cysharp.Threading.Tasks;
 using HungNT;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto;
-using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
-using Sirenix.OdinInspector;
 using TMPro;
 using UnityEngine;
 using UnityEngine.UI;
@@ -123,13 +121,7 @@ namespace MMORPG.Client.Network
         private void SetStatus(string text)
         {
             _statusText.text = text;
-            this.Log(text); 
-        }
-
-        [Button]
-        public void SendMoveInput(int seq, float dirX, float dirY)
-        {
-            _netService.Send(NetCmd.MoveInput, new MoveInputRequest { Seq = seq, DirX = dirX, DirY = dirY });
+            this.Log(text);
         }
     }
 }

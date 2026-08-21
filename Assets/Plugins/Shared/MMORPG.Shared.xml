@@ -398,33 +398,47 @@
         </member>
         <member name="T:MMORPG.Shared.Dto.World.MoveInputRequest">
             <summary>
-            Trạng thái phím đang bấm tại một bước dự đoán của client. Cố tình KHÔNG có trường thời gian:
+            Ý định của client tại một bước dự đoán. Cố tình KHÔNG có trường thời gian:
             server tích phân bằng TICK_DT của chính nó — dt mà đi trên gói tin thì dt là chỗ hack tốc độ.
             </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
             <b>int</b> Seq<br/>
-            <b>float</b> DirX<br/>
-            <b>float</b> DirY<br/>
+            <b>MMORPG.Shared.World.MoveIntent</b> Intent<br/>
             </code>
             </remarks>
         </member>
         <member name="P:MMORPG.Shared.Dto.World.MoveInputRequest.Seq">
             <summary>Số thứ tự client tự đánh, tăng dần. Server echo lại để client biết mình đã được xử tới đâu.</summary>
         </member>
+        <member name="P:MMORPG.Shared.Dto.World.MoveInputRequest.Intent">
+            <summary>
+            Đúng cái struct mà <see cref="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single)"/> nhận, không phải bản sao dàn phẳng của nó.
+            Client dự đoán bằng struct này rồi gửi chính nó đi; thêm một nút bấm mới sau này là sửa
+            một chỗ, không phải bốn.
+            </summary>
+        </member>
         <member name="T:MMORPG.Shared.Dto.World.MoveStateResponse">
+            <summary>
+            Trạng thái authoritative của chính người nhận, gửi mỗi tick. Mang nguyên
+            <see cref="T:MMORPG.Shared.World.MoveState"/> chứ không dàn phẳng ra từng trường: client replay các input còn treo
+            từ đây, mà replay thì cần ĐỦ trạng thái — thiếu một trường là replay ra một quỹ đạo khác.
+            Dàn phẳng thì mỗi lần <see cref="T:MMORPG.Shared.World.MoveState"/> mọc thêm trường là một lần có thể quên chép.
+            </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
             <b>int</b> LastInputSeq<br/>
-            <b>float</b> X<br/>
-            <b>float</b> Y<br/>
+            <b>MMORPG.Shared.World.MoveState</b> State<br/>
             </code>
             </remarks>
         </member>
         <member name="P:MMORPG.Shared.Dto.World.MoveStateResponse.LastInputSeq">
             <summary>Input cuối cùng server đã nhận trước tick này. Client xoá pending ≤ số này rồi replay phần còn lại.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.MoveStateResponse.State">
+            <summary>Trạng thái vật lý sau tick này, y hệt cái server đang giữ.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.World.EntitySpawnNotice">
             <summary>
@@ -712,21 +726,123 @@
             </summary>
         </member>
         <member name="T:MMORPG.Shared.World.MovementRules">
-            <summary>
-            Hằng số và công thức di chuyển dùng CHUNG: server mô phỏng thật, client dự đoán trước.
-            Hai bên phải ra cùng kết quả từ cùng input — vì vậy công thức chỉ tồn tại ở đây, một nơi.
-            </summary>
+             <summary>
+             Luật di chuyển dùng CHUNG: server mô phỏng thật, client dự đoán trước rồi replay.
+             Hai bên phải ra cùng một kết quả từ cùng input — vì vậy luật chỉ tồn tại ở đây, một nơi.
+            
+             Mọi phép tính trong file này chỉ được dùng + - * / và so sánh trên float. Bốn phép đó được
+             IEEE-754 quy định tới từng bit nên CoreCLR (server) và Mono/IL2CPP (client) buộc phải cho
+             cùng kết quả. Gọi MathF.Sin/Pow/Exp là mở cửa cho sai số nền tảng, và sai số ấy cộng dồn
+             suốt cú nhảy chứ không tự triệt tiêu.
+             </summary>
         </member>
         <member name="F:MMORPG.Shared.World.MovementRules.MOVE_SPEED">
-            <summary>Tốc độ chạy, đơn vị world/giây.</summary>
+            <summary>Tốc độ chạy ngang, world unit/giây.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.GRAVITY">
+            <summary>
+            Gia tốc rơi, unit/giây². Lớn hơn 9.81 của đời thật rất nhiều — trọng lực "đúng vật lý"
+            cho cảm giác lơ lửng như trên mặt trăng, không game platformer nào dùng.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.JUMP_SPEED">
+            <summary>
+            Vận tốc bật lên tức thời khi nhảy. Đỉnh nhảy = JUMP_SPEED² / (2·GRAVITY) ≈ 2 unit,
+            thời gian bay ≈ 2·JUMP_SPEED/GRAVITY ≈ 0.73s ≈ 15 tick — đủ dài để nội suy phía
+            người xem có mẫu mà vẽ đường cong.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.MAX_FALL_SPEED">
+            <summary>
+            Trần tốc độ rơi. Không có nó, rơi từ trên cao đủ lâu sẽ đi hơn một ô mỗi tick và
+            XUYÊN QUA sàn giữa hai lần kiểm va chạm.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.GROUND_Y">
+            <summary>Cao độ mặt sàn tạm — cả thế giới là một mặt phẳng. Map có hình dạng thật là Phase 10.</summary>
         </member>
         <member name="F:MMORPG.Shared.World.MovementRules.WORLD_HALF_EXTENT">
-            <summary>Nửa cạnh vùng đi lại: map tạm là hình vuông [-E, +E] quanh gốc, chưa có va chạm.</summary>
+            <summary>Nửa cạnh vùng đi lại theo trục ngang. Trục dọc không còn bị kẹp: đã có sàn và trọng lực.</summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.Step(System.Single,System.Single,System.Single,System.Single,System.Single)">
+        <member name="F:MMORPG.Shared.World.MovementRules.COYOTE_TICKS">
             <summary>
-            Một bước mô phỏng: dịch theo hướng rồi kẹp trong biên map.
-            dir phải đã chuẩn hoá (độ dài ≤ 1) — người gọi chịu trách nhiệm, hàm này không kiểm lại.
+            Số tick còn được nhảy sau khi đã rời mép sàn (coyote time). 3 tick = 150ms: đủ để tha thứ
+            cho phản xạ người, chưa đủ để thành "nhảy giữa không trung".
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.JUMP_BUFFER_TICKS">
+            <summary>Số tick một cú bấm nhảy còn được giữ lại chờ tiếp đất (jump buffer).</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.EXPIRED">
+            <summary>
+            Giá trị "hết hạn" cho hai bộ đếm trên — lớn hơn mọi ngưỡng nên điều kiện nhảy luôn sai.
+            Cũng là trần kẹp để bộ đếm không tăng tới tràn int khi người chơi đứng yên lâu.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single)">
+             <summary>
+             Một bước mô phỏng. Hàm THUẦN: không đọc thời gian, không random, không đọc biến ngoài —
+             cùng (state, intent, dt) luôn cho cùng kết quả, ở cả hai đầu dây.
+            
+             THỨ TỰ các phép dưới đây là một phần của contract. Đổi thứ tự là đổi kết quả, và vì
+             hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
+             </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.MoveIntent">
+            <summary>
+            Ý định của người chơi tại một tick — đúng những gì bấm được trên bàn phím, không hơn.
+            Cố tình không có trục Y: trong platformer người chơi không điều khiển chiều dọc,
+            chiều dọc là hệ quả của trọng lực và của cú nhảy.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveIntent.DirX">
+            <summary>Hướng ngang trong [-1, 1]. Người gọi chịu trách nhiệm kẹp; hàm Step không kiểm lại.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveIntent.Jump">
+            <summary>
+            CẠNH LÊN của nút nhảy: "tại tick này người chơi vừa bấm", không phải "nút đang bị giữ".
+            Cạnh chứ không phải mức, vì ở 20 tick/s một cú bấm nhanh 30ms sẽ lọt trọn vào khe giữa
+            hai lần đọc mức — người chơi bấm mà nhân vật không nhảy, không có lỗi nào để lần theo.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.MoveState">
+             <summary>
+             Toàn bộ trạng thái vật lý của một entity — tập nhỏ nhất mà biết nó thì tính được tick kế tiếp.
+             Vận tốc nằm ở đây chứ không suy ra từ vị trí: hai nhân vật cùng một điểm, một đang bay lên
+             một đang rơi xuống, tick sau sẽ ở hai chỗ khác nhau.
+            
+             Là struct field công khai chứ không phải class có property: nó bị copy hàng chục lần mỗi giây
+             trong vòng replay của reconciliation, và tính "gán là copy" của value type chính là thứ giữ
+             cho replay không vô tình sửa trạng thái gốc.
+             </summary>
+             <remarks>
+             Struct này đi thẳng trên dây bên trong <c>MoveStateResponse</c>. Vì mọi field đều là kiểu
+             unmanaged, MemoryPack không sinh mã đọc/ghi từng field mà **copy nguyên khối bộ nhớ** — nhanh,
+             nhưng đổi lại byte trên dây chính là bố cục struct trong RAM. Hai ràng buộc đi kèm:
+             (1) <see cref="F:System.Runtime.InteropServices.LayoutKind.Sequential"/> ghi tường minh để server (CoreCLR) và client
+             (Mono/IL2CPP) chắc chắn xếp field giống nhau; (2) thêm một field kiểu tham chiếu (string,
+             mảng...) là phá tính unmanaged — lúc đó phải đổi cách gửi, không phải chỉ thêm một dòng.
+             </remarks>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.Grounded">
+            <summary>Chân có đang chạm sàn ở CUỐI tick trước không. Dùng cho hiển thị; điều kiện nhảy dùng bộ đếm bên dưới.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.TicksSinceGrounded">
+            <summary>
+            Số tick từ lần cuối chạm đất. 0 = đang đứng đất. Cho phép "coyote time": vẫn nhảy được vài
+            tick sau khi đã rời mép sàn — người chơi luôn cảm thấy mình bấm kịp, và với họ thì họ đúng.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.TicksSinceJumpRequest">
+            <summary>
+            Số tick từ lần cuối bấm nhảy. Cho phép "jump buffer": bấm sớm ngay trước lúc tiếp đất thì
+            cú bấm được giữ lại, chạm đất là bật lên ngay thay vì rơi vào hư không.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MoveState.AtRest(System.Single,System.Single)">
+            <summary>
+            Trạng thái lúc mới vào world. Grounded = false có chủ ý: để tick đầu tiên tự rơi và tự
+            phát hiện sàn, thay vì tin rằng toạ độ lấy từ DB đang đứng đúng trên mặt đất.
             </summary>
         </member>
     </members>
