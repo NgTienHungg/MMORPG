@@ -12,26 +12,16 @@ namespace MMORPG.Client.World
     /// </summary>
     public sealed class PlayerMotor : MonoBehaviour
     {
+        /// <summary>
+        /// Tốc độ tan của sai lệch hiển thị, đơn vị 1/giây. 12 ≈ tan 90% trong ~0.2s: đủ nhanh để
+        /// không thấy nhân vật trôi lệch, đủ chậm để cú sửa không thành một cú giật mới.
+        /// </summary>
+        private const float CORRECTION_DECAY = 12f;
+
+        /// <summary>Lệch hơn mức này thì kéo mượt là dối người chơi — cắt thẳng về vị trí đúng.</summary>
+        private const float SNAP_DISTANCE = 2f;
+
         private InputSystem_Actions _inputActions;
-
-        /// <summary>Một bước dự đoán chưa được server xác nhận — nguyên liệu để replay.</summary>
-        private readonly struct PendingInput
-        {
-            public readonly int Seq;
-
-            /// <summary>
-            /// Giữ nguyên cả MoveIntent chứ không chỉ hướng chạy. Thiếu cờ Jump ở đây thì mỗi lần
-            /// reconciliation replay lại, quỹ đạo tính ra là quỹ đạo KHÔNG có cú nhảy — nhân vật
-            /// bị kéo tụt về mặt đất đúng lúc đang bay lên.
-            /// </summary>
-            public readonly MoveIntent Intent;
-
-            public PendingInput(int seq, MoveIntent intent)
-            {
-                Seq = seq;
-                Intent = intent;
-            }
-        }
 
         private WorldApi _worldApi;
         private WorldNetHandler _worldNetHandler;
@@ -49,6 +39,16 @@ namespace MMORPG.Client.World
         // Trạng thái MÔ PHỎNG (nhảy bậc 20Hz) tách khỏi vị trí HIỂN THỊ (transform, mượt theo frame).
         private MoveState _simState;
 
+        /// <summary>Trạng thái ở tick TRƯỚC — đầu trái của đoạn nội suy đang vẽ.</summary>
+        private MoveState _prevSimState;
+
+        /// <summary>
+        /// Phần bù thị giác: chênh lệch giữa chỗ đang vẽ và chỗ mô phỏng nói, sinh ra mỗi lần
+        /// reconciliation kéo trạng thái về. Cộng vào lúc vẽ rồi cho tiêu dần, nhờ đó cú sửa trải
+        /// ra thành một đoạn trượt ngắn thay vì một bước nhảy cóc.
+        /// </summary>
+        private Vector2 _renderOffset;
+
         private void Awake()
         {
             _inputActions = new InputSystem_Actions();
@@ -60,6 +60,7 @@ namespace MMORPG.Client.World
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
             _simState = MoveState.AtRest(spawnPos.x, spawnPos.y);
+            _prevSimState = _simState;
 
             _worldNetHandler.OnMoveStateResult += OnMoveStateResult;
         }
@@ -93,17 +94,35 @@ namespace MMORPG.Client.World
             while (_accumulator >= MovementRules.TICK_DT)
             {
                 _accumulator -= MovementRules.TICK_DT;
+
+                // Chốt tick vừa rời đi TRƯỚC khi Step ghi đè _simState — nó là đầu trái của đoạn
+                // nội suy mà các frame sắp tới sẽ đi dọc theo.
+                _prevSimState = _simState;
                 Step(dirX);
             }
 
-            // Hiển thị đuổi theo mô phỏng. Mốc là MAX_FALL_SPEED chứ không phải MOVE_SPEED:
-            // lúc rơi, mô phỏng đi nhanh gấp 4 lần lúc chạy, đuổi bằng tốc độ chạy là tụt lại thấy rõ.
-            transform.position = Vector3.MoveTowards(
-                transform.position, new Vector3(_simState.X, _simState.Y, 0f),
-                MovementRules.MAX_FALL_SPEED * 1.5f * Time.deltaTime
-            );
+            // Suy giảm theo hàm mũ để sai lệch tan sau cùng một khoảng THỜI GIAN ở mọi frame rate,
+            // thay vì sau cùng một số FRAME. Nhân trực tiếp: không cần nhớ giá trị ban đầu.
+            _renderOffset *= Mathf.Exp(-CORRECTION_DECAY * Time.deltaTime);
+
+            transform.position = InterpolatedPosition() + _renderOffset;
         }
 
+        /// <summary>
+        /// Vị trí vẽ ở frame này: điểm giữa hai tick gần nhất, tỉ lệ theo phần thời gian đã trôi
+        /// kể từ tick cuối. Hiển thị vì thế luôn trễ mô phỏng đúng một tick (50ms) — cái giá để có
+        /// đường đi liền mạch thay vì 20 bậc thang mỗi giây.
+        /// </summary>
+        private Vector2 InterpolatedPosition()
+        {
+            float alpha = _accumulator / MovementRules.TICK_DT;
+
+            return Vector2.Lerp(
+                new Vector2(_prevSimState.X, _prevSimState.Y),
+                new Vector2(_simState.X, _simState.Y),
+                alpha);
+        }
+        
         /// <summary>Một bước dự đoán: mô phỏng trước, ghi nợ, gửi lên server. Gửi CẢ khi đứng yên — thả phím cũng là input.</summary>
         private void Step(float dirX)
         {
@@ -126,20 +145,56 @@ namespace MMORPG.Client.World
         /// </summary>
         private void OnMoveStateResult(MoveStateResponse response)
         {
+            // Chỗ ĐANG vẽ, ghi lại trước khi trạng thái bị thay: mọi phép bù bên dưới đo từ đây.
+            Vector2 renderedBefore = InterpolatedPosition() + _renderOffset;
+
             _pending.RemoveAll(p => p.Seq <= response.LastInputSeq);
 
-            // Lấy TRỌN trạng thái server, không chỉ vị trí. VelY quyết định 15 tick tiếp theo của cú
-            // nhảy, hai bộ đếm coyote/buffer quyết định có được nhảy tiếp không — giữ lại bản của
-            // mình mà chỉ nhận X/Y của server là trộn hai sự thật. Gán nguyên struct: không có
-            // danh sách trường nào để quên chép.
             MoveState state = response.State;
+
+            // Đầu trái của đoạn nội suy sau khi replay = trạng thái ngay TRƯỚC bước replay cuối.
+            // Khởi tạo bằng giá trị cũ để lúc không còn input nào để replay thì giữ nguyên đầu trái:
+            // cho hai đầu mút trùng nhau là hiển thị đứng hình tới hết tick — chuyện xảy ra liên tục
+            // khi test cùng máy, lúc server gần như ack tức thì.
+            MoveState previous = _prevSimState;
 
             foreach (PendingInput pending in _pending)
             {
+                previous = state;
                 state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT);
             }
 
+            _prevSimState = previous;
             _simState = state;
+
+            // Giữ nguyên chỗ đang vẽ, đẩy toàn bộ chênh lệch vào phần bù rồi cho nó tan dần.
+            Vector2 offset = renderedBefore - InterpolatedPosition();
+
+            // Lệch quá xa (mất gói kéo dài, server dịch chuyển nhân vật) thì trượt mượt chỉ làm
+            // nhân vật đi xuyên địa hình trên đường về — cắt thẳng, thà giật một cái còn hơn.
+            if (offset.sqrMagnitude > SNAP_DISTANCE * SNAP_DISTANCE)
+                offset = Vector2.zero;
+
+            _renderOffset = offset;
+        }
+
+        /// <summary>Một bước dự đoán chưa được server xác nhận — nguyên liệu để replay.</summary>
+        private readonly struct PendingInput
+        {
+            public readonly int Seq;
+
+            /// <summary>
+            /// Giữ nguyên cả MoveIntent chứ không chỉ hướng chạy. Thiếu cờ Jump ở đây thì mỗi lần
+            /// reconciliation replay lại, quỹ đạo tính ra là quỹ đạo KHÔNG có cú nhảy — nhân vật
+            /// bị kéo tụt về mặt đất đúng lúc đang bay lên.
+            /// </summary>
+            public readonly MoveIntent Intent;
+
+            public PendingInput(int seq, MoveIntent intent)
+            {
+                Seq = seq;
+                Intent = intent;
+            }
         }
     }
 }
