@@ -26,7 +26,7 @@ namespace MMORPG.Client.World
         }
 
         /// <summary>Gửi đúng cái intent vừa dùng để dự đoán — không dàn nó ra thành từng tham số rồi ráp lại.</summary>
-        public void Move(int seq, MoveIntent intent)
+        public void Move(int seq, in MoveIntent intent)
         {
             // Không log ở đây — 20 lần/giây, log là dìm chết console.
             _netService.Send(NetCmd.MoveInput, new MoveInputRequest { Seq = seq, Intent = intent });

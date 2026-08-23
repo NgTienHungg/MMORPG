@@ -414,7 +414,7 @@
         </member>
         <member name="P:MMORPG.Shared.Dto.World.MoveInputRequest.Intent">
             <summary>
-            Đúng cái struct mà <see cref="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single)"/> nhận, không phải bản sao dàn phẳng của nó.
+            Đúng cái struct mà <see cref="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.CharacterProfile)"/> nhận, không phải bản sao dàn phẳng của nó.
             Client dự đoán bằng struct này rồi gửi chính nó đi; thêm một nút bấm mới sau này là sửa
             một chỗ, không phải bốn.
             </summary>
@@ -443,7 +443,7 @@
         <member name="T:MMORPG.Shared.Dto.World.EntitySpawnNotice">
             <summary>
             Phần BẤT BIẾN của một entity — gửi đúng một lần lúc nó xuất hiện.
-            Thứ đổi theo tick (vị trí) đi trong snapshot, không lặp lại ở đây mỗi tick.
+            Thứ đổi theo tick đi trong snapshot, không lặp lại ở đây mỗi tick.
             </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
@@ -453,11 +453,23 @@
             <b>int</b> ClassId<br/>
             <b>float</b> X<br/>
             <b>float</b> Y<br/>
+            <b>bool</b> FacingLeft<br/>
+            <b>bool</b> Crouching<br/>
+            <b>MMORPG.Shared.World.ActionState</b> Action<br/>
             </code>
             </remarks>
         </member>
+        <member name="P:MMORPG.Shared.Dto.World.EntitySpawnNotice.ClassId">
+            <summary>
+            Lớp nhân vật. Người nhận tra bảng bằng số này để biết đối phương chạy nhanh bao nhiêu và
+            mỗi hành động của họ dài bao lâu — nhờ vậy các con số ấy không phải đi trên dây.
+            </summary>
+        </member>
         <member name="P:MMORPG.Shared.Dto.World.EntitySpawnNotice.X">
             <summary>Vị trí lúc xuất hiện — mồi đầu tiên cho buffer nội suy phía client.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.EntitySpawnNotice.FacingLeft">
+            <summary>Tư thế lúc xuất hiện — để nhân vật hiện ra đã đúng hướng, không quay đầu một nhịp sau.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.World.EntityDespawnNotice">
             <remarks>
@@ -468,15 +480,28 @@
             </remarks>
         </member>
         <member name="T:MMORPG.Shared.Dto.World.EntityState">
-            <summary>Trạng thái một entity tại một tick. Cố tình chỉ có thứ thay đổi theo tick.</summary>
+            <summary>
+            Trạng thái một entity tại một tick. Cố tình chỉ có thứ NGƯỜI XEM cần để vẽ — không phải trọn
+            MoveState như kênh của chính mình. Người xem không replay ai cả, nên vận tốc và các bộ đếm
+            là byte thừa, 20 lần mỗi giây, nhân với số người quanh họ.
+            </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
             <b>int</b> EntityId<br/>
             <b>float</b> X<br/>
             <b>float</b> Y<br/>
+            <b>bool</b> FacingLeft<br/>
+            <b>bool</b> Crouching<br/>
+            <b>MMORPG.Shared.World.ActionState</b> Action<br/>
             </code>
             </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.EntityState.FacingLeft">
+            <summary>Hai thứ KHÔNG suy được từ chuỗi vị trí: hướng mặt (có trí nhớ) và tư thế ngồi.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.EntityState.Action">
+            <summary>Tầng action — do server quyết, người xem không có cách nào tự biết.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.World.WorldSnapshotNotice">
             <remarks>
@@ -725,6 +750,93 @@
             Đóng khung một gói hoàn chỉnh, sẵn sàng ghi thẳng lên socket.
             </summary>
         </member>
+        <member name="T:MMORPG.Shared.World.ActionDefinition">
+            <summary>
+            Các con số của MỘT hành động. Người thiết kế viết bằng giây — đơn vị của họ; hàm dựng quy ra
+            tick ngay tại đây để từ đó về sau mô phỏng chỉ còn làm việc với số nguyên.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.ActionDefinition.DurationTicks">
+            <summary>Hành động kéo dài bao nhiêu tick.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.ActionDefinition.CooldownTicks">
+            <summary>Nhịp tối thiểu giữa hai lần dùng, đếm từ lúc BẮT ĐẦU lần trước.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.ActionDefinition.LocksMovement">
+            <summary>
+            Trong lúc hành động này diễn ra thì thân thể có mất quyền điều khiển không.
+            Là dữ liệu chứ không phải một nhánh switch: thêm một chiêu "đứng yên đọc chú" chỉ là
+            thêm một ô true, không phải sửa luật.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.CharacterProfile">
+             <summary>
+             Bộ số của một lớp nhân vật: chạy nhanh bao nhiêu, nhảy cao bao nhiêu, mỗi hành động dài bao lâu.
+            
+             Cả server lẫn client đều đọc — server để mô phỏng, client để dự đoán và để co hoạt ảnh cho vừa
+             thời lượng. Vì vậy nó phải ở Shared: hai bên đọc hai bảng khác nhau thì mọi thứ vẫn chạy, chỉ
+             là lệch dần, và không có lỗi nào để lần theo.
+             </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.CharacterProfile.MoveSpeed">
+            <summary>Tốc độ chạy ngang, world unit/giây.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.CharacterProfile.JumpSpeed">
+            <summary>Vận tốc bật lên tức thời khi nhảy.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.CharacterProfile.GetAction(MMORPG.Shared.World.ActionState)">
+            <summary>
+            Số liệu của một hành động. Hành động không có trong bảng (kể cả None) trả về bản rỗng:
+            0 tick, không khoá thân — nhờ vậy chỗ gọi không phải kiểm null hay kiểm None.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.CharacterProfiles">
+            <summary>
+            Bảng tra profile theo lớp nhân vật. Hiện dựng bằng C# ngay trong Shared; khi bảng chuyển sang
+            đọc từ file thì chỉ hàm Build đổi, mọi chỗ gọi Get giữ nguyên.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.LocomotionState">
+            <summary>
+            Tư thế thân thể — SUY RA từ trạng thái vật lý, không đi trên dây và không ai "quyết" nó cả.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.ActionRequest">
+            <summary>
+            Hành động mà CLIENT được phép xin. Cố tình không có Hurt/Die: hai trạng thái đó sinh ra từ
+            sự kiện chỉ server thấy, nên chúng phải nằm ngoài tầm diễn đạt của một gói tin gửi lên.
+            Chặn bằng kiểu dữ liệu chứ không bằng câu lệnh — câu lệnh chỉ được kiểm bởi trí nhớ của
+            người sửa code tiếp theo, còn kiểu thì được kiểm mỗi lần build.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.ActionState">
+             <summary>
+             Hành động một entity CÓ THỂ đang ở. Tập này rộng hơn <see cref="T:MMORPG.Shared.World.ActionRequest"/> đúng ở phần
+             mà chỉ server có quyền đặt.
+            
+             Giá trị số cũng chính là ĐỘ ƯU TIÊN: lớn hơn thì cắt ngang được cái nhỏ hơn.
+             </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.CharacterStates">
+            <summary>Luật của tầng trạng thái: suy tư thế, và ai được cắt ngang ai.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.CharacterStates.Derive(MMORPG.Shared.World.MoveState@)">
+             <summary>
+             Tư thế thân thể tại một trạng thái vật lý. Hàm THUẦN, và thứ tự kiểm là một phần của
+             định nghĩa: trên không thắng ngồi, ngồi thắng chạy. Đang bay mà bấm ngồi thì vẫn là Jump.
+            
+             Server không gọi hàm này lần nào — server không vẽ gì cả. Nó nằm ở đây vì đây là nơi
+             duy nhất định nghĩa "MoveState này nghĩa là tư thế gì", và định nghĩa phải ở cạnh dữ
+             liệu nó đọc: thêm một field vào MoveState là thấy ngay có phải sửa chỗ này không.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.CharacterStates.CanEnter(MMORPG.Shared.World.ActionState,System.Int32,MMORPG.Shared.World.ActionState)">
+            <summary>
+            Có được chuyển sang <paramref name="next"/> không. Toàn bộ ma trận 4×4 gói trong một
+            dòng luật: ưu tiên cao hơn thì cắt ngang được, bằng hoặc thấp hơn thì phải chờ hết
+            thời lượng. Viết 16 nhánh cho 16 ô là cách chắc chắn để sai một ô mà không ai biết.
+            </summary>
+        </member>
         <member name="T:MMORPG.Shared.World.MovementRules">
              <summary>
              Luật di chuyển dùng CHUNG: server mô phỏng thật, client dự đoán trước rồi replay.
@@ -736,20 +848,10 @@
              suốt cú nhảy chứ không tự triệt tiêu.
              </summary>
         </member>
-        <member name="F:MMORPG.Shared.World.MovementRules.MOVE_SPEED">
-            <summary>Tốc độ chạy ngang, world unit/giây.</summary>
-        </member>
         <member name="F:MMORPG.Shared.World.MovementRules.GRAVITY">
             <summary>
             Gia tốc rơi, unit/giây². Lớn hơn 9.81 của đời thật rất nhiều — trọng lực "đúng vật lý"
             cho cảm giác lơ lửng như trên mặt trăng, không game platformer nào dùng.
-            </summary>
-        </member>
-        <member name="F:MMORPG.Shared.World.MovementRules.JUMP_SPEED">
-            <summary>
-            Vận tốc bật lên tức thời khi nhảy. Đỉnh nhảy = JUMP_SPEED² / (2·GRAVITY) ≈ 2 unit,
-            thời gian bay ≈ 2·JUMP_SPEED/GRAVITY ≈ 0.73s ≈ 15 tick — đủ dài để nội suy phía
-            người xem có mẫu mà vẽ đường cong.
             </summary>
         </member>
         <member name="F:MMORPG.Shared.World.MovementRules.MAX_FALL_SPEED">
@@ -779,21 +881,38 @@
             Cũng là trần kẹp để bộ đếm không tăng tới tràn int khi người chơi đứng yên lâu.
             </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single)">
+        <member name="M:MMORPG.Shared.World.MovementRules.ToTicks(System.Single)">
+             <summary>
+             Quy giây ra tick. Chạy MỘT LẦN lúc dựng bảng, không nằm trong Step — nhờ vậy vòng mô phỏng
+             chỉ còn làm việc với số nguyên, và hai đầu dây không có cửa nào để lệch nhau ở chữ số cuối.
+            
+             Làm tròn LÊN và có sàn 1: một hành động 10ms mà quy ra 0 tick thì nó không tồn tại — phép 0
+             của Step sẽ xoá nó ngay tick sau. Hệ quả phải nói trước với người viết số: thời lượng bị
+             lượng tử hoá theo 50ms, viết 0.23s hay 0.25s đều ra 5 tick.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.CharacterProfile)">
              <summary>
              Một bước mô phỏng. Hàm THUẦN: không đọc thời gian, không random, không đọc biến ngoài —
-             cùng (state, intent, dt) luôn cho cùng kết quả, ở cả hai đầu dây.
+             cùng (state, intent, dt, profile) luôn cho cùng kết quả, ở cả hai đầu dây.
+            
+             profile là bộ số của CHÍNH nhân vật đang được mô phỏng. Nó vào bằng tham số chứ không nằm
+             trong MoveState: MoveState đi trên dây mỗi tick, còn profile thì hai bên tra được từ ClassId
+             — gửi kèm là trả tiền băng thông 20 lần mỗi giây cho một thứ không bao giờ đổi.
             
              THỨ TỰ các phép dưới đây là một phần của contract. Đổi thứ tự là đổi kết quả, và vì
              hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
              </summary>
         </member>
         <member name="T:MMORPG.Shared.World.MoveIntent">
-            <summary>
-            Ý định của người chơi tại một tick — đúng những gì bấm được trên bàn phím, không hơn.
-            Cố tình không có trục Y: trong platformer người chơi không điều khiển chiều dọc,
-            chiều dọc là hệ quả của trọng lực và của cú nhảy.
-            </summary>
+             <summary>
+             Ý định của người chơi tại một tick — đúng những gì bấm được trên bàn phím, không hơn.
+             Cố tình không có trục Y: trong platformer người chơi không điều khiển chiều dọc,
+             chiều dọc là hệ quả của trọng lực và của cú nhảy.
+            
+             Đi thẳng trên dây (bọc trong MoveInputRequest) nên mọi field ở đây đều là thứ kẻ lạ điều
+             khiển được: bên nhận phải kiểm, không được tin.
+             </summary>
         </member>
         <member name="F:MMORPG.Shared.World.MoveIntent.DirX">
             <summary>Hướng ngang trong [-1, 1]. Người gọi chịu trách nhiệm kẹp; hàm Step không kiểm lại.</summary>
@@ -805,9 +924,24 @@
             hai lần đọc mức — người chơi bấm mà nhân vật không nhảy, không có lỗi nào để lần theo.
             </summary>
         </member>
+        <member name="F:MMORPG.Shared.World.MoveIntent.Crouch">
+            <summary>
+            MỨC của nút ngồi: bấm là ngồi, thả là đứng. Ngược hẳn với Jump — ngồi là một tư thế kéo
+            dài nên chỉ giá trị mới nhất có nghĩa, gộp lại là ngồi mãi không đứng dậy được.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveIntent.Action">
+            <summary>
+            Hành động vừa xin, dạng CẠNH như Jump. Kiểu ActionRequest chứ không phải ActionState:
+            tập giá trị này cố tình hẹp hơn, để "xin được Hurt" là câu không viết ra được.
+            </summary>
+        </member>
         <member name="T:MMORPG.Shared.World.MoveState">
              <summary>
-             Toàn bộ trạng thái vật lý của một entity — tập nhỏ nhất mà biết nó thì tính được tick kế tiếp.
+             Toàn bộ trạng thái của một entity — tập nhỏ nhất mà biết nó thì tính được tick kế tiếp,
+             VÀ vẽ được nhân vật ra màn hình. Hai vai trò trong một struct là có chủ đích: nhờ vậy hoạt
+             ảnh được reconciliation lo hộ, không cần một đường đồng bộ riêng.
+            
              Vận tốc nằm ở đây chứ không suy ra từ vị trí: hai nhân vật cùng một điểm, một đang bay lên
              một đang rơi xuống, tick sau sẽ ở hai chỗ khác nhau.
             
@@ -818,10 +952,12 @@
              <remarks>
              Struct này đi thẳng trên dây bên trong <c>MoveStateResponse</c>. Vì mọi field đều là kiểu
              unmanaged, MemoryPack không sinh mã đọc/ghi từng field mà **copy nguyên khối bộ nhớ** — nhanh,
-             nhưng đổi lại byte trên dây chính là bố cục struct trong RAM. Hai ràng buộc đi kèm:
+             nhưng đổi lại byte trên dây chính là bố cục struct trong RAM. Ba ràng buộc đi kèm:
              (1) <see cref="F:System.Runtime.InteropServices.LayoutKind.Sequential"/> ghi tường minh để server (CoreCLR) và client
              (Mono/IL2CPP) chắc chắn xếp field giống nhau; (2) thêm một field kiểu tham chiếu (string,
-             mảng...) là phá tính unmanaged — lúc đó phải đổi cách gửi, không phải chỉ thêm một dòng.
+             mảng...) là phá tính unmanaged — lúc đó phải đổi cách gửi, không phải chỉ thêm một dòng;
+             (3) mỗi lần thêm/bớt/đổi thứ tự field là một lần đổi giao thức, DLL cũ bên Unity sẽ đọc ra
+             những con số vô nghĩa mà không báo lỗi.
              </remarks>
         </member>
         <member name="F:MMORPG.Shared.World.MoveState.Grounded">
@@ -838,6 +974,27 @@
             Số tick từ lần cuối bấm nhảy. Cho phép "jump buffer": bấm sớm ngay trước lúc tiếp đất thì
             cú bấm được giữ lại, chạm đất là bật lên ngay thay vì rơi vào hư không.
             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.Crouching">
+            <summary>
+            Đang ngồi. Là sự thật vật lý chứ không phải chuyện hình ảnh: ngồi thì VelX bị ép về 0,
+            nên nó phải nằm trong trạng thái mà cả hai bên cùng mô phỏng.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.FacingLeft">
+            <summary>
+            Hướng mặt. Không suy ra được từ VelX vì nó có TRÍ NHỚ — đứng yên thì giữ hướng cũ.
+            Và vì hướng quyết định đòn đánh nhắm về phía nào nên nó phải do server chốt.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.Action">
+            <summary>Hành động đang thực hiện. Chỉ Step (từ ý định) hoặc lệnh của server đặt được.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.ActionTicksLeft">
+            <summary>Số tick còn lại của hành động. Đếm ngược trong Step nên replay tự đúng.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.TicksSinceAttack">
+            <summary>Số tick kể từ lần đánh gần nhất — nền của cooldown. Cùng họ với TicksSinceGrounded.</summary>
         </member>
         <member name="M:MMORPG.Shared.World.MoveState.AtRest(System.Single,System.Single)">
             <summary>

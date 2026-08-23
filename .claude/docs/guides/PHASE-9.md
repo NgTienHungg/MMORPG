@@ -6,13 +6,21 @@
 > rằng có những trạng thái client **không bao giờ được tự bật**.
 >
 > **Điều kiện:** xong [`PHASE-8.md`](PHASE-8.md) hết Bước 4 — nhảy có coyote time, hai client thấy
-> nhau bay lên rơi xuống theo đường cong.
+> nhau bay lên rơi xuống theo đường cong. Rồi làm **Bước 0** trước khi vào Bước 1: cho sàn phẳng tạm
+> trùng với tilemap đã vẽ, và gỡ hai file `MapGrid.cs` / `Map.cs` chép từ bản tài liệu top-down cũ.
+>
+> **Map thật KHÔNG thuộc phase này.** Phase 9 vẫn chạy trên mặt phẳng tạm của Phase 8; hình dạng map
+> (lớp `Collision` trong tilemap → tool export ra file map → server và client cùng đọc) là toàn bộ
+> nội dung của [`PHASE-10.md`](PHASE-10.md). Trộn hai việc vào một phase thì lúc nhân vật vẽ sai sẽ
+> không biết tại hoạt ảnh hay tại va chạm.
 >
 > **Bài học chính:** (1) trạng thái nhân vật có **hai tầng** với hai chủ sở hữu khác nhau, và nhầm
 > tầng là phá golden rule #2 ở dạng hình ảnh; (2) cách chặn client xin bậy **rẻ nhất** không phải là
-> `if` kiểm tra ở server mà là **kiểu dữ liệu không cho phép diễn đạt điều bậy**; (3) thời lượng một
-> trạng thái đếm bằng **tick**, không bao giờ bằng độ dài clip — vì server không có clip nào cả;
-> (4) `Animator` của Unity là **máy chiếu phim**; đặt luật chơi vào đó là đặt luật ở nơi server không
+> `if` kiểm tra ở server mà là **kiểu dữ liệu không cho phép diễn đạt điều bậy**; (3) con số của luật
+> chơi **viết bằng giây** (đơn vị của người thiết kế), **đếm bằng tick** (đơn vị của mô phỏng), và
+> **không bao giờ** lấy từ độ dài `AnimationClip`; (4) những con số ấy là **dữ liệu theo từng nhân
+> vật**, không phải `const` — nên chúng sống trong một bảng tra được, không nằm rải trong code;
+> (5) `Animator` của Unity là **máy chiếu phim**; đặt luật chơi vào đó là đặt luật ở nơi server không
 > đọc được, không replay được, không test được.
 
 Format như trước: **hướng làm** hiện sẵn, **📖 Lời giải** trong foldout.
@@ -60,6 +68,43 @@ MoveState { Action ActionTicksLeft } ──────────────�
 Cả hai tầng **đều đọc từ `MoveState`**. Nghĩa là cả hai đều đã được reconciliation của Phase 8 lo hộ:
 gói `MoveState` về → replay → ra trạng thái mới → hình ảnh tự đúng theo. Không có đường ống đồng bộ
 riêng cho hoạt ảnh, và đó là lý do phase này ngắn hơn vẻ ngoài của nó.
+
+---
+
+## Bước 0 — Cho sàn phẳng tạm trùng với map đã vẽ (10 phút)
+
+Phase 8 để cả thế giới là một mặt phẳng ở `GROUND_Y = 0`, biên ngang `±WORLD_HALF_EXTENT`. Nhưng
+trong scene thì `Map.prefab` đã có tilemap vẽ tay: mặt đất nằm ở một cao độ khác 0, và map trải dài
+về một phía chứ không đối xứng quanh gốc toạ độ. Không chỉnh thì suốt phase này nhân vật đứng lơ lửng
+giữa không khí và kẹt vào một bức tường vô hình giữa map — nhìn cái gì cũng thấy sai, mà sai vì địa
+hình chứ không phải vì hoạt ảnh. Debug hoạt ảnh trên một nền đã sai sẵn là tự làm khó mình.
+
+Chọn một trong hai, mất vài phút:
+
+- **Rẻ nhất:** kéo object `Map` trong scene lên/xuống sao cho **mặt trên của hàng đất mà nhân vật
+  đứng nằm đúng ở `y = 0`**. Không sửa một dòng code nào.
+- Hoặc sửa hằng trong `MovementRules` cho khớp map: `GROUND_Y` = cao độ mặt đất đã vẽ, và thay
+  `Math.Clamp(state.X, -WORLD_HALF_EXTENT, WORLD_HALF_EXTENT)` bằng hai hằng `WORLD_MIN_X` /
+  `WORLD_MAX_X` lấy từ bề ngang tilemap (`Tilemap.cellBounds` trong Inspector cho biết ngay).
+
+Cả hai đều là **tạm** và cả hai đều bị xoá ở Phase 10. Ghi thẳng điều đó vào comment của hằng số để
+sau này không ai tưởng đây là thiết kế.
+
+> ### Hai file phải gỡ trước khi bắt đầu
+>
+> `Server/Shared/World/MapGrid.cs` và `Server/Shared/World/Map.cs` đang nằm trong staging là chép từ
+> **bản cũ** của tài liệu Map — bản viết cho game top-down: lưới chỉ có hai loại ô "đi được / không đi
+> được", map cố định kích thước và đặt giữa gốc toạ độ.
+>
+> Platformer cần khác hẳn: ô **đặc**, ô **rỗng**, và **bệ xuyên-một-chiều** (nhảy xuyên từ dưới lên,
+> đứng được từ trên xuống) — ba loại chứ không phải hai. Map cũng không cố định kích thước: mỗi map
+> có origin và bề rộng riêng, và hình dạng của nó phải sinh ra từ **chính tilemap bạn vẽ**, không phải
+> từ một mảng chuỗi gõ tay trong `Shared` — gõ tay là có hai bản vẽ của cùng một map, và không ai kiểm
+> hai bản ấy có khớp nhau không.
+>
+> `git rm --cached` rồi xoá (hoặc `git stash`) hai file đó đi. Bản đúng dựng lại từ đầu ở Phase 10.
+> Giữ lại thì tới Phase 10 sẽ phải xoá đúng lúc đang bận việc khác, và trong lúc chờ thì có một
+> `MapGrid` trong `Shared` mà không ai gọi — thứ tệ hơn cả không có gì.
 
 ---
 
@@ -150,22 +195,30 @@ coyote time; giờ là năm field cho hoạt ảnh. Đây không phải thiết 
 kiểu `ActionRequest` (**nút cạnh** — như `Jump`). Nhớ luật của Phase 8: trục giữ thì lấy giá trị mới
 nhất, nút cạnh thì gộp lại tới khi tiêu thụ.
 
-**(f) Dọn DTO — bỏ hẳn kiểu chép tay từng field.** `MoveStateResponse` hiện chép tay 7 field từ
-`MoveState`; sau bước này sẽ là 12. Ba chỗ chép tay (khai báo DTO, server điền, client đọc) × 12 field
-= 36 cơ hội gõ nhầm — mà nhầm thì **không có lỗi biên dịch**, chỉ có một field im lặng mang giá trị
-mặc định.
-
-Cho `MoveState` và `MoveIntent` đi thẳng trên dây:
+**(f) DTO đã gói trọn từ Phase 8 — bước này không phải làm gì, và đó là điểm đáng dừng lại.**
+`MoveInputRequest` / `MoveStateResponse` hiện đã mang nguyên `MoveIntent` / `MoveState` chứ không chép
+tay từng field:
 
 ```csharp
-[MemoryPackable] public partial struct MoveState  { ... }
-[MemoryPackable] public partial struct MoveIntent { ... }
-
-[MemoryPackable] public partial class MoveInputRequest  { public int Seq; public MoveIntent Intent; }
-[MemoryPackable] public partial class MoveStateResponse { public int LastInputSeq; public MoveState State; }
+public partial class MoveInputRequest  { public int Seq; public MoveIntent Intent; }
+public partial class MoveStateResponse { public int LastInputSeq; public MoveState State; }
 ```
 
-Số chỗ chép tay về **0**. Thêm field vào `MoveState` từ nay là sửa đúng một file.
+Nhờ vậy `MoveState` nở từ 7 lên 12 field mà **không có chỗ nào phải chép thêm**. Nếu còn ba chỗ chép
+tay (khai báo DTO, server điền, client đọc) thì mỗi field mới là 3 cơ hội gõ nhầm — mà nhầm thì
+**không có lỗi biên dịch**, chỉ có một field im lặng mang giá trị mặc định.
+
+**Một thứ phải giữ nguyên khi thêm field:** `MoveState` và `MoveIntent` **không** có `[MemoryPackable]`,
+chúng chỉ có `[StructLayout(LayoutKind.Sequential)]`. MemoryPack gặp struct **unmanaged** (mọi field
+là kiểu giá trị, không chứa tham chiếu) thì copy nguyên khối bộ nhớ thay vì sinh mã đọc/ghi từng
+field — nhanh hơn, nhưng byte trên dây **chính là** bố cục struct trong RAM. Hai hệ quả cho phase này:
+
+- `bool`, `int` và `enum : byte` đều là unmanaged, nên 5 field mới không phá tính chất đó. Thêm một
+  `string` hay một mảng thì phá — và lúc ấy phải đổi hẳn cách gửi chứ không phải thêm một dòng.
+- Bố cục đổi **là** giao thức đổi. Build `Shared` xong mà DLL chưa sang được Unity thì hai bên đọc
+  cùng một chuỗi byte theo hai bố cục khác nhau: không lỗi, không log, chỉ có nhân vật nhấp nháy ở
+  những toạ độ vô nghĩa. `NetCmd` không bảo vệ được loại lệch này — nó chỉ bảo đảm hai bên gọi đúng
+  handler, không bảo đảm hai bên hiểu payload giống nhau.
 
 Có một câu hỏi đúng phải hỏi ở đây: *gắn format gói tin vào cấu trúc nội bộ như vậy có phải là coupling
 tồi không?* Với kênh này thì **không**, và lý do đáng nhớ:
@@ -175,14 +228,39 @@ tồi không?* Với kênh này thì **không**, và lý do đáng nhớ:
 > format — giữ chúng khác nhau là có chủ đích, không phải quên gộp.
 
 **(g) `EntityState` — thứ người khác cần, và không hơn.** Người xem **không** cần `VelX`, `VelY`,
-`TicksSinceGrounded`… Họ cần đủ để vẽ. Thêm đúng hai byte:
+`TicksSinceGrounded`… Họ cần đủ để vẽ. Thêm đúng ba trường, **viết thẳng ra, không đóng gói bit**:
 
 ```csharp
-public byte Flags;   // bit 0 FacingLeft, bit 1 Crouching
-public byte Action;  // ActionState
+public bool FacingLeft;
+public bool Crouching;
+public ActionState Action;
 ```
 
-Vì sao chỉ hai thứ này chứ không gửi luôn cả `LocomotionState`? Vì phần còn lại **suy được từ chính
+Bản đầu của phase này gói hai `bool` vào một `byte Flags` với `1 << 0`, `1 << 1`, `flags |= ...`.
+Bỏ đi, có chủ đích, và lý do đáng nhớ hơn cả cái byte tiết kiệm được:
+
+| | `byte Flags` + mặt nạ bit | Ba trường viết thẳng |
+|---|---|---|
+| Tốn | 2 byte/entity/tick | 3 byte/entity/tick |
+| Đọc code | phải nhớ bit nào là gì, sai một bit thì nửa số nhân vật quay ngược mặt | nhìn tên là biết |
+| Thêm một cờ mới | sửa hằng số, sửa `Pack`, sửa `Has`, và không được đụng thứ tự bit cũ | thêm một dòng |
+| Sai thì báo ở đâu | không đâu cả | không đâu cả — nhưng khó sai hơn nhiều |
+
+Một byte thừa × 20 tick/s × 30 người quanh bạn = **600 byte/giây**. Đường truyền nào cũng nuốt được
+con số đó mà không chớp mắt. Đổi lại là code đọc được, và ở một dự án học thì đó là thứ đắt hơn.
+
+> Nén bit là **tối ưu**, không phải thiết kế. Tối ưu đúng lúc là sau khi đã đo; tối ưu sai lúc là trả
+> phí bằng thời gian đọc code của chính mình, mỗi lần mở file, mãi mãi.
+
+Ngày nào cờ nhiều lên thật (10–15 cái: choáng, tàng hình, cưỡi thú, đang giao dịch…) và profiler chỉ
+đúng vào băng thông snapshot thì hãy nén — và khi đó nén ở **đúng một chỗ** trong `Shared`, không phải
+mặt nạ bit chép tay hai bên. Ghi vào "Để dành" rồi đi tiếp.
+
+`Action` gửi thẳng kiểu `ActionState` chứ không phải `byte`: MemoryPack ghi enum đúng bằng 1 byte của
+kiểu nền, nên **cùng giá lại không phải cast ở hai đầu**. Cast `(byte)`/`(ActionState)` chỉ là chỗ để
+gõ nhầm, không mua được gì.
+
+Vì sao chỉ ba thứ này chứ không gửi luôn cả `LocomotionState`? Vì phần còn lại **suy được từ chính
 vị trí đang gửi**: hai mẫu snapshot liên tiếp cho `ΔY > 0` là đang bay lên, `ΔY < 0` là đang rơi,
 `ΔY == 0` là đang chạm đất, rồi `ΔX` phân biệt `Idle` với `Walk`. Chi tiết ở Bước 5. Còn hai thứ
 **không** suy được là `Crouching` (ngồi và đứng yên cho cùng một chuỗi vị trí) và `FacingLeft` (đứng
@@ -190,9 +268,6 @@ yên thì hướng mặt là trí nhớ, không phải chuyển động).
 
 Bài tập nhỏ tự làm trước khi đọc tiếp: lấy 5 giá trị của `LocomotionState`, tự phân loại cái nào suy
 được từ hai mẫu vị trí, cái nào không, và vì sao. Trả lời đúng câu đó là hiểu xong nửa phase.
-
-Đóng gói bit ở **một chỗ duy nhất** trong `Shared` (`EntityFlags.Pack` / `.Has`) — mặt nạ bit chép tay
-hai bên là đúng anti-pattern số 1 của repo, chỉ khác chỗ nạn nhân là một con số `1 << 1`.
 
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
@@ -284,67 +359,98 @@ namespace MMORPG.Shared.World
             return ticksLeft <= 0;
         }
 
-        /// <summary>
-        /// Hành động có khoá thân thể lại không: ăn đòn và chết thì không tự đi được nữa.
-        /// Đánh thì vẫn chạy được — bộ sprite có cả jumpATK lẫn flyKick, khoá chân là tự mâu thuẫn.
-        /// </summary>
-        public static bool BlocksMovement(ActionState action)
-        {
-            return action == ActionState.Hurt || action == ActionState.Die;
-        }
+        // Cố tình KHÔNG có hàm kiểu BlocksMovement(action) ở đây: "hành động này có khoá thân không"
+        // là một CON SỐ của từng hành động, không phải một luật chung — nó nằm trong ActionDefinition.
     }
 }
 ```
 
-**`Server/Shared/World/MoveState.cs`** — thêm 5 field vào `MoveState`, 2 field vào `MoveIntent`, và
-`[MemoryPackable]` cho cả hai:
+**`Server/Shared/World/MoveState.cs`** — thêm 2 field vào `MoveIntent`, 5 field vào `MoveState`.
+Giữ nguyên `[StructLayout(LayoutKind.Sequential)]` và **không** thêm `[MemoryPackable]`: hai struct
+này vẫn unmanaged nên MemoryPack vẫn copy nguyên khối — xem mục (f).
 
 ```csharp
-using MemoryPack;
+using System.Runtime.InteropServices;
 
 namespace MMORPG.Shared.World
 {
     /// <summary>
     /// Ý định của người chơi tại một tick — đúng những gì bấm được trên bàn phím, không hơn.
-    /// Đi thẳng trên dây (bọc trong MoveInputRequest) nên mọi field ở đây đều là thứ kẻ lạ
-    /// điều khiển được: người nhận phải kiểm, không được tin.
+    /// Cố tình không có trục Y: trong platformer người chơi không điều khiển chiều dọc,
+    /// chiều dọc là hệ quả của trọng lực và của cú nhảy.
+    ///
+    /// Đi thẳng trên dây (bọc trong MoveInputRequest) nên mọi field ở đây đều là thứ kẻ lạ điều
+    /// khiển được: bên nhận phải kiểm, không được tin.
     /// </summary>
-    [MemoryPackable]
-    public partial struct MoveIntent
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MoveIntent
     {
-        /// <summary>Hướng ngang trong [-1, 1]. Người gọi chịu trách nhiệm kẹp; Step không kiểm lại.</summary>
+        /// <summary>Hướng ngang trong [-1, 1]. Người gọi chịu trách nhiệm kẹp; hàm Step không kiểm lại.</summary>
         public float DirX;
 
-        /// <summary>CẠNH LÊN của nút nhảy: "vừa bấm tại tick này", không phải "nút đang bị giữ".</summary>
+        /// <summary>
+        /// CẠNH LÊN của nút nhảy: "tại tick này người chơi vừa bấm", không phải "nút đang bị giữ".
+        /// Cạnh chứ không phải mức, vì ở 20 tick/s một cú bấm nhanh 30ms sẽ lọt trọn vào khe giữa
+        /// hai lần đọc mức — người chơi bấm mà nhân vật không nhảy, không có lỗi nào để lần theo.
+        /// </summary>
         public bool Jump;
 
-        /// <summary>Trục GIỮ: bấm là ngồi, thả là đứng. Khác Jump — lấy giá trị mới nhất, không gộp.</summary>
+        /// <summary>
+        /// MỨC của nút ngồi: bấm là ngồi, thả là đứng. Ngược hẳn với Jump — ngồi là một tư thế kéo
+        /// dài nên chỉ giá trị mới nhất có nghĩa, gộp lại là ngồi mãi không đứng dậy được.
+        /// </summary>
         public bool Crouch;
 
         /// <summary>
-        /// Hành động vừa xin, dạng cạnh như Jump. Kiểu ActionRequest chứ không phải ActionState:
-        /// tập giá trị này cố tình hẹp hơn, để "xin được Hurt" là chuyện không viết ra được.
+        /// Hành động vừa xin, dạng CẠNH như Jump. Kiểu ActionRequest chứ không phải ActionState:
+        /// tập giá trị này cố tình hẹp hơn, để "xin được Hurt" là câu không viết ra được.
         /// </summary>
         public ActionRequest Action;
     }
 
     /// <summary>
     /// Toàn bộ trạng thái của một entity — tập nhỏ nhất mà biết nó thì tính được tick kế tiếp,
-    /// VÀ vẽ được nhân vật ra màn hình. Hai vai trò trong một struct là có chủ đích: nhờ vậy
-    /// hoạt ảnh được reconciliation lo hộ, không cần đường đồng bộ riêng.
+    /// VÀ vẽ được nhân vật ra màn hình. Hai vai trò trong một struct là có chủ đích: nhờ vậy hoạt
+    /// ảnh được reconciliation lo hộ, không cần một đường đồng bộ riêng.
+    ///
+    /// Vận tốc nằm ở đây chứ không suy ra từ vị trí: hai nhân vật cùng một điểm, một đang bay lên
+    /// một đang rơi xuống, tick sau sẽ ở hai chỗ khác nhau.
+    ///
+    /// Là struct field công khai chứ không phải class có property: nó bị copy hàng chục lần mỗi giây
+    /// trong vòng replay của reconciliation, và tính "gán là copy" của value type chính là thứ giữ
+    /// cho replay không vô tình sửa trạng thái gốc.
     /// </summary>
-    [MemoryPackable]
-    public partial struct MoveState
+    /// <remarks>
+    /// Struct này đi thẳng trên dây bên trong <c>MoveStateResponse</c>. Vì mọi field đều là kiểu
+    /// unmanaged, MemoryPack không sinh mã đọc/ghi từng field mà **copy nguyên khối bộ nhớ** — nhanh,
+    /// nhưng đổi lại byte trên dây chính là bố cục struct trong RAM. Ba ràng buộc đi kèm:
+    /// (1) <see cref="LayoutKind.Sequential"/> ghi tường minh để server (CoreCLR) và client
+    /// (Mono/IL2CPP) chắc chắn xếp field giống nhau; (2) thêm một field kiểu tham chiếu (string,
+    /// mảng...) là phá tính unmanaged — lúc đó phải đổi cách gửi, không phải chỉ thêm một dòng;
+    /// (3) mỗi lần thêm/bớt/đổi thứ tự field là một lần đổi giao thức, DLL cũ bên Unity sẽ đọc ra
+    /// những con số vô nghĩa mà không báo lỗi.
+    /// </remarks>
+    [StructLayout(LayoutKind.Sequential)]
+    public struct MoveState
     {
         public float X;
         public float Y;
         public float VelX;
         public float VelY;
 
-        /// <summary>Chân có đang chạm sàn ở CUỐI tick trước không. Điều kiện để được nhảy.</summary>
+        /// <summary>Chân có đang chạm sàn ở CUỐI tick trước không. Dùng cho hiển thị; điều kiện nhảy dùng bộ đếm bên dưới.</summary>
         public bool Grounded;
 
+        /// <summary>
+        /// Số tick từ lần cuối chạm đất. 0 = đang đứng đất. Cho phép "coyote time": vẫn nhảy được vài
+        /// tick sau khi đã rời mép sàn — người chơi luôn cảm thấy mình bấm kịp, và với họ thì họ đúng.
+        /// </summary>
         public int TicksSinceGrounded;
+
+        /// <summary>
+        /// Số tick từ lần cuối bấm nhảy. Cho phép "jump buffer": bấm sớm ngay trước lúc tiếp đất thì
+        /// cú bấm được giữ lại, chạm đất là bật lên ngay thay vì rơi vào hư không.
+        /// </summary>
         public int TicksSinceJumpRequest;
 
         /// <summary>
@@ -365,15 +471,20 @@ namespace MMORPG.Shared.World
         /// <summary>Số tick còn lại của hành động. Đếm ngược trong Step nên replay tự đúng.</summary>
         public int ActionTicksLeft;
 
-        /// <summary>Số tick kể từ lần đánh gần nhất — nền của cooldown.</summary>
+        /// <summary>Số tick kể từ lần đánh gần nhất — nền của cooldown. Cùng họ với TicksSinceGrounded.</summary>
         public int TicksSinceAttack;
 
+        /// <summary>
+        /// Trạng thái lúc mới vào world. Grounded = false có chủ ý: để tick đầu tiên tự rơi và tự
+        /// phát hiện sàn, thay vì tin rằng toạ độ lấy từ DB đang đứng đúng trên mặt đất.
+        /// </summary>
         public static MoveState AtRest(float x, float y)
         {
             return new MoveState
             {
                 X = x, Y = y, VelX = 0f, VelY = 0f,
                 Grounded = false,
+                // Bắt đầu ở trạng thái hết hạn: vừa vào world thì chưa có tư cách nhảy nào cả.
                 TicksSinceGrounded = MovementRules.EXPIRED,
                 TicksSinceJumpRequest = MovementRules.EXPIRED,
                 Crouching = false,
@@ -389,49 +500,28 @@ namespace MMORPG.Shared.World
 }
 ```
 
-**`Server/Shared/Dto/World/MoveDto.cs`** — thu gọn còn hai lớp bọc:
+**`Server/Shared/Dto/World/MoveDto.cs`** — **không sửa một chữ.** Hai lớp bọc đã đúng hình dạng từ
+Phase 8, và `MoveState` nở thêm bao nhiêu field thì chúng cũng không đổi:
 
 ```csharp
-using MemoryPack;
-using MMORPG.Shared.World;
-
-namespace MMORPG.Shared.Dto.World
-{
-    /// <summary>
-    /// Ý định của client tại một bước dự đoán. Cố tình KHÔNG có trường thời gian:
-    /// server tích phân bằng TICK_DT của chính nó — dt mà đi trên gói tin thì dt là chỗ hack tốc độ.
-    /// </summary>
-    [MemoryPackable]
     public partial class MoveInputRequest
     {
-        /// <summary>Số thứ tự client tự đánh, tăng dần. Server echo lại để client biết đã xử tới đâu.</summary>
         public int Seq { get; set; }
-
-        /// <summary>
-        /// Nguyên vẹn ý định, không tách field. Tách ra rồi ráp lại ở đầu kia là chép tay contract:
-        /// thêm một field mà quên một chỗ ráp thì field đó im lặng mang giá trị mặc định.
-        /// </summary>
         public MoveIntent Intent { get; set; }
     }
 
-    /// <summary>
-    /// Trạng thái authoritative của chính người nhận, gửi mỗi tick.
-    /// Mang TRỌN MoveState vì đó đúng là định nghĩa của reconciliation: client replay từ đây,
-    /// thiếu một field là replay ra một tương lai khác.
-    /// </summary>
-    [MemoryPackable]
     public partial class MoveStateResponse
     {
-        /// <summary>Input cuối server đã nhận trước tick này. Client xoá pending ≤ số này rồi replay phần còn lại.</summary>
         public int LastInputSeq { get; set; }
-
         public MoveState State { get; set; }
     }
-}
 ```
 
-**`Server/Shared/Dto/World/WorldSyncDto.cs`** — `EntityState` và `EntitySpawnNotice` thêm hai byte,
-kèm chỗ đóng gói bit dùng chung:
+Đây là lần đầu trong dự án bạn **hưởng** một quyết định thiết kế cũ thay vì trả giá cho nó: hôm ở
+Phase 8 đổi từ 7 field rời sang gói trọn struct tốn khoảng nửa tiếng; hôm nay nó trả về 5 field × 3
+chỗ chép tay = 15 dòng không phải viết, và 15 cơ hội gõ nhầm không tồn tại.
+
+**`Server/Shared/Dto/World/WorldSyncDto.cs`** — `EntityState` và `EntitySpawnNotice` thêm ba trường:
 
 ```csharp
 using System;
@@ -441,35 +531,6 @@ using MMORPG.Shared.World;
 namespace MMORPG.Shared.Dto.World
 {
     /// <summary>
-    /// Đóng/mở gói các cờ nhị phân của một entity trong snapshot. Một chỗ duy nhất biết bit nào là
-    /// gì — mặt nạ bit chép tay ở hai đầu dây là chép tay contract, và lệch một bit thì cả nửa số
-    /// nhân vật quay mặt ngược mà không có lỗi nào để lần theo.
-    /// </summary>
-    public static class EntityFlags
-    {
-        public const byte FACING_LEFT = 1 << 0;
-        public const byte CROUCHING = 1 << 1;
-
-        public static byte Pack(in MoveState state)
-        {
-            byte flags = 0;
-
-            if (state.FacingLeft)
-                flags |= FACING_LEFT;
-
-            if (state.Crouching)
-                flags |= CROUCHING;
-
-            return flags;
-        }
-
-        public static bool Has(byte flags, byte bit)
-        {
-            return (flags & bit) != 0;
-        }
-    }
-
-    /// <summary>
     /// Phần BẤT BIẾN của một entity — gửi đúng một lần lúc nó xuất hiện.
     /// Thứ đổi theo tick đi trong snapshot, không lặp lại ở đây mỗi tick.
     /// </summary>
@@ -478,16 +539,21 @@ namespace MMORPG.Shared.Dto.World
     {
         public int EntityId { get; set; }
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Lớp nhân vật. Người nhận tra bảng bằng số này để biết đối phương chạy nhanh bao nhiêu và
+        /// mỗi hành động của họ dài bao lâu — nhờ vậy các con số ấy không phải đi trên dây.
+        /// </summary>
         public int ClassId { get; set; }
 
         /// <summary>Vị trí lúc xuất hiện — mồi đầu tiên cho buffer nội suy phía client.</summary>
         public float X { get; set; }
         public float Y { get; set; }
 
-        /// <summary>Cờ lúc xuất hiện — để nhân vật hiện ra đã đúng hướng mặt, không quay đầu một nhịp sau.</summary>
-        public byte Flags { get; set; }
-
-        public byte Action { get; set; }
+        /// <summary>Tư thế lúc xuất hiện — để nhân vật hiện ra đã đúng hướng, không quay đầu một nhịp sau.</summary>
+        public bool FacingLeft { get; set; }
+        public bool Crouching { get; set; }
+        public ActionState Action { get; set; }
     }
 
     [MemoryPackable]
@@ -509,10 +575,11 @@ namespace MMORPG.Shared.Dto.World
         public float Y { get; set; }
 
         /// <summary>Hai thứ KHÔNG suy được từ chuỗi vị trí: hướng mặt (có trí nhớ) và tư thế ngồi.</summary>
-        public byte Flags { get; set; }
+        public bool FacingLeft { get; set; }
+        public bool Crouching { get; set; }
 
         /// <summary>Tầng action — do server quyết, người xem không có cách nào tự biết.</summary>
-        public byte Action { get; set; }
+        public ActionState Action { get; set; }
     }
 
     [MemoryPackable]
@@ -525,27 +592,35 @@ namespace MMORPG.Shared.Dto.World
 
 </details>
 
-### ✅ CHECKPOINT A — build đỏ, và danh sách việc tự hiện ra
+### ✅ CHECKPOINT A — build **xanh**, và đó mới là chỗ đáng sợ
 
-`dotnet build Server/Shared` phải **sạch**; DLL tự copy sang `Assets/Plugins/Shared/`.
+`dotnet build Server/Shared` phải sạch; DLL tự copy sang `Assets/Plugins/Shared/`.
 
-`dotnet build Server/GameServer` và Unity console phải **đỏ**, ở đúng những chỗ này:
+Rồi build `Server/GameServer` và mở Unity: **cũng xanh nốt**, không một dòng đỏ.
 
-| Đỏ ở đâu | Vì sao |
-|---|---|
-| `PlayerEntity.SetInput` · `Integrate` | `MoveIntent` đổi hình dạng |
-| `MoveHandler.OnMoveInput` | `input.DirX` không còn — giờ là `input.Intent.DirX` |
-| `WorldService.Tick` | `MoveStateResponse` không còn 7 field rời |
-| `PlayerMotor` (Unity) | cả ba chỗ trên, phía client |
-| `WorldSpawner` · `RemotePlayerView` | **không đỏ** — `EntityState` chỉ *thêm* field |
+Dừng lại một nhịp, vì kết quả này ngược trực giác. Vừa thêm 5 field vào `MoveState`, 2 field vào
+`MoveIntent`, 2 field vào `EntityState` — mà không chỗ nào hỏng: `new MoveIntent { DirX = ..., Jump = ... }`
+cũ vẫn hợp lệ (field mới nhận giá trị mặc định), mọi chỗ đọc cũ vẫn đọc đúng thứ nó vốn đọc.
 
-Chỗ cuối đáng để ý và là bài học miễn phí: thêm field vào một DTO thì bên đọc **không** đỏ, nó chỉ
-lặng lẽ bỏ qua field mới. Đó chính là loại bug câm mà mục (f) vừa dọn cho kênh `MoveState` — và là lý
-do ở kênh snapshot ta phải **tự nhớ** đi cập nhật bên đọc, vì không có ai nhắc.
+Trình biên dịch im lặng nghĩa là **danh sách việc phải tự viết ra**:
+
+| Chỗ | Làm ở bước | Quên thì triệu chứng là gì |
+|---|---|---|
+| `MovementRules.Step` | Bước 2 | Năm field mới vĩnh viễn 0/false — nhân vật không bao giờ ngồi, không bao giờ đánh |
+| `PlayerEntity.SetInput` · `Integrate` | Bước 3 | Server không bao giờ nhìn thấy nút ngồi và nút đánh |
+| `MoveHandler.OnMoveInput` | Bước 3 | Hai field mới không qua cửa kiểm — client gửi gì server tin nấy |
+| `WorldService` (snapshot + spawn) | Bước 3 | Người khác luôn quay mặt phải, không bao giờ ngồi |
+| `PlayerMotor` | Bước 4 | Không gửi ngồi/đánh, và không vẽ hoạt ảnh nào |
+| `RemotePlayerView` · `WorldSpawner` | Bước 5 | Ba trường mới tới nơi rồi bị vứt đi |
+
+Bài học miễn phí, và đắt hơn vẻ ngoài: **contract nở ra thì trình biên dịch không còn đứng về phía
+bạn.** Xoá hay đổi tên một field thì có lỗi đỏ dẫn đường tới từng chỗ dùng; **thêm** một field thì chỉ
+có bug câm. Đó cũng là lý do mục (f) đáng giá: kênh `MoveState` gửi trọn struct nên nó tự đúng, và
+danh sách trên chỉ còn các chỗ *sinh ra* dữ liệu — không còn chỗ nào *chép lại* dữ liệu.
 
 ---
 
-## Bước 2 — Shared: `Step` biết tư thế, hướng mặt và hành động
+## Bước 2 — Shared: `Step` biết tư thế, hướng mặt, hành động — và số riêng của từng nhân vật
 
 ### Hướng làm
 
@@ -565,91 +640,277 @@ Server vẫn cần đặt được `Hurt`/`Die` từ bên ngoài — nhưng đó
 theo thời gian". Phần diễn tiến (đếm ngược, hết hạn, cắt ngang) vẫn ở trong `Step`. Ranh giới: *sự kiện
 rời rạc thì đặt từ ngoài, nhịp thời gian thì ở trong.*
 
-**Hằng số mới trong `MovementRules`** — tất cả đếm bằng **tick**:
+### Thời lượng: người ta viết bằng **giây**, mô phỏng đếm bằng **tick**
 
-| Hằng | Giá trị | Ra giây | Ghi chú |
-|---|---|---|---|
-| `ATTACK_TICKS` | `5` | 0.25s | Clip `attack` có 3 frame; 0.25s cho 3 frame là 12fps, vừa mắt |
-| `ATTACK_COOLDOWN_TICKS` | `8` | 0.4s | Đếm từ lúc **bắt đầu** đánh, không phải lúc kết thúc |
-| `HURT_TICKS` | `4` | 0.2s | Clip `hurt` 2 frame |
-| `DIE_TICKS` | `20` | 1.0s | Clip `die` 10 frame. Hết ticks vẫn **ở lại** `Die` |
+Đây là chỗ bản đầu của phase làm sai, và sai theo kiểu càng về sau càng đắt. Nó viết:
 
-**Vì sao đếm bằng tick chứ không bằng độ dài clip** — đây là ý mà ROADMAP gọi tên riêng, và nó có ba
-tầng lý do:
+```csharp
+public const int ATTACK_TICKS = 5;
+public const int HURT_TICKS = 4;
+```
 
-1. **Server không có clip.** `GameServer` là process .NET, ở đó không tồn tại `AnimationClip`. Muốn
-   server biết "đòn đánh kéo dài bao lâu" thì con số ấy phải là con số, không phải asset.
-2. **Clip là tài sản của người làm hình.** Hôm nay `attack` 3 frame, mai hoạ sĩ thêm 2 frame vung tay
-   cho đẹp. Nếu thời lượng đòn đánh ăn theo clip thì vừa sửa một file `.anim` là **đổi cân bằng game**
-   — mà không ai review nó như đổi cân bằng.
-3. **Tick là đơn vị duy nhất hai bên cùng đếm được.** Giây thì mỗi máy một đồng hồ; frame thì mỗi máy
-   một tốc độ. Tick là nhịp của giao thức.
+Hai vấn đề, và cái thứ hai nặng hơn cái thứ nhất:
 
-Hệ quả ngược lại, và là việc của Bước 4: **clip phải co giãn cho vừa số tick**, không phải ngược lại.
+**(1) Đơn vị sai với người sẽ đọc con số đó.** Hoạ sĩ nói "đòn này diễn khoảng một phần tư giây",
+game designer nói "hồi chiêu 3 giây". Không ai trong hai người biết tick là gì, và họ không nên phải
+biết: tick là chi tiết *cài đặt* của server. Bắt họ quy đổi là bắt họ làm một phép nhân trong đầu mỗi
+lần chỉnh số — và ngày server đổi từ 20 lên 30 tick/s thì **mọi con số họ từng viết đều sai**.
+
+**(2) `const` nghĩa là "cả thế giới chỉ có một giá trị".** Trong MMO thì mọi con số này đều **theo
+nhân vật**: chiến binh vung kiếm 0.25s, pháp sư đọc chú 1.2s; giày tăng tốc chạy; nội tại giảm hồi
+chiêu. `const` không diễn đạt được điều đó, và ngày cần thì không "sửa số" được — phải sửa **hình
+dạng** của code, ở mọi chỗ đang gọi.
+
+Chữa bằng ba mảnh, và mỗi mảnh trả lời đúng một câu:
+
+| Mảnh | Trả lời | Ở đâu |
+|---|---|---|
+| `ActionDefinition` | "một hành động gồm những con số nào" — thời lượng, hồi chiêu, có khoá thân không | `Shared` |
+| `CharacterProfile` | "**nhân vật này** chạy nhanh bao nhiêu, các hành động của nó dài bao lâu" | `Shared`, tra theo `ClassId` |
+| `MovementRules.ToTicks(seconds)` | "giây quy ra tick thế nào" — đúng một công thức, cho cả hai đầu dây | `Shared` |
+
+Viết vào bảng bằng **giây**, quy ra tick **một lần** lúc dựng bảng, rồi từ đó trong `Step` chỉ còn số
+nguyên tick:
+
+```csharp
+new ActionDefinition(durationSeconds: 0.25f, cooldownSeconds: 0.4f, locksMovement: false)
+```
+
+**Vì sao mô phỏng vẫn phải đếm bằng tick, không đếm thẳng bằng giây.** Ba lý do độc lập:
+
+1. **Số nguyên không có sai số.** `ActionTicksLeft--` mỗi tick rồi so `<= 0` là chính xác tuyệt đối ở
+   cả hai đầu dây. Cộng dồn `elapsedSeconds += dt` thì hai bên có thể lệch ở chữ số cuối, và một
+   hành động kết thúc sớm/muộn **một tick** giữa client và server là một lần rubber-band.
+2. **Replay phải cho đúng kết quả cũ.** Reconciliation chạy lại `Step` hàng chục lần mỗi giây; thứ
+   nào đếm bằng số nguyên thì chạy lại bao nhiêu lần cũng ra đúng con số ấy.
+3. **Tick là nhịp của giao thức.** Giây thì mỗi máy một đồng hồ, frame thì mỗi máy một tốc độ.
+
+**Giá phải trả, và phải nói trước cho người thiết kế biết:** thời lượng bị **lượng tử hoá theo 50ms**.
+Viết `0.23s` hay `0.25s` đều ra 5 tick; viết `0.26s` thì thành 6 tick (0.3s). Quy tắc quy đổi vì thế
+phải nằm ở một chỗ và làm tròn **lên**, có sàn 1 tick — một hành động 10ms mà thành 0 tick thì nó
+không tồn tại, và một `ActionTicksLeft = 0` sẽ bị phép 0 xoá ngay tick sau.
+
+**Còn `MOVE_SPEED` và `JUMP_SPEED`?** Cũng chuyển vào `CharacterProfile` — cùng lý do (2): tốc độ chạy
+là chỉ số của nhân vật, không phải hằng số của vũ trụ. Ngược lại `GRAVITY`, `MAX_FALL_SPEED`,
+`COYOTE_TICKS`, `JUMP_BUFFER_TICKS` thì **ở lại** `MovementRules`: chúng là luật của *thế giới*, ai
+vào cũng chịu như nhau. Ranh giới để tự phân loại: *đổi con số này thì một người đổi, hay cả thế giới
+đổi?*
+
+**Bảng nằm ở đâu bây giờ, và ở đâu về sau.** Phase này dựng bảng **bằng C# ngay trong `Shared`** —
+một hàm `Build()` trả về `Dictionary<int, CharacterProfile>`. Đó chưa phải đích đến, nhưng nó đã đúng
+**hình dạng**: tra theo id, viết bằng giây, quy ra tick một lần. Phase 11 chỉ thay *nguồn* của bảng
+(đọc từ file, sửa không cần build lại) mà **không đụng một dòng nào ở chỗ gọi** — `profile.MoveSpeed`,
+`profile.GetAction(...)` giữ nguyên. Đó là toàn bộ ý nghĩa của việc dựng đúng seam trước khi cần tới nó.
+
+Và vì client cũng phải đọc bảng này để dự đoán (nó là **config loại B** trong bảng phân loại ở
+ROADMAP §2b), bảng phải sống ở `Shared` chứ không phải ở `GameServer`. Ngày bảng ra file, hai bên đọc
+**cùng một file**, và lệch version thì bị chặn vào world — cũng là bài của Phase 11.
 
 **Thứ tự các phép trong `Step`** — vẫn là một phần của contract, giờ dài hơn:
 
 ```
+     Tra bảng          current = profile.GetAction(state.Action)   (sau phép 0)
 0.  Nhịp tầng action   ActionTicksLeft-- (sàn 0) ; TicksSinceAttack++ (kẹp EXPIRED)
                        hết ticks và không phải Die  →  Action = None
-1.  Tư thế             Crouching = intent.Crouch && Grounded && !BlocksMovement(Action)
-2.  Vận tốc ngang      bị khoá (Hurt/Die) hoặc đang ngồi  →  VelX = 0
-                       ngược lại                          →  VelX = DirX * MOVE_SPEED
+1.  Tư thế             Crouching = intent.Crouch && Grounded && !locked
+2.  Vận tốc ngang      locked (Hurt/Die) hoặc đang ngồi  →  VelX = 0
+                       ngược lại                        →  VelX = DirX * profile.MoveSpeed
     Hướng mặt          VelX != 0 và Action == None  →  FacingLeft = VelX < 0
 3.  Trọng lực          (như Phase 8)
 4a. Bộ đếm nhảy        (như Phase 8)
 4b. Điều kiện nhảy     (như Phase 8) + không bị khoá thân
-4c. Nếu nhảy           (như Phase 8)
+4c. Nếu nhảy           VelY = profile.JumpSpeed
 5.  Xin hành động      intent.Action == Attack
-                       && TicksSinceAttack >= ATTACK_COOLDOWN_TICKS
+                       && TicksSinceAttack >= attack.CooldownTicks
                        && CanEnter(Action, ActionTicksLeft, Attack)
-                       →  Action = Attack ; ActionTicksLeft = ATTACK_TICKS ; TicksSinceAttack = 0
+                       →  Action = Attack ; ActionTicksLeft = attack.DurationTicks ; TicksSinceAttack = 0
 6.  Tích phân          (như Phase 8)
 7.  Va chạm sàn        (như Phase 8)
 8.  Kẹp biên X         (như Phase 8)
 ```
 
-Bốn chỗ dễ sai, đọc kỹ trước khi gõ:
+Năm chỗ dễ sai, đọc kỹ trước khi gõ:
 
 - **Phép 0 phải chạy trước phép 5.** Chạy sau thì cú đánh vừa bắt đầu ở tick này đã bị chính phép 0
   trừ mất một tick. Cùng loại bẫy với "kiểm `Grounded` trước hay sau va chạm sàn" ở Phase 8.
+- **Tra bảng SAU phép 0.** Phép 0 có thể vừa đưa `Action` về `None`; tra trước thì cả tick này thân
+  thể vẫn bị khoá theo hành động đã hết hạn — trễ một nhịp, đủ để cảm thấy "nhân vật đơ".
 - **Phép 0 không được xoá `Die`.** Chết rồi thì hết `ActionTicksLeft` là hết *hoạt ảnh*, không phải
   hết *trạng thái*. Bỏ sót nhánh loại trừ này thì xác chết đứng dậy đi tiếp sau 1 giây.
 - **Hướng mặt khoá khi `Action != None`.** Đang vung tay mà xoay được người là đòn đánh đổi hướng giữa
   chừng — ở Phase 14 khi đòn đánh có hộp va chạm thật thì đó là lỗ hack: bấm đánh rồi xoay để quét cả
   hai bên.
-- **Cooldown đếm từ lúc bắt đầu.** `TicksSinceAttack = 0` đặt cùng lúc với `ActionTicksLeft = ATTACK_TICKS`.
-  Đếm từ lúc kết thúc thì tổng nhịp đánh = `ATTACK_TICKS + COOLDOWN`, và mỗi lần chỉnh độ dài anim là
-  vô tình chỉnh luôn tốc độ đánh — đúng thứ vừa nói ở lý do (2).
+- **Cooldown đếm từ lúc bắt đầu.** `TicksSinceAttack = 0` đặt cùng lúc với `ActionTicksLeft`. Đếm từ
+  lúc kết thúc thì tổng nhịp đánh = thời lượng + hồi chiêu, và mỗi lần chỉnh độ dài đòn đánh là vô
+  tình chỉnh luôn tốc độ đánh.
 
 Chú ý một điều tinh tế: phép 5 có **hai** điều kiện chặn (`CanEnter` và cooldown) và chúng khác nhau.
 `CanEnter` trả lời "trạng thái hiện tại có cho phép không" (đang `hurt` thì không). Cooldown trả lời
 "nhịp đánh đã tới chưa". Gộp hai thứ này vào một số là mất khả năng diễn đạt "đang choáng thì cấm đánh
 kể cả đã hết cooldown".
 
+Và `locksMovement` giờ là **dữ liệu**, không phải một `switch` trong code: hôm nay `Hurt`/`Die` khoá
+thân còn `Attack` thì không, mai thêm một chiêu "đứng yên đọc chú" thì chỉ là một ô `true` trong bảng.
+Đây là cùng một bài học với (c) ở Bước 1, ở tầng khác: *luật thì viết bằng code, số thì viết bằng dữ liệu.*
+
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
 
-**`Server/Shared/World/MovementRules.cs`** — hằng mới và `Step` đầy đủ:
+**`Server/Shared/World/CharacterProfile.cs`** (file mới):
 
 ```csharp
-        /// <summary>Thời lượng một đòn đánh, tính bằng TICK. Không tính bằng độ dài clip: server
-        /// không có clip nào, và độ dài clip là tài sản của người làm hình chứ không phải của luật chơi.</summary>
-        public const int ATTACK_TICKS = 5;
+using System.Collections.Generic;
+
+namespace MMORPG.Shared.World
+{
+    /// <summary>
+    /// Các con số của MỘT hành động. Người thiết kế viết bằng giây — đơn vị của họ; hàm dựng quy ra
+    /// tick ngay tại đây để từ đó về sau mô phỏng chỉ còn làm việc với số nguyên.
+    /// </summary>
+    public readonly struct ActionDefinition
+    {
+        /// <summary>Hành động kéo dài bao nhiêu tick.</summary>
+        public readonly int DurationTicks;
+
+        /// <summary>Nhịp tối thiểu giữa hai lần dùng, đếm từ lúc BẮT ĐẦU lần trước.</summary>
+        public readonly int CooldownTicks;
 
         /// <summary>
-        /// Nhịp đánh tối thiểu, đếm từ lúc BẮT ĐẦU đòn trước. Đếm từ lúc kết thúc thì mỗi lần chỉnh
-        /// độ dài đòn đánh là vô tình chỉnh luôn tốc độ đánh.
+        /// Trong lúc hành động này diễn ra thì thân thể có mất quyền điều khiển không.
+        /// Là dữ liệu chứ không phải một nhánh switch: thêm một chiêu "đứng yên đọc chú" chỉ là
+        /// thêm một ô true, không phải sửa luật.
         /// </summary>
-        public const int ATTACK_COOLDOWN_TICKS = 8;
+        public readonly bool LocksMovement;
 
-        /// <summary>Thời lượng choáng khi trúng đòn.</summary>
-        public const int HURT_TICKS = 4;
+        public ActionDefinition(float durationSeconds, float cooldownSeconds, bool locksMovement)
+        {
+            DurationTicks = MovementRules.ToTicks(durationSeconds);
+            CooldownTicks = MovementRules.ToTicks(cooldownSeconds);
+            LocksMovement = locksMovement;
+        }
+    }
 
-        /// <summary>Thời lượng hoạt ảnh gục. Hết số tick này thì hoạt ảnh xong, nhưng trạng thái Die ở lại.</summary>
-        public const int DIE_TICKS = 20;
+    /// <summary>
+    /// Bộ số của một lớp nhân vật: chạy nhanh bao nhiêu, nhảy cao bao nhiêu, mỗi hành động dài bao lâu.
+    ///
+    /// Cả server lẫn client đều đọc — server để mô phỏng, client để dự đoán và để co hoạt ảnh cho vừa
+    /// thời lượng. Vì vậy nó phải ở Shared: hai bên đọc hai bảng khác nhau thì mọi thứ vẫn chạy, chỉ
+    /// là lệch dần, và không có lỗi nào để lần theo.
+    /// </summary>
+    public sealed class CharacterProfile
+    {
+        public int ClassId { get; }
 
-        public static MoveState Step(MoveState state, MoveIntent intent, float dt)
+        /// <summary>Tốc độ chạy ngang, world unit/giây.</summary>
+        public float MoveSpeed { get; }
+
+        /// <summary>Vận tốc bật lên tức thời khi nhảy.</summary>
+        public float JumpSpeed { get; }
+
+        private readonly Dictionary<ActionState, ActionDefinition> _actions;
+
+        public CharacterProfile(int classId, float moveSpeed, float jumpSpeed,
+            Dictionary<ActionState, ActionDefinition> actions)
+        {
+            ClassId = classId;
+            MoveSpeed = moveSpeed;
+            JumpSpeed = jumpSpeed;
+            _actions = actions;
+        }
+
+        /// <summary>
+        /// Số liệu của một hành động. Hành động không có trong bảng (kể cả None) trả về bản rỗng:
+        /// 0 tick, không khoá thân — nhờ vậy chỗ gọi không phải kiểm null hay kiểm None.
+        /// </summary>
+        public ActionDefinition GetAction(ActionState action)
+        {
+            if (!_actions.TryGetValue(action, out ActionDefinition definition))
+                return default;
+
+            return definition;
+        }
+    }
+
+    /// <summary>
+    /// Bảng tra profile theo lớp nhân vật. Hiện dựng bằng C# ngay trong Shared; khi bảng chuyển sang
+    /// đọc từ file thì chỉ hàm Build đổi, mọi chỗ gọi Get giữ nguyên.
+    /// </summary>
+    public static class CharacterProfiles
+    {
+        public const int DRAGON_WARRIOR = 1;
+
+        private static readonly Dictionary<int, CharacterProfile> _byClassId = Build();
+
+        public static CharacterProfile Get(int classId)
+        {
+            if (!_byClassId.TryGetValue(classId, out CharacterProfile profile))
+                return _byClassId[DRAGON_WARRIOR];
+
+            return profile;
+        }
+
+        private static Dictionary<int, CharacterProfile> Build()
+        {
+            var dragonWarrior = new CharacterProfile(
+                DRAGON_WARRIOR,
+                moveSpeed: 5f,
+                jumpSpeed: 11f,
+                new Dictionary<ActionState, ActionDefinition>
+                {
+                    // Mọi con số dưới đây viết bằng GIÂY. Đòn đánh 0.25s cho clip 3 frame là 12fps,
+                    // vừa mắt; hồi chiêu 0.4s là nhịp bấm liên tục mà không thành máy khoan.
+                    [ActionState.Attack] = new ActionDefinition(0.25f, 0.4f, locksMovement: false),
+
+                    // Choáng thì khoá thân: mất quyền điều khiển là toàn bộ ý nghĩa của trúng đòn.
+                    [ActionState.Hurt] = new ActionDefinition(0.2f, 0f, locksMovement: true),
+
+                    // Hết 1 giây là hết HOẠT ẢNH gục; trạng thái Die thì ở lại cho tới khi hồi sinh.
+                    [ActionState.Die] = new ActionDefinition(1f, 0f, locksMovement: true),
+                });
+
+            return new Dictionary<int, CharacterProfile>
+            {
+                [dragonWarrior.ClassId] = dragonWarrior,
+            };
+        }
+    }
+}
+```
+
+**`Server/Shared/World/MovementRules.cs`** — bỏ `MOVE_SPEED` / `JUMP_SPEED` (đã sang `CharacterProfile`),
+thêm `ToTicks`, và `Step` nhận thêm profile:
+
+```csharp
+        /// <summary>
+        /// Quy giây ra tick. Chạy MỘT LẦN lúc dựng bảng, không nằm trong Step — nhờ vậy vòng mô phỏng
+        /// chỉ còn làm việc với số nguyên, và hai đầu dây không có cửa nào để lệch nhau ở chữ số cuối.
+        ///
+        /// Làm tròn LÊN và có sàn 1: một hành động 10ms mà quy ra 0 tick thì nó không tồn tại — phép 0
+        /// của Step sẽ xoá nó ngay tick sau. Hệ quả phải nói trước với người viết số: thời lượng bị
+        /// lượng tử hoá theo 50ms, viết 0.23s hay 0.25s đều ra 5 tick.
+        /// </summary>
+        public static int ToTicks(float seconds)
+        {
+            if (seconds <= 0f)
+                return 0;
+
+            int ticks = (int)MathF.Ceiling(seconds * TICK_RATE);
+
+            return ticks < 1 ? 1 : ticks;
+        }
+
+        /// <summary>
+        /// Một bước mô phỏng. Hàm THUẦN: không đọc thời gian, không random, không đọc biến ngoài —
+        /// cùng (state, intent, dt, profile) luôn cho cùng kết quả, ở cả hai đầu dây.
+        ///
+        /// profile là bộ số của CHÍNH nhân vật đang được mô phỏng. Nó vào bằng tham số chứ không nằm
+        /// trong MoveState: MoveState đi trên dây mỗi tick, còn profile thì hai bên tra được từ ClassId
+        /// — gửi kèm là trả tiền băng thông 20 lần mỗi giây cho một thứ không bao giờ đổi.
+        ///
+        /// THỨ TỰ các phép dưới đây là một phần của contract. Đổi thứ tự là đổi kết quả, và vì
+        /// hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
+        /// </summary>
+        public static MoveState Step(MoveState state, MoveIntent intent, float dt, CharacterProfile profile)
         {
             // 0. Nhịp của tầng action. PHẢI chạy trước phép 5: chạy sau thì đòn vừa bắt đầu ở tick
             //    này bị trừ mất một tick ngay khi chưa kịp diễn.
@@ -664,19 +925,21 @@ kể cả đã hết cooldown".
             if (state.ActionTicksLeft <= 0 && state.Action != ActionState.Die)
                 state.Action = ActionState.None;
 
+            // Tra bảng SAU phép 0, vì phép 0 vừa có thể đưa Action về None. Tra trước thì cả tick này
+            // thân thể còn bị khoá theo một hành động đã hết hạn — trễ một nhịp, đủ để thấy "đơ".
+            bool locked = profile.GetAction(state.Action).LocksMovement;
+
             // 1. Tư thế. Ngồi chỉ có nghĩa khi chân chạm đất và thân thể còn nghe lời.
-            state.Crouching = intent.Crouch
-                              && state.Grounded
-                              && !CharacterStates.BlocksMovement(state.Action);
+            state.Crouching = intent.Crouch && state.Grounded && !locked;
 
             // 2. Vận tốc ngang. Ăn đòn / gục thì mất quyền điều khiển; ngồi thì đứng yên tại chỗ.
-            if (CharacterStates.BlocksMovement(state.Action) || state.Crouching)
+            if (locked || state.Crouching)
             {
                 state.VelX = 0f;
             }
             else
             {
-                state.VelX = intent.DirX * MOVE_SPEED;
+                state.VelX = intent.DirX * profile.MoveSpeed;
             }
 
             // Hướng mặt: chỉ đổi khi đang thật sự dịch chuyển VÀ không vướng hành động nào.
@@ -685,7 +948,7 @@ kể cả đã hết cooldown".
             if (state.VelX != 0f && state.Action == ActionState.None)
                 state.FacingLeft = state.VelX < 0f;
 
-            // 3. Trọng lực.
+            // 3. Trọng lực — luật của thế giới, không theo nhân vật.
             state.VelY -= GRAVITY * dt;
             if (state.VelY < -MAX_FALL_SPEED)
                 state.VelY = -MAX_FALL_SPEED;
@@ -700,11 +963,11 @@ kể cả đã hết cooldown".
                 state.TicksSinceJumpRequest++;
 
             // 4b/4c. Nhảy — thêm điều kiện thân thể còn nghe lời.
-            if (!CharacterStates.BlocksMovement(state.Action) &&
+            if (!locked &&
                 state.TicksSinceJumpRequest <= JUMP_BUFFER_TICKS &&
                 state.TicksSinceGrounded <= COYOTE_TICKS)
             {
-                state.VelY = JUMP_SPEED;
+                state.VelY = profile.JumpSpeed;
                 state.TicksSinceJumpRequest = EXPIRED;
                 state.TicksSinceGrounded = EXPIRED;
             }
@@ -713,12 +976,14 @@ kể cả đã hết cooldown".
             //    CanEnter  = "trạng thái hiện tại có cho phép không" (đang choáng thì không)
             //    cooldown  = "nhịp đánh đã tới chưa"
             //    Gộp vào một số là mất khả năng diễn đạt "hết cooldown rồi nhưng đang choáng nên vẫn cấm".
+            ActionDefinition attack = profile.GetAction(ActionState.Attack);
+
             if (intent.Action == ActionRequest.Attack &&
-                state.TicksSinceAttack >= ATTACK_COOLDOWN_TICKS &&
+                state.TicksSinceAttack >= attack.CooldownTicks &&
                 CharacterStates.CanEnter(state.Action, state.ActionTicksLeft, ActionState.Attack))
             {
                 state.Action = ActionState.Attack;
-                state.ActionTicksLeft = ATTACK_TICKS;
+                state.ActionTicksLeft = attack.DurationTicks;
                 state.TicksSinceAttack = 0;
             }
 
@@ -739,7 +1004,8 @@ kể cả đã hết cooldown".
                 state.Grounded = false;
             }
 
-            // 8. Biên ngang tạm.
+            // 8. Biên ngang tạm (hoặc hai hằng WORLD_MIN_X / WORLD_MAX_X nếu bạn chọn cách thứ
+            //    hai ở Bước 0). Cả hai đều biến mất ở Phase 10 khi map có tường thật.
             state.X = Math.Clamp(state.X, -WORLD_HALF_EXTENT, WORLD_HALF_EXTENT);
 
             return state;
@@ -755,6 +1021,8 @@ mở Unity. Tạo tạm một console project (hoặc nhét vào đầu `Program
 `Step` bằng tay và in ra:
 
 ```csharp
+CharacterProfile profile = CharacterProfiles.Get(CharacterProfiles.DRAGON_WARRIOR);
+
 var state = MoveState.AtRest(0f, 0f);
 var idle = new MoveIntent();
 var attack = new MoveIntent { Action = ActionRequest.Attack };
@@ -763,7 +1031,7 @@ for (int tick = 0; tick < 20; tick++)
 {
     // Bấm đánh ở tick 2 và tick 5 — cú thứ hai phải bị cooldown chặn.
     MoveIntent intent = tick == 2 || tick == 5 ? attack : idle;
-    state = MovementRules.Step(state, intent, MovementRules.TICK_DT);
+    state = MovementRules.Step(state, intent, MovementRules.TICK_DT, profile);
 
     Log.Info($"t={tick} action={state.Action} left={state.ActionTicksLeft} " +
              $"sinceAtk={state.TicksSinceAttack} loco={CharacterStates.Derive(state)}");
@@ -779,6 +1047,10 @@ Phải thấy đúng bốn điều:
 
 Nếu (2) cho `left=4` ngay tại tick bắt đầu → phép 0 đang chạy sau phép 5.
 Nếu (3) lại đánh được → thiếu điều kiện cooldown, hoặc đặt `TicksSinceAttack = 0` sai chỗ.
+
+Để ý hai con số `5` và `8` trong log: chúng **không có trong code** ở đâu cả. Trong bảng bạn viết
+`0.25f` và `0.4f`; `ToTicks` biến chúng thành 5 và 8. Thử đổi `0.25f` thành `0.26f` rồi chạy lại — vẫn
+ra 6 tick chứ không phải 5.2: đó là lượng tử hoá 50ms, tận mắt.
 
 ---
 
@@ -807,20 +1079,49 @@ if (action != ActionRequest.None)
 Gói `{ Action: None }` đến sau gói `{ Action: Attack }` mà ghi đè thẳng thì cú đánh bốc hơi — đúng
 kịch bản "thỉnh thoảng bấm mà không nhảy" của Phase 8, lần này là "thỉnh thoảng bấm mà không đánh".
 
-**(b) `ForceAction(ActionState action, int ticks)`** — cửa để **server** đặt trạng thái, và là cửa duy
-nhất. Nó vẫn phải hỏi `CanEnter`: server có quyền hơn client, nhưng không có quyền phá luật (gây
-`hurt` cho một xác chết là vô nghĩa, và ở Phase 14 nó còn là chỗ để một con quái hồi sinh mục tiêu
-bằng cách đánh nó).
+**(b) `ForceAction(ActionState action)`** — cửa để **server** đặt trạng thái, và là cửa duy nhất.
+
+Chú ý nó **không nhận số tick**. Thời lượng là chuyện của nhân vật *bị tác động*, nên `ForceAction` tự
+tra `profile.GetAction(action).DurationTicks`. Người ra lệnh chỉ nói **cái gì xảy ra**, không nói **kéo
+dài bao lâu** — nhờ vậy hai nhân vật khác lớp cùng ăn một đòn sẽ choáng khác nhau mà chỗ gọi không cần
+biết gì về chuyện đó. Đây là hệ quả trực tiếp của việc bỏ `const` ở Bước 2, và là chỗ đầu tiên nó trả lãi.
+
+Nó vẫn phải hỏi `CanEnter`: server có quyền hơn client, nhưng không có quyền phá luật (gây `hurt` cho
+một xác chết là vô nghĩa, và ở Phase 14 nó còn là chỗ để một con quái vô tình "hồi sinh" mục tiêu bằng
+cách đánh nó).
 
 Đặt `ForceAction` trên `PlayerEntity` chứ không rải rác trong `WorldService`: một chỗ duy nhất sửa
 được tầng 2 thì sau này truy "ai bật `Die`" là đọc đúng một hàm.
 
-**(c) `Integrate`** dựng `MoveIntent` đủ 4 field, tiêu thụ `_pendingAction` giống hệt `_pendingJump`.
-Bộ đếm `_ticksSinceInput` (mất mạng thì thả phím) giờ xoá thêm `_intentCrouch` — nhưng **không** xoá
-`_pendingAction`: cùng lý do như `_pendingJump`, mất mạng không phải cớ để nuốt một cú bấm đã xảy ra
-thật.
+Hai chi tiết nhỏ mà bỏ qua là mất thời gian:
 
-**`Server/GameServer/Handlers/MoveHandler.cs`** — thêm một lớp kiểm mà lần đầu dự án gặp:
+- **`State` là property trả về struct**, nên `State.Action = action;` **không biên dịch được** (bạn
+  đang sửa vào một bản copy tạm mà C# vứt đi ngay sau đó — trình biên dịch chặn thẳng). Phải
+  copy-sửa-gán lại: `MoveState state = State; state.Action = ...; State = state;`. Đây là mặt trái
+  của chính tính chất đã cứu vòng replay ở Phase 8: **gán là copy**.
+- **Chỉ gọi `ForceAction` từ luồng tick.** Xem (d).
+
+**(c) `Integrate`** dựng `MoveIntent` đủ 4 field, tiêu thụ `_pendingAction` giống hệt `_pendingJump`.
+Bộ đếm `_ticksSinceInput` (mất mạng thì coi như thả phím) giờ xoá thêm `_intentCrouch` — nhưng
+**không** xoá `_pendingAction`: cùng lý do như `_pendingJump`, mất mạng không phải cớ để nuốt một cú
+bấm đã xảy ra thật.
+
+**(d) Lệnh đến từ ngoài luồng tick thì phải xếp hàng.** `WorldService` nhận yêu cầu `Hurt`/`Die` từ
+luồng đọc phím (mục dưới), nhưng **không** được sửa entity ngay tại đó. `MoveState` là struct hơn 40
+byte; ghi nó từ luồng này trong lúc luồng tick đang đọc thì người đọc có thể thấy **nửa cũ nửa mới** —
+không exception, không log, chỉ là một tick với toạ độ vô nghĩa. Cách chữa rẻ và đúng:
+
+```csharp
+_forcedActions.Enqueue(...)   // luồng bất kỳ, chỉ ghi vào hàng đợi
+// ... đầu Tick(): TryDequeue rồi mới áp dụng lên entity   ← luồng tick, một mình
+```
+
+`lock` quanh vòng duyệt cũng chạy được, nhưng hàng đợi mới là hình dạng thật của một game server:
+**mọi thứ muốn đổi thế giới đều xếp hàng, thế giới chỉ đổi bên trong tick.** Phase 14 sẽ cần đúng
+hình dạng này khi sát thương đến từ một entity khác, và Phase 15 cần nó cho chat.
+
+**`Server/GameServer/Handlers/MoveHandler.cs`** — hai field mới đi qua đúng cửa kiểm mà `DirX` đã đi,
+cộng thêm một lớp mà dự án lần đầu gặp:
 
 ```csharp
 if (!Enum.IsDefined(intent.Action))
@@ -835,11 +1136,18 @@ im lặng hoặc nổ. Enum trên dây **luôn** phải kiểm miền giá trị
 > Ranh giới đáng nhớ: kiểu dữ liệu bảo vệ *code của bạn* khỏi chính bạn. Kiểm miền giá trị bảo vệ
 > *server của bạn* khỏi người khác. Hai việc khác nhau, cần cả hai.
 
-**`Server/GameServer/World/WorldService.cs`** — hai chỗ:
-- gửi `MoveState`: giờ chỉ còn `State = entity.State`, hết chép tay;
-- dựng `EntityState`: thêm `Flags = EntityFlags.Pack(entity.State)` và `Action = (byte)entity.State.Action`.
-- `Spawn` cũng điền `Flags`/`Action` vào `EntitySpawnNotice` — người mới lọt vào tầm nhìn phải hiện ra
-  đã đúng hướng mặt, không quay đầu một nhịp sau.
+Nhớ giữ nguyên nếp đang có ở file này: **dựng một `MoveIntent` mới từ các trường đã kiểm**, không sửa
+tại chỗ rồi dùng lại object của client. Gói tin là dữ liệu của người lạ; chỉ thứ đã qua cửa mới được
+đi tiếp vào mô phỏng.
+
+**`Server/GameServer/World/WorldService.cs`** — bốn chỗ:
+
+- `Tick`: gửi `MoveState` thì **không đổi gì** (`State = entity.State` đã gửi trọn struct);
+- `BuildSnapshotFor`: mỗi `EntityState` thêm `FacingLeft`, `Crouching`, `Action` — ba phép gán thẳng;
+- `Spawn` → `ToSpawnNotice`: cũng thêm hai field đó — người mới lọt vào tầm nhìn phải hiện ra đã đúng
+  hướng mặt, không quay đầu một nhịp sau;
+- thêm hàng đợi lệnh + hai hàm `EnqueueForceAll` / `EnqueueReviveAll` cho nút thử bên dưới, và drain
+  hàng đợi ở **đầu** `Tick`.
 
 **`Server/GameServer/Program.cs` — nút thử.** Tầng 2 có ba trạng thái nhưng mới một cái có nguồn phát
 (client xin `Attack`). `Hurt` và `Die` chưa có ai gây ra — hệ thống sát thương là chuyện của Chặng D.
@@ -853,10 +1161,8 @@ Thêm một vòng đọc phím trên thread riêng:
 | `K` | mọi người `Die` |
 | `J` | mọi người về `None` (hồi sinh tạm) |
 
-`Console.ReadKey` **chặn luồng** nên phải chạy trong `Task.Run`, và vì nó đụng vào `_entities` từ ngoài
-luồng tick nên phải đi qua một hàng đợi lệnh — hoặc đơn giản hơn cho bản học: `lock` đúng chỗ duyệt.
-Ghi rõ ranh giới luồng trong comment; đây là lần đầu có thứ ngoài tick sửa entity, và nó sẽ không phải
-lần cuối.
+`Console.ReadKey` **chặn luồng** nên phải chạy trong `Task.Run` — gọi thẳng trong vòng accept là treo
+cả server.
 
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
@@ -876,13 +1182,34 @@ lần cuối.
 
     private int _ticksSinceInput;
 
-    public void SetInput(int seq, in MoveIntent intent)
+    /// <summary>
+    /// Bộ số của lớp nhân vật này: tốc độ chạy, độ cao nhảy, thời lượng và hồi chiêu từng hành động.
+    /// Tra đúng một lần lúc dựng entity — nó không đổi trong suốt đời entity.
+    /// </summary>
+    private readonly CharacterProfile _profile;
+
+    public PlayerEntity(int entityId, CharacterRow row, ClientSession owner)
+    {
+        // ... các dòng gán cũ giữ nguyên ...
+        State = MoveState.AtRest(row.X, row.Y);
+        Owner = owner;
+
+        // DÒNG DỄ QUÊN NHẤT CỦA CẢ PHASE. Thiếu nó thì Step nhận profile null và ném
+        // NullReferenceException ở MỌI tick; GameLoop nuốt lỗi (một tick hỏng không được giết nhịp
+        // tim server) nên triệu chứng KHÔNG phải crash mà là: không ai được tích phân, không gói
+        // MoveState/WorldSnapshot nào được gửi — người khác thấy bạn đứng hình.
+        _profile = CharacterProfiles.Get(row.ClassId);
+    }
+
+    /// <summary>Nhận ý định đã được handler làm sạch. Chạy ở luồng IO, không phải luồng tick.</summary>
+    public void SetInput(int seq, MoveIntent intent)
     {
         LastInputSeq = seq;
 
         _intentDirX = intent.DirX;
         _intentCrouch = intent.Crouch;
 
+        // |= chứ không =. Xem comment ở khai báo _pendingJump.
         _pendingJump |= intent.Jump;
 
         // Cùng ý với |= ở trên: chỉ ghi khi có gì để ghi, đừng để None xoá mất Attack vừa tới.
@@ -893,29 +1220,58 @@ lần cuối.
     }
 
     /// <summary>
-    /// Cửa DUY NHẤT để phía server đặt trạng thái hành động (trúng đòn, gục, hồi sinh).
-    /// Vẫn phải hỏi luật: server có quyền hơn client nhưng không có quyền phá bảng chuyển tiếp —
-    /// gây choáng cho một xác chết là vô nghĩa dù ai ra lệnh.
-    /// Một chỗ duy nhất sửa được tầng 2 thì sau này truy "ai bật Die" là đọc đúng một hàm.
+    /// Cửa DUY NHẤT để phía server đặt trạng thái hành động (trúng đòn, gục). Vẫn phải hỏi luật:
+    /// server có quyền hơn client nhưng không có quyền phá bảng chuyển tiếp — gây choáng cho một
+    /// xác chết là vô nghĩa dù ai ra lệnh. Một chỗ duy nhất sửa được tầng 2 thì sau này truy
+    /// "ai bật Die" là đọc đúng một hàm.
+    ///
+    /// CHỈ GỌI TỪ LUỒNG TICK. Lệnh sinh ra ở luồng khác phải đi qua hàng đợi của WorldService.
     /// </summary>
-    public bool ForceAction(ActionState action, int ticks)
+    public bool ForceAction(ActionState action)
     {
-        if (!CharacterStates.CanEnter(State.Action, State.ActionTicksLeft, action))
+        // State là property trả về struct nên "State.Action = ..." không biên dịch được: nó sẽ là
+        // phép sửa vào một bản copy tạm rồi vứt đi. Copy ra biến, sửa, gán lại — mặt trái của
+        // đúng cái tính chất "gán là copy" đã cứu vòng replay ở Phase 8.
+        MoveState state = State;
+
+        if (!CharacterStates.CanEnter(state.Action, state.ActionTicksLeft, action))
             return false;
 
-        State.Action = action;
-        State.ActionTicksLeft = ticks;
+        state.Action = action;
+
+        // Thời lượng tra từ bảng của CHÍNH nhân vật này, không nhận từ người gọi: cùng một đòn thì
+        // hai lớp nhân vật choáng khác nhau, và chỗ ra lệnh không cần biết điều đó.
+        state.ActionTicksLeft = _profile.GetAction(action).DurationTicks;
+        State = state;
+
         return true;
+    }
+
+    /// <summary>
+    /// Đặt lại tầng action về None, BỎ QUA bảng chuyển tiếp. Phải là đường riêng chứ không mượn
+    /// ForceAction, vì CanEnter chặn mọi lối ra khỏi Die — mà đó là chủ ý: hồi sinh là quyết định
+    /// hành chính của server, không phải một bước chuyển trạng thái trong luật chơi.
+    /// </summary>
+    public void Revive()
+    {
+        MoveState state = State;
+
+        state.Action = ActionState.None;
+        state.ActionTicksLeft = 0;
+        State = state;
     }
 
     public void Integrate(float dt)
     {
         // Quá 1 giây không có input mới → coi như đã thả phím. Chỉ xoá thứ dạng GIỮ; cú bấm dạng
-        // cạnh đã chốt vẫn phải được tiêu thụ — mất mạng không phải cớ để nuốt input người chơi đã bấm.
+        // cạnh đã chốt vẫn phải được tiêu thụ — mất mạng không phải cớ để nuốt input đã bấm thật.
         if (++_ticksSinceInput > MovementRules.TICK_RATE)
         {
             _intentDirX = 0f;
             _intentCrouch = false;
+
+            // Kẹp lại luôn để bộ đếm không leo tới tràn int khi một client treo hàng năm trời.
+            _ticksSinceInput = MovementRules.TICK_RATE + 1;
         }
 
         var intent = new MoveIntent
@@ -930,105 +1286,140 @@ lần cuối.
         _pendingJump = false;
         _pendingAction = ActionRequest.None;
 
-        State = MovementRules.Step(State, intent, dt);
+        State = MovementRules.Step(State, intent, dt, _profile);
     }
 ```
 
-**`Server/GameServer/Handlers/MoveHandler.cs`**:
+**`Server/GameServer/Handlers/MoveHandler.cs`** — phần dựng intent đã làm sạch:
 
 ```csharp
-[TcpHandler(NetCmd.MoveInput, MinState = SessionState.InWorld)]
-public static Task<NetResult> OnMoveInput(NetRequest req)
-{
-    var input = req.GetData<MoveInputRequest>();
-    PlayerEntity entity = req.Session.Entity;
+            // Dựng lại intent đã làm sạch thay vì dùng thẳng cái client gửi: gói tin là dữ liệu của
+            // người lạ, chỉ những trường đã qua kiểm mới được đi tiếp vào mô phỏng.
+            var intent = new MoveIntent
+            {
+                // Chống hack tốc độ: DirX = 10 là chạy nhanh gấp 10.
+                DirX = Math.Clamp(input.Intent.DirX, -1f, 1f),
 
-    // MinState đã chặn phần lớn, nhưng LeaveWorld có thể xảy ra giữa lúc gói đang bay.
-    if (entity == null)
-        return Task.FromResult(NetResult.None);
+                // Jump và Crouch không cần kiểm: bool chỉ có hai giá trị. Gửi Jump = true mỗi tick
+                // cũng vô ích — điều kiện coyote/buffer nằm trong MovementRules.Step, và Step chạy
+                // ở đây chứ không ở máy họ.
+                Jump = input.Intent.Jump,
+                Crouch = input.Intent.Crouch,
 
-    MoveIntent intent = input.Intent;
+                // Enum trên dây chỉ là một byte do MÁY KHÁC gửi: (ActionRequest)77 hợp lệ hoàn toàn
+                // với C#, không khớp nhánh nào và tuỳ chỗ dùng mà im lặng hoặc nổ. Kiểu dữ liệu bảo
+                // vệ code khỏi chính mình; kiểm miền giá trị mới là thứ bảo vệ server khỏi người khác.
+                Action = Enum.IsDefined(input.Intent.Action) ? input.Intent.Action : ActionRequest.None,
+            };
 
-    // NaN lây qua MỌI phép toán: lọt một lần là X/Y thành NaN vĩnh viễn và theo SavePosition vào
-    // tận DB. Lưu ý NaN < -1 và NaN > 1 đều FALSE nên Clamp bên dưới không bắt được nó — thứ tự
-    // hai phép này không đảo được.
-    if (!float.IsFinite(intent.DirX))
-        return Task.FromResult(NetResult.None);
-
-    // Chống hack tốc độ: DirX = 10 là chạy nhanh gấp 10.
-    intent.DirX = Math.Clamp(intent.DirX, -1f, 1f);
-
-    // Enum trên dây chỉ là một byte do MÁY KHÁC gửi: (ActionRequest)77 hợp lệ hoàn toàn với C#,
-    // không khớp nhánh nào và tuỳ chỗ dùng mà im lặng hoặc nổ. Kiểu dữ liệu bảo vệ code khỏi
-    // chính mình; kiểm miền giá trị mới là thứ bảo vệ server khỏi người khác.
-    if (!Enum.IsDefined(intent.Action))
-        intent.Action = ActionRequest.None;
-
-    // Jump và Crouch không cần kiểm: bool chỉ có hai giá trị. Gửi Jump = true mỗi tick cũng vô ích —
-    // điều kiện coyote nằm trong MovementRules.Step, và Step chạy ở đây chứ không ở máy họ.
-    entity.SetInput(input.Seq, intent);
-
-    // Fire-and-forget: không trả lời từng input. Câu trả lời gộp là MoveState mỗi tick.
-    return Task.FromResult(NetResult.None);
-}
+            entity.SetInput(input.Seq, intent);
 ```
 
-**`Server/GameServer/World/WorldService.cs`** — phần gửi trong `Tick`:
+**`Server/GameServer/World/WorldService.cs`** — snapshot và spawn mang thêm ba trường:
 
 ```csharp
-    entity.Owner.SendData(NetCmd.MoveState, new MoveStateResponse
+        private static EntitySpawnNotice ToSpawnNotice(PlayerEntity entity)
         {
-            LastInputSeq = entity.LastInputSeq,
+            return new EntitySpawnNotice
+            {
+                EntityId = entity.EntityId,
+                Name = entity.Name,
+                ClassId = entity.ClassId,
+                X = entity.X,
+                Y = entity.Y,
 
-            // Trọn trạng thái, không tách field. Thêm field vào MoveState từ nay không phải
-            // sờ vào dòng này — và cũng không thể quên nó.
-            State = entity.State,
+                // Hiện ra là đã đúng hướng mặt và đúng tư thế, không quay đầu một nhịp sau.
+                FacingLeft = entity.State.FacingLeft,
+                Crouching = entity.State.Crouching,
+                Action = entity.State.Action,
+            };
         }
-    );
 ```
-
-và phần dựng snapshot:
 
 ```csharp
-    states[i] = new EntityState
-    {
-        EntityId = other.EntityId,
-        X = other.State.X,
-        Y = other.State.Y,
-        Flags = EntityFlags.Pack(other.State),
-        Action = (byte)other.State.Action,
-    };
+                states.Add(new EntityState
+                {
+                    EntityId = entity.EntityId,
+                    X = entity.X,
+                    Y = entity.Y,
+                    FacingLeft = entity.State.FacingLeft,
+                    Crouching = entity.State.Crouching,
+                    Action = entity.State.Action,
+                });
 ```
 
-và `EntitySpawnNotice` trong `Spawn` thêm hai dòng tương ứng.
-
-**`Server/GameServer/World/WorldService.cs`** — ba hàm cho nút thử:
+**`Server/GameServer/World/WorldService.cs`** — hàng đợi lệnh cho nút thử:
 
 ```csharp
         /// <summary>
-        /// Gây trạng thái cho TẤT CẢ entity đang trong world. Chỉ dùng cho nút thử trên console —
-        /// nguồn phát thật của Hurt/Die là hệ thống sát thương.
-        ///
-        /// Gọi từ luồng đọc phím, tức NGOÀI luồng tick. Khoá quanh vòng duyệt để không đụng
-        /// _entities giữa lúc tick đang thêm/xoá; đây là lần đầu có thứ ngoài tick sửa entity.
+        /// Một lệnh đổi trạng thái đến từ NGOÀI luồng tick. Hiện chỉ có nút thử trên console phát ra;
+        /// từ Phase 14 thì sát thương của quái và của người chơi khác cũng đi đường này.
         /// </summary>
-        public void ForceActionAll(ActionState action, int ticks)
+        private readonly struct ForcedActionCommand
         {
-            lock (_entities)
+            public readonly ActionState Action;
+
+            /// <summary>Bỏ qua bảng chuyển tiếp — chỉ dùng cho hồi sinh, vì Die không có lối ra hợp lệ.</summary>
+            public readonly bool BypassRules;
+
+            public ForcedActionCommand(ActionState action, bool bypassRules)
             {
-                foreach (PlayerEntity entity in _entities.Values)
-                    entity.ForceAction(action, ticks);
+                Action = action;
+                BypassRules = bypassRules;
             }
+        }
+
+        // ConcurrentQueue vì bên ghi là luồng đọc phím còn bên đọc là luồng tick. Chỉ hàng đợi này
+        // đi qua ranh giới luồng; entity thì không ai ngoài tick được chạm vào.
+        private readonly ConcurrentQueue<ForcedActionCommand> _forcedActions = new();
+
+        /// <summary>
+        /// Xin gây trạng thái cho TẤT CẢ entity trong world. Gọi được từ luồng bất kỳ — lệnh chỉ
+        /// được xếp hàng ở đây, và chỉ thật sự có hiệu lực ở đầu tick kế tiếp.
+        ///
+        /// Vì sao không sửa thẳng entity tại đây: MoveState là struct hơn 40 byte, ghi nó trong lúc
+        /// luồng tick đang đọc thì người đọc có thể thấy nửa cũ nửa mới. Không exception, không log,
+        /// chỉ là một tick mang toạ độ vô nghĩa — loại lỗi đắt nhất để tìm.
+        /// </summary>
+        public void EnqueueForceAll(ActionState action)
+        {
+            _forcedActions.Enqueue(new ForcedActionCommand(action, bypassRules: false));
+        }
+
+        public void EnqueueReviveAll()
+        {
+            _forcedActions.Enqueue(new ForcedActionCommand(ActionState.None, bypassRules: true));
         }
 ```
 
-(và `Tick` cũng phải `lock (_entities)` quanh vòng duyệt của nó — nếu chưa có.)
-
-**`Server/GameServer/Program.cs`** — vòng đọc phím:
+và `Tick` mọc thêm một vòng ở **trước** vòng tích phân:
 
 ```csharp
-// Console điều khiển. Console.ReadKey CHẶN luồng gọi nó, nên phải có luồng riêng —
-// đặt trong vòng accept là treo cả server.
+        public void Tick(float dt)
+        {
+            // Vòng 0: tiêu thụ lệnh đến từ ngoài. Đặt trước vòng tích phân để trạng thái vừa bị áp
+            // đặt được chính tick này diễn tiến (đếm ngược, khoá di chuyển), thay vì trễ một nhịp.
+            while (_forcedActions.TryDequeue(out ForcedActionCommand command))
+            {
+                foreach (PlayerEntity entity in _entities.Values)
+                {
+                    if (command.BypassRules)
+                        entity.Revive();
+                    else
+                        entity.ForceAction(command.Action);
+                }
+            }
+
+            // Vòng 1: tích phân TẤT CẢ trước. (như cũ)
+            ...
+        }
+```
+
+**`Server/GameServer/Program.cs`** — vòng đọc phím, đặt ngay sau khi `gameLoop` chạy:
+
+```csharp
+// Console điều khiển — nguồn phát TẠM cho Hurt/Die tới khi có hệ thống sát thương ở Phase 14.
+// Console.ReadKey CHẶN luồng gọi nó, nên phải có luồng riêng: đặt trong vòng accept là treo cả server.
 _ = Task.Run(() =>
 {
     while (!cts.IsCancellationRequested)
@@ -1036,17 +1427,18 @@ _ = Task.Run(() =>
         switch (Console.ReadKey(intercept: true).Key)
         {
             case ConsoleKey.H:
-                worldService.ForceActionAll(ActionState.Hurt, MovementRules.HURT_TICKS);
+                // Không truyền thời lượng: mỗi entity tra bảng của lớp mình.
+                worldService.EnqueueForceAll(ActionState.Hurt);
                 Log.Info($"[thử] Toàn map {"HURT".Yellow()}");
                 break;
 
             case ConsoleKey.K:
-                worldService.ForceActionAll(ActionState.Die, MovementRules.DIE_TICKS);
+                worldService.EnqueueForceAll(ActionState.Die);
                 Log.Info($"[thử] Toàn map {"DIE".Red()}");
                 break;
 
             case ConsoleKey.J:
-                worldService.ForceActionAll(ActionState.None, 0);
+                worldService.EnqueueReviveAll();
                 Log.Info($"[thử] Toàn map {"hồi sinh".Green()}");
                 break;
         }
@@ -1054,23 +1446,9 @@ _ = Task.Run(() =>
 });
 ```
 
-Lưu ý `ForceActionAll(ActionState.None, 0)` đi qua `CanEnter`, mà `CanEnter` chặn mọi đường ra khỏi
-`Die`. Nên hàm hồi sinh phải là đường **riêng**, không mượn `ForceAction`:
-
-```csharp
-        /// <summary>Đặt lại tầng action về None, bỏ qua bảng chuyển tiếp. Hồi sinh là quyết định
-        /// hành chính của server, không phải một bước chuyển trạng thái trong luật chơi.</summary>
-        public void ReviveAll()
-        {
-            lock (_entities)
-            {
-                foreach (PlayerEntity entity in _entities.Values)
-                    entity.Revive();
-            }
-        }
-```
-
-với `PlayerEntity.Revive()` đặt thẳng `State.Action = ActionState.None; State.ActionTicksLeft = 0;`.
+Lưu ý vì sao hồi sinh phải là hàm **riêng** chứ không phải `EnqueueForceAll(ActionState.None, 0)`:
+`ForceAction` đi qua `CanEnter`, mà `CanEnter` chặn mọi đường ra khỏi `Die`. Gọi cách kia thì bấm `J`
+sẽ không có tác dụng gì — và đó là bảng chuyển tiếp đang làm đúng việc của nó, không phải lỗi.
 
 </details>
 
@@ -1156,36 +1534,65 @@ Bên trong:
 - chọn clip: `action != None` → clip của action; ngược lại → clip của locomotion;
 - **chỉ gọi `Play` khi clip đổi** — gọi mỗi frame là hoạt ảnh giậm chân tại frame 0 vĩnh viễn.
 
-**Tốc độ phát: clip phải co cho vừa số tick.** Đây là chỗ trả nợ lời hứa ở Bước 2. Server nói "đòn
-đánh dài 5 tick" = 0.25s. Clip `dw_attack` dài bao nhiêu là chuyện của người dựng clip. Nếu clip dài
-0.4s thì hoạt ảnh **bị cắt ngọn** khi trạng thái hết; nếu dài 0.1s thì nó đứng hình chờ. Cả hai đều
-sai, và cả hai đều "sửa được bằng cách chỉnh clip" — tức là mời người làm hình đi chỉnh cân bằng game.
+**Tốc độ phát: clip phải co cho vừa thời lượng mà LUẬT quy định.** Đây là chỗ trả nợ lời hứa ở Bước 2,
+và cũng là câu trả lời cho một câu hỏi rất đúng: *nếu hoạ sĩ đổi số frame hoặc đổi độ dài clip thì phải
+sửa gì ở server?*
 
-Chữa bằng một dòng:
+**Không sửa gì cả.** Hai con số này thuộc hai thế giới khác nhau:
+
+| | Thời lượng hành động | Độ dài clip |
+|---|---|---|
+| Là gì | **luật chơi** — 0.25s ghi trong `CharacterProfile` | **tài sản mỹ thuật** — hệ quả của số frame và sample rate |
+| Ai đổi | game designer, và đó là **đổi cân bằng** | hoạ sĩ, và đó là **đổi hình** |
+| Ai đọc | server (mô phỏng) + client (dự đoán) | chỉ client, chỉ để vẽ |
+| Đổi thì phải làm gì | sửa bảng → cả hai bên đổi theo, review như một thay đổi cân bằng | không phải làm gì hết |
+
+Ràng buộc giữa hai thế giới nằm gọn trong một dòng ở client:
 
 ```csharp
 _animator.speed = clip.length / (ticks * MovementRules.TICK_DT);
 ```
 
-Và `ticks` lấy ở đâu? Không cần gửi qua mạng: `ATTACK_TICKS`, `HURT_TICKS`, `DIE_TICKS` là hằng số
-trong `Shared`, **người xem tự biết**. Thêm một hàm tra vào `CharacterStates`:
+Clip dài hơn thời lượng thì phát nhanh lên cho vừa; ngắn hơn thì phát chậm lại. Nhờ đó hoạ sĩ thêm 2
+frame vung tay cho đẹp là **màn hình vẫn đúng 0.25s**, server không biết chuyện đó xảy ra, và không ai
+vô tình đổi cân bằng bằng một file `.anim`. Chỉ khi thật sự muốn đòn đánh *dài hơn* thì mới sửa
+`durationSeconds` trong bảng — một chỗ, hai bên cùng đổi.
+
+Và `ticks` lấy ở đâu? **Không cần gửi qua mạng.** Người xem biết `ClassId` của đối phương (từ
+`EntitySpawnNotice`) nên tra được đúng `CharacterProfile` của họ:
 
 ```csharp
-public static int DurationTicks(ActionState action)
+int ticks = _profile.GetAction(action).DurationTicks;
 ```
 
-Đây là phần thưởng thứ hai của việc đếm bằng tick: thời lượng là **kiến thức chung**, nên không tốn
-byte nào để đồng bộ.
+Đây là phần thưởng thứ hai của việc để bảng ở `Shared`: thời lượng là **kiến thức chung**, nên không
+tốn byte nào để đồng bộ — kể cả khi mỗi lớp nhân vật có một bộ số riêng.
 
-**`Assets/Game/Scripts/World/PlayerMotor.cs`** — bốn sửa đổi nhỏ:
+**`Assets/Game/Scripts/World/PlayerMotor.cs`** — năm sửa đổi nhỏ, và một chỗ **không** được đụng vào:
 
 1. Chốt nút đánh dạng cạnh y hệt nút nhảy: `_attackLatched` đặt trong `Update`, tiêu thụ trong `Step`.
    Đọc `WasPressedThisFrame` bên trong vòng tick là mất phần lớn cú bấm — bài cũ, lỗi cũ.
-2. Đọc `Crouch` dạng **giữ**: `_inputActions.Player.Crouch.IsPressed()`. Trục giữ đọc trong vòng tick
-   là đúng, khác hẳn nút cạnh — sai chỗ này là hiểu sai bài của Phase 8.
+2. Đọc `Crouch` dạng **giữ**: `_inputActions.Player.Crouch.IsPressed()`, đọc ở `Update` rồi truyền
+   vào `Step`. Trục giữ lấy mức tại thời điểm dựng tick là đúng, khác hẳn nút cạnh — sai chỗ này là
+   hiểu sai bài của Phase 8.
 3. `Step` dựng `MoveIntent` đủ 4 field và gửi nguyên vẹn qua `WorldApi.Move(seq, intent)`.
-4. Sau khi mô phỏng xong, đẩy sang animator: `_characterAnimator.Apply(CharacterStates.Derive(_simState), _simState.Action, _simState.FacingLeft)`.
+4. `Init` nhận thêm `classId` (từ `EnterWorldResponse`), tra `CharacterProfiles.Get(classId)` cất vào
+   `_profile`, và chuyển tiếp cho `_characterAnimator.Init(...)`. Ba lời gọi `MovementRules.Step`
+   (trong `Step` và trong vòng replay của `OnMoveStateResult`) đều nhận thêm tham số này.
+5. Cuối `Update`, đẩy trạng thái sang animator:
+   `_characterAnimator.Apply(CharacterStates.Derive(_simState), _simState.Action, _simState.FacingLeft)`.
    Gọi trong `Update` (mỗi frame) chứ không trong `Step` (mỗi tick) — hình ảnh chạy theo frame.
+
+**Không đụng vào `OnMoveStateResult`.** Đây là chỗ dễ vô tình phá nhất, vì hàm này đã được viết lại ở
+cuối Phase 8: nó giữ `_prevSimState` để có đầu trái cho đoạn nội suy, và đẩy phần chênh lệch sau
+reconciliation vào `_renderOffset` cho tan dần. Chép đè một bản `OnMoveStateResult` "gọn hơn" vào đây
+là mất cả hai thứ đó, và triệu chứng (giật nhẹ mỗi lần server sửa) trông **không** giống lỗi của
+Phase 9 nên sẽ tốn cả buổi để tìm.
+
+Mà thật ra hàm đó **không cần** sửa gì cả: `response.State` mang trọn `MoveState`, nên `Action`,
+`ActionTicksLeft`, `FacingLeft`, `Crouching` được đối chiếu và replay bằng đúng cơ chế đã có — không
+có đường đồng bộ riêng nào cho hoạt ảnh. Vòng `Update` cũng giữ nguyên phần
+`transform.position = InterpolatedPosition() + _renderOffset;`, chỉ thêm một dòng gọi animator.
 
 `Player.Attack` và `Player.Crouch` đã có sẵn trong `InputSystem_Actions` (mặc định: chuột trái và
 phím `C`). Đổi binding cho hợp tay thì mở asset ra sửa, không cần code.
@@ -1207,31 +1614,8 @@ cú bấm.)
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
 
-**`Server/Shared/World/CharacterStates.cs`** — thêm hàm tra thời lượng:
-
-```csharp
-        /// <summary>
-        /// Thời lượng của một hành động, tính bằng tick. Là kiến thức CHUNG: nhờ vậy người xem
-        /// tự biết đòn đánh của người khác dài bao lâu mà không cần gửi thêm byte nào.
-        /// </summary>
-        public static int DurationTicks(ActionState action)
-        {
-            switch (action)
-            {
-                case ActionState.Attack:
-                    return MovementRules.ATTACK_TICKS;
-
-                case ActionState.Hurt:
-                    return MovementRules.HURT_TICKS;
-
-                case ActionState.Die:
-                    return MovementRules.DIE_TICKS;
-
-                default:
-                    return 0;
-            }
-        }
-```
+**`Server/Shared/`** — không có file mới nào ở bước này: `CharacterProfile.GetAction(...)` dựng ở
+Bước 2 đã trả lời đủ cả hai câu hỏi mà client cần ("hành động này dài bao nhiêu tick").
 
 **`Assets/Game/Scripts/World/CharacterAnimator.cs`** (file mới):
 
@@ -1283,6 +1667,19 @@ namespace MMORPG.Client.World
         /// hoạt ảnh bị đặt lại về frame 0 liên tục và đứng hình.</summary>
         private int _currentHash;
 
+        /// <summary>
+        /// Bộ số của nhân vật đang được vẽ — cần đúng một thứ trong đó: mỗi hành động dài bao nhiêu
+        /// tick, để co clip cho vừa. Nhân vật của mình lấy từ ClassId trong EnterWorldResponse,
+        /// nhân vật người khác lấy từ ClassId trong EntitySpawnNotice.
+        /// </summary>
+        private CharacterProfile _profile;
+
+        /// <summary>Gọi ngay sau khi Instantiate, trước lần Apply đầu tiên.</summary>
+        public void Init(CharacterProfile profile)
+        {
+            _profile = profile;
+        }
+
         private void Awake()
         {
             foreach (LocomotionClip entry in _locomotionClips)
@@ -1332,7 +1729,7 @@ namespace MMORPG.Client.World
             // Co clip cho vừa số tick mà LUẬT quy định, thay vì để độ dài clip quyết định luật.
             // Không co thì clip dài hơn bị cắt ngọn giữa chừng, clip ngắn hơn đứng hình chờ —
             // và cách "sửa" hiển nhiên là đi chỉnh clip, tức là mời người làm hình chỉnh cân bằng game.
-            int ticks = CharacterStates.DurationTicks(action);
+            int ticks = _profile.GetAction(action).DurationTicks;
             float wanted = ticks * MovementRules.TICK_DT;
 
             _animator.speed = wanted > 0f ? _actionLengths[action] / wanted : 1f;
@@ -1352,29 +1749,45 @@ namespace MMORPG.Client.World
         }
 ```
 
-**`Assets/Game/Scripts/World/PlayerMotor.cs`** (phần thay đổi):
+**`Assets/Game/Scripts/World/PlayerMotor.cs`** (chỉ những chỗ đổi — phần nội suy và reconciliation của
+Phase 8 giữ nguyên):
 
 ```csharp
         [SerializeField] private CharacterAnimator _characterAnimator;
 
-        /// <summary>Cú bấm nhảy đang chờ tick tới tiêu thụ.</summary>
-        private bool _jumpLatched;
+        /// <summary>
+        /// Bộ số của lớp nhân vật mình đang chơi. Client PHẢI dự đoán bằng đúng bảng server dùng —
+        /// lệch một con số là lệch quỹ đạo, và reconciliation sẽ kéo giật liên tục mà không rõ vì sao.
+        /// </summary>
+        private CharacterProfile _profile;
 
-        /// <summary>Cú bấm đánh đang chờ tick tới tiêu thụ — cùng lý do như _jumpLatched:
-        /// Update chạy 60–300Hz còn Step chỉ 20Hz, đọc WasPressedThisFrame trong vòng tick là mất bấm.</summary>
+        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos, int classId)
+        {
+            _worldApi = worldApi;
+            _worldNetHandler = worldNetHandler;
+            _profile = CharacterProfiles.Get(classId);
+
+            _simState = MoveState.AtRest(spawnPos.x, spawnPos.y);
+            _prevSimState = _simState;
+
+            // Animator cần cùng bảng đó, nhưng chỉ để co clip cho vừa thời lượng.
+            _characterAnimator.Init(_profile);
+
+            _worldNetHandler.OnMoveStateResult += OnMoveStateResult;
+        }
+
+        /// <summary>
+        /// Cú bấm đánh đang chờ tick tới tiêu thụ. Cùng lý do như _jumpLatched: Update chạy 60–300Hz
+        /// còn Step chỉ 20Hz, đọc WasPressedThisFrame bên trong vòng tick là bỏ lỡ phần lớn cú bấm.
+        /// </summary>
         private bool _attackLatched;
-
-        private MoveState _simState;
-
-        /// <summary>Trạng thái mô phỏng hiện tại — nguồn để vẽ hình cho chính mình.</summary>
-        public MoveState SimState => _simState;
 
         private void Update()
         {
             if (_worldApi == null)
                 return;
 
-            // Nút dạng CẠNH: chốt ngay tại frame nó xảy ra.
+            // Hai nút dạng CẠNH: chốt ngay tại frame chúng xảy ra.
             if (_inputActions.Player.Jump.WasPressedThisFrame())
                 _jumpLatched = true;
 
@@ -1383,27 +1796,31 @@ namespace MMORPG.Client.World
 
             float dirX = Mathf.Clamp(_inputActions.Player.Move.ReadValue<Vector2>().x, -1f, 1f);
 
-            // Trục GIỮ: đọc mức tại thời điểm tick là đúng — không chốt, không gộp.
+            // Trục GIỮ: lấy MỨC tại lúc dựng tick, không chốt và không gộp. Ngồi là một tư thế kéo
+            // dài — thả phím ra là phải đứng dậy ngay tick sau.
             bool crouch = _inputActions.Player.Crouch.IsPressed();
 
             _accumulator += Time.deltaTime;
             while (_accumulator >= MovementRules.TICK_DT)
             {
                 _accumulator -= MovementRules.TICK_DT;
+
+                _prevSimState = _simState;
                 Step(dirX, crouch);
             }
 
-            transform.position = Vector3.MoveTowards(
-                transform.position, new Vector3(_simState.X, _simState.Y, 0f),
-                MovementRules.MAX_FALL_SPEED * 1.5f * Time.deltaTime
-            );
+            _renderOffset *= Mathf.Exp(-CORRECTION_DECAY * Time.deltaTime);
 
-            // Hình chạy theo FRAME, không theo tick — vẽ ở đây chứ không trong Step.
+            transform.position = InterpolatedPosition() + _renderOffset;
+
+            // Hình chạy theo FRAME, không theo tick — gọi ở đây chứ không trong Step.
+            // Đọc thẳng _simState (tick mới nhất) chứ không nội suy: VỊ TRÍ thì nội suy cho mượt,
+            // còn TRẠNG THÁI thì không có "một nửa giữa idle và walk" để nội suy.
             _characterAnimator.Apply(
                 CharacterStates.Derive(_simState), _simState.Action, _simState.FacingLeft);
         }
 
-        /// <summary>Một bước dự đoán: mô phỏng trước, ghi nợ, gửi lên server.</summary>
+        /// <summary>Một bước dự đoán: mô phỏng trước, ghi nợ, gửi lên server. Gửi CẢ khi đứng yên — thả phím cũng là input.</summary>
         private void Step(float dirX, bool crouch)
         {
             int seq = ++_nextSeq;
@@ -1420,28 +1837,23 @@ namespace MMORPG.Client.World
             _jumpLatched = false;
             _attackLatched = false;
 
-            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT);
+            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, _profile);
 
             _pending.Add(new PendingInput(seq, intent));
             _worldApi.Move(seq, intent);
         }
-
-        private void OnMoveStateResult(MoveStateResponse response)
-        {
-            _pending.RemoveAll(p => p.Seq <= response.LastInputSeq);
-
-            // Trọn trạng thái server, không nhặt từng field. Hoạt ảnh cũng nằm trong đó, nên nó
-            // được đối chiếu bằng đúng cơ chế đã có — không cần đường đồng bộ riêng cho hình ảnh.
-            MoveState state = response.State;
-
-            foreach (PendingInput pending in _pending)
-            {
-                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT);
-            }
-
-            _simState = state;
-        }
 ```
+
+Trong `OnMoveStateResult` **sửa đúng một chỗ** — vòng replay cũng phải mang profile theo:
+
+```csharp
+                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT, _profile);
+```
+
+Ngoài dòng đó ra thì `OnMoveStateResult`, `InterpolatedPosition`, `PendingInput` và hai hằng
+`CORRECTION_DECAY` / `SNAP_DISTANCE` **không sửa gì**. `PendingInput` đã giữ nguyên cả `MoveIntent` từ
+Phase 8 nên hai field mới (`Crouch`, `Action`) tự động có mặt trong vòng replay — nếu hồi đó lưu riêng
+`dirX` và `jump` thì hôm nay đã phải quay lại sửa, và quên thì cú đánh sẽ biến mất mỗi lần server ack.
 
 </details>
 
@@ -1494,7 +1906,9 @@ nó không hề xin, không hề tự tính, và không có cách nào từ ch�
 `renderTime`. Nó đã có sẵn **đúng thứ cần** cho tầng 1: hai vị trí liên tiếp và khoảng thời gian giữa
 chúng — tức là vận tốc.
 
-**Mở rộng `Sample`** thành `(Time, Pos, Flags, Action)` và `PushState` nhận thêm hai byte.
+**Mở rộng `Sample`** thành `(Time, Pos, FacingLeft, Crouching, Action)`, và `PushState` nhận thêm ba
+tham số cùng tên. Thêm một `Init(CharacterProfile)` nữa để chuyển bảng số cho animator — người xem cần
+nó để co clip cho vừa thời lượng của **lớp nhân vật kia**, không phải của mình.
 
 **Suy tư thế từ hai mẫu đang nội suy:**
 
@@ -1515,7 +1929,7 @@ var fake = new MoveState
     VelX = delta.x / dt,
     VelY = delta.y / dt,
     Grounded = Mathf.Abs(delta.y) < EPS,
-    Crouching = EntityFlags.Has(a.Flags, EntityFlags.CROUCHING),
+    Crouching = a.Crouching,
 };
 LocomotionState locomotion = CharacterStates.Derive(fake);
 ```
@@ -1541,13 +1955,20 @@ dồn), người xem sẽ thấy `Δy = 0` giữa lúc đối phương đang bay
 (`_buffer[^1]`) là để hình chạy trước vị trí `INTERP_DELAY = 0.15s`: nhân vật vung tay ở chỗ nó chưa
 đứng tới.
 
-**`WorldSpawner`** truyền hai byte mới ở cả `OnEntitySpawn` lẫn `OnSnapshot`. Đây chính là chỗ
-CHECKPOINT A đã cảnh báo: thêm field vào DTO không làm bên đọc đỏ, nên phải tự nhớ.
+**`WorldSpawner`** truyền ba trường mới ở cả `OnEntitySpawn` lẫn `OnSnapshot`, và gọi thêm
+`view.Init(CharacterProfiles.Get(notice.ClassId))` lúc spawn. Nhân vật của mình cũng vậy:
+`motor.Init(_worldApi, _worldNetHandler, spawnPos, response.ClassId)`. Đây chính là chỗ CHECKPOINT A đã
+cảnh báo: thêm field vào DTO không làm bên đọc đỏ, nên phải tự nhớ.
 
-**Prefab.** `Player_Remote` cần đúng bộ `Animator` + `CharacterAnimator` như `Player_Main`. Cách rẻ
-nhất là tách phần nhìn thấy được (`SpriteRenderer` + `Animator` + `CharacterAnimator`) thành một prefab
-con `DragonWarriorView`, rồi cả hai prefab cùng nhúng nó. Sửa hoạt ảnh một lần, hai bên cùng đổi —
-cùng tinh thần "một nguồn", lần này ở tầng asset.
+**Prefab.** Gần như không phải làm gì: `Player_Remote` đang là **prefab variant** của `Player_Main`
+(nó gỡ `PlayerMotor` ra và thêm `RemotePlayerView` vào). Gắn `CharacterAnimator` lên object con
+`DragonWarrior` của `Player_Main` là `Player_Remote` có luôn, và mọi lần chỉnh clip về sau cũng vậy —
+đúng tinh thần "một nguồn", lần này ở tầng asset và Unity làm hộ.
+
+Chỉ nhớ **gán tham chiếu `_characterAnimator`** ở cả hai chỗ: trên `PlayerMotor` (prefab gốc) và trên
+`RemotePlayerView` (prefab variant). Variant kế thừa component nhưng field của component *mới thêm*
+thì vẫn phải kéo, và bỏ trống thì không có lỗi biên dịch — chỉ có `NullReferenceException` lúc người
+thứ hai vào world.
 
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
@@ -1585,24 +2006,33 @@ namespace MMORPG.Client.World
         {
             public readonly float Time;
             public readonly Vector2 Pos;
-            public readonly byte Flags;
+            public readonly bool FacingLeft;
+            public readonly bool Crouching;
             public readonly ActionState Action;
 
-            public Sample(float time, Vector2 pos, byte flags, byte action)
+            public Sample(float time, Vector2 pos, bool facingLeft, bool crouching, ActionState action)
             {
                 Time = time;
                 Pos = pos;
-                Flags = flags;
-                Action = (ActionState)action;
+                FacingLeft = facingLeft;
+                Crouching = crouching;
+                Action = action;
             }
         }
 
         private readonly List<Sample> _buffer = new();
 
         /// <summary>Gọi mỗi lần snapshot đến. Mốc thời gian là đồng hồ MÁY MÌNH lúc nhận.</summary>
-        public void PushState(Vector2 pos, byte flags, byte action)
+        /// <summary>Bảng số của LỚP NHÂN VẬT KIA — cần để co clip cho vừa thời lượng của họ.</summary>
+        public void Init(CharacterProfile profile)
         {
-            _buffer.Add(new Sample(Time.time, pos, flags, action));
+            _characterAnimator.Init(profile);
+        }
+
+        /// <summary>Gọi mỗi lần snapshot đến. Mốc thời gian là đồng hồ MÁY MÌNH lúc nhận.</summary>
+        public void PushState(Vector2 pos, bool facingLeft, bool crouching, ActionState action)
+        {
+            _buffer.Add(new Sample(Time.time, pos, facingLeft, crouching, action));
 
             while (_buffer.Count > 2 && _buffer[0].Time < Time.time - BUFFER_KEEP)
                 _buffer.RemoveAt(0);
@@ -1666,13 +2096,10 @@ namespace MMORPG.Client.World
                 // biểu diễn được phép đoán, mô phỏng thì không.
                 Grounded = Mathf.Abs(delta.y) < EPS,
 
-                Crouching = EntityFlags.Has(a.Flags, EntityFlags.CROUCHING),
+                Crouching = a.Crouching,
             };
 
-            _characterAnimator.Apply(
-                CharacterStates.Derive(sampled),
-                a.Action,
-                EntityFlags.Has(a.Flags, EntityFlags.FACING_LEFT));
+            _characterAnimator.Apply(CharacterStates.Derive(sampled), a.Action, a.FacingLeft);
         }
     }
 }
@@ -1691,7 +2118,10 @@ namespace MMORPG.Client.World
             remote.name = $"Remote_{notice.EntityId}_{notice.Name}";
 
             var view = remote.GetComponent<RemotePlayerView>();
-            view.PushState(new Vector2(notice.X, notice.Y), notice.Flags, notice.Action);
+
+            // Bảng số tra từ ClassId của NGƯỜI KIA, không phải của mình.
+            view.Init(CharacterProfiles.Get(notice.ClassId));
+            view.PushState(new Vector2(notice.X, notice.Y), notice.FacingLeft, notice.Crouching, notice.Action);
 
             _remotes[notice.EntityId] = view;
         }
@@ -1706,7 +2136,7 @@ namespace MMORPG.Client.World
                 if (!_remotes.TryGetValue(state.EntityId, out RemotePlayerView view))
                     continue;
 
-                view.PushState(new Vector2(state.X, state.Y), state.Flags, state.Action);
+                view.PushState(new Vector2(state.X, state.Y), state.FacingLeft, state.Crouching, state.Action);
             }
         }
 ```
@@ -1719,13 +2149,14 @@ Hai client bằng ParrelSync:
 
 1. A chạy → B thấy A `walk`, đúng hướng. A dừng → B thấy A `idle`, **giữ hướng cũ**.
 2. A nhảy → B thấy `jump` lúc lên, `fall` lúc xuống, và tiếp đất là về `idle` ngay chứ không kẹt ở `fall`.
-3. A ngồi (`C`) → B thấy `crouch`. Đây là thứ **không suy được** — nó tới từ 1 bit trong `Flags`.
-   Thử tạm bỏ bit `CROUCHING` khỏi `Pack` để thấy: A ngồi mà B thấy A đứng. Trả lại code.
+3. A ngồi (`C`) → B thấy `crouch`. Đây là thứ **không suy được** — nó tới từ trường `Crouching` trong
+   snapshot. Thử tạm bỏ dòng gán `Crouching` ở `BuildSnapshotFor` để thấy: A ngồi mà B thấy A đứng.
+   Trả lại code.
 4. A đánh → B thấy `attack` đúng độ dài, đúng hướng A đang nhìn, rồi về `idle`. Không có gói `NetCmd`
    mới nào tham gia — mở log ra kiểm nếu không tin.
 5. Gõ `K` ở console server → **cả hai màn hình** đều thấy **cả hai nhân vật** gục. Gõ `J` → cùng đứng dậy.
 6. A đứng yên quay mặt sang trái rồi **thoát và vào lại** → B thấy A hiện ra đã quay trái sẵn (nhờ
-   `Flags` trong `EntitySpawnNotice`), không quay đầu một nhịp sau.
+   `FacingLeft` trong `EntitySpawnNotice`), không quay đầu một nhịp sau.
 
 Bước (5) đáng ăn mừng: một sự kiện phát sinh hoàn toàn ở server, không client nào xin, đã đi qua đúng
 đường ống có sẵn (`Step` → `MoveState`/snapshot → animator) tới hai màn hình khác nhau và khớp nhau.
@@ -1744,7 +2175,7 @@ Thêm tạm vào `PlayerMotor.Update`:
 if (Keyboard.current.xKey.wasPressedThisFrame)
 {
     _simState.Action = ActionState.Hurt;
-    _simState.ActionTicksLeft = MovementRules.HURT_TICKS;
+    _simState.ActionTicksLeft = _profile.GetAction(ActionState.Hurt).DurationTicks;
 }
 ```
 
@@ -1760,7 +2191,8 @@ không từ máy bạn.
 Sửa tạm `PlayerMotor.Step` thành `Action = (ActionRequest)77`. Chạy. Server không nổ, không đánh —
 `Enum.IsDefined` đã đổi nó về `None`.
 
-Giờ **xoá tạm** dòng `Enum.IsDefined` ở `MoveHandler` và chạy lại. Vẫn không nổ, vẫn không đánh: phép 5
+Giờ **bỏ tạm** phép kiểm ở `MoveHandler` (`Action = input.Intent.Action` thẳng, không qua
+`Enum.IsDefined`) rồi chạy lại. Vẫn không nổ, vẫn không đánh: phép 5
 so `== ActionRequest.Attack` nên `77` rơi ra ngoài. Vậy dòng kiểm ấy vô dụng?
 
 Không — nó vô dụng **hôm nay**. Viết thử một `switch (intent.Action)` có `default: throw` xem, hoặc
@@ -1768,14 +2200,19 @@ tưởng tượng ngày `Action` được dùng làm chỉ số vào một mản
 "dòng đó cứu bạn hôm nay" mà là: **mọi giá trị đến từ dây đều phải được đưa về miền hợp lệ ngay tại
 cửa**, trước khi nó kịp lan vào trong nơi mọi người đều giả định nó sạch. Trả cả hai chỗ về như cũ.
 
-**3. Đổi `ATTACK_TICKS` từ 5 thành 30 và không đụng vào clip.**
+**3. Đổi `durationSeconds` của `Attack` từ `0.25f` thành `1.5f` và không đụng vào clip.**
 Build lại `Shared`, chơi. Đòn đánh giờ kéo 1.5 giây và clip `attack` **tự chậm lại cho vừa**, không bị
-lặp, không đứng hình. Đổi tiếp thành 2 → đòn đánh nhoáng qua, clip chạy vống lên.
+lặp, không đứng hình. Đổi tiếp thành `0.1f` → đòn đánh nhoáng qua, clip chạy vống lên.
 
-Rồi làm ngược lại: giữ `ATTACK_TICKS = 5` nhưng vào Unity chỉnh sample rate của clip `dw_attack` cho
-nó dài gấp đôi. **Không có gì thay đổi trên màn hình.** Đó là điều đáng nhớ: người làm hình sửa clip
-thoải mái mà không đụng được vào cân bằng game; người làm luật sửa một hằng số là cả hai đầu dây đổi
-theo. Ranh giới đúng chỗ.
+Rồi làm **ngược lại**: trả về `0.25f`, nhưng vào Unity chỉnh sample rate của clip `dw_attack` cho nó
+dài gấp đôi. **Không có gì thay đổi trên màn hình, và không phải sửa gì ở server.** Đó là câu trả lời
+cho "đổi hoạt ảnh thì phải cập nhật gì": *không cập nhật gì cả* — người làm hình sửa clip thoải mái mà
+không đụng được vào cân bằng; người làm cân bằng sửa một ô trong bảng là cả hai đầu dây đổi theo.
+
+Thử nốt cái thứ ba cho đủ bộ: đổi `moveSpeed` của `DRAGON_WARRIOR` từ `5f` thành `9f`, **chỉ build lại
+`Shared` cho server mà cố tình không copy DLL sang Unity**. Chạy: nhân vật chạy nhanh trên máy bạn rồi
+bị kéo giật về liên tục. Đó là hình ảnh sống của "hai bên đọc hai bảng khác nhau" — và là lý do bảng
+này phải nằm ở `Shared`, và vì sao Phase 11 sẽ cần kiểm version bảng lúc đăng nhập.
 
 ---
 
@@ -1784,7 +2221,10 @@ theo. Ranh giới đúng chỗ.
 | Triệu chứng | Nguyên nhân thường gặp | Chỗ sửa |
 |---|---|---|
 | Hoạt ảnh đứng ở frame 0, giật liên tục | Gọi `Animator.Play` mỗi frame thay vì chỉ khi clip đổi | `CharacterAnimator` — kiểm `hash == _currentHash` |
-| Đòn đánh bị cắt ngọn / đứng hình chờ | Quên `_animator.speed`, hoặc `DurationTicks` trả 0 cho action đó | `CharacterAnimator.PlayAction` |
+| Đòn đánh bị cắt ngọn / đứng hình chờ | Quên `_animator.speed`, hoặc `GetAction(...)` trả 0 tick (hành động chưa có trong bảng) | `CharacterAnimator.PlayAction` · `CharacterProfiles.Build` |
+| `NullReferenceException` trong `PlayAction` | Quên gọi `Init(profile)` sau `Instantiate` | `WorldSpawner` |
+| Nhân vật chạy nhanh/chậm rồi bị kéo giật liên tục | Client và server đang đọc hai bảng số khác nhau — DLL chưa được copy sang Unity | Build lại `Server/Shared` |
+| Hành động ngắn (< 0.05s) không bao giờ diễn ra | `ToTicks` làm tròn xuống thay vì lên, hoặc thiếu sàn 1 tick | `MovementRules.ToTicks` |
 | Đánh xong nhân vật kẹt ở `attack` mãi | Phép 0 không đưa `Action` về `None` khi hết ticks | `MovementRules.Step` phép 0 |
 | Xác chết đứng dậy sau 1 giây | Phép 0 thiếu nhánh loại trừ `Die` | `MovementRules.Step` phép 0 |
 | Đòn đánh chỉ dài 4 tick thay vì 5 | Phép 0 chạy **sau** phép 5 | Thứ tự trong `Step` |
@@ -1796,14 +2236,22 @@ theo. Ranh giới đúng chỗ.
 | Đứng yên là nhân vật tự quay về phải | Đang suy `FacingLeft` từ `VelX` mỗi tick thay vì giữ trạng thái cũ | `MovementRules.Step` phép 2 |
 | Ngồi mà vẫn chạy được | Phép 2 không ép `VelX = 0` khi `Crouching` | `MovementRules.Step` phép 2 |
 | Bấm `C` giữa không trung là ngồi luôn | Thiếu điều kiện `state.Grounded` ở phép 1 | `MovementRules.Step` phép 1 |
-| Người khác không bao giờ hiện `crouch` | Quên bit `CROUCHING` trong `EntityFlags.Pack`, hoặc `WorldSpawner` chưa truyền `Flags` | `WorldService` · `WorldSpawner` |
+| Người khác không bao giờ hiện `crouch` | Quên gán `Crouching` khi dựng `EntityState`, hoặc `WorldSpawner` chưa truyền nó | `WorldService` · `WorldSpawner` |
 | Người khác luôn quay mặt phải | Như trên, với bit `FACING_LEFT`; hoặc `flipX` gán nhầm dấu | `CharacterAnimator.Apply` |
 | Người khác lúc nào cũng `idle` dù đang chạy | `Draw` không được gọi, hoặc `dt` truyền vào bằng 0 → `VelX` thành NaN/Infinity | `RemotePlayerView.Update` |
 | Người khác kẹt ở `fall` sau khi tiếp đất | `EPS` quá nhỏ so với sai số, hoặc lấy mẫu `_buffer[^1]` thay vì hai mẫu đang nội suy | `RemotePlayerView.Draw` |
-| Người khác vung tay ở chỗ họ chưa đứng tới | Lấy `Flags`/`Action` từ mẫu mới nhất chứ không từ mẫu đang vẽ | `RemotePlayerView.Draw` |
+| Người khác vung tay ở chỗ họ chưa đứng tới | Lấy tư thế/`Action` từ mẫu mới nhất chứ không từ mẫu đang vẽ | `RemotePlayerView.Draw` |
 | Nhân vật đứng im hoàn toàn sau khi build `Shared` | Unity còn dùng DLL cũ — post-build chưa copy sang `Assets/Plugins/Shared/` | Build lại `Server/Shared` |
-| `MemoryPack` báo lỗi lúc chạy về `MoveState` | Quên `[MemoryPackable]` hoặc quên `partial` trên struct | `MoveState.cs` |
+| `MemoryPack` ném lỗi, hoặc nhân vật nhấp nháy ở những toạ độ vô nghĩa sau khi thêm field | Unity còn DLL cũ nên đang đọc bố cục struct cũ — thêm field vào `MoveState` là đổi giao thức | Build lại `Server/Shared`, kiểm ngày sửa của `Assets/Plugins/Shared/MMORPG.Shared.dll` |
+| `State.Action = ...` không biên dịch được | `State` là property trả struct — phải copy ra biến, sửa, rồi gán lại | `PlayerEntity.ForceAction` |
+| Gõ `H` mà thỉnh thoảng không ăn, hoặc nhân vật nháy một cái sang toạ độ lạ | Đang sửa `State` thẳng từ luồng đọc phím thay vì xếp hàng cho luồng tick áp dụng | `WorldService` — hàng đợi `_forcedActions` |
+| Bấm `J` mà không ai đứng dậy | Hồi sinh đang đi qua `ForceAction`, mà `CanEnter` chặn mọi lối ra khỏi `Die` | `WorldService.EnqueueReviveAll` · `PlayerEntity.Revive` |
 | Gõ `H` ở console mà server đơ | `Console.ReadKey` gọi thẳng trong luồng chính chứ không trong `Task.Run` | `Program.cs` |
+| **Người khác đứng hình hoàn toàn; nhân vật mình vẫn chạy được nhưng server không bao giờ sửa** | `_profile` chưa được gán trong constructor `PlayerEntity` → `Step` ném NRE mỗi tick, `GameLoop` nuốt lỗi nên không có gói nào được gửi. **Nhìn console server: có `Tick ném lỗi` lặp 20 lần/giây** | `PlayerEntity` constructor |
+| Người khác di chuyển được nhưng không có hoạt ảnh nào | `RemotePlayerView` chưa gọi `Draw`, hoặc `WorldSpawner` chưa gọi `view.Init(...)` | Bước 5 |
+| Nhân vật đứng lơ lửng trên không, hoặc lún vào mặt đất đã vẽ | `GROUND_Y` chưa khớp cao độ mặt đất của tilemap | Bước 0 |
+| Chạy một đoạn là kẹt vào tường vô hình giữa map | Biên `±WORLD_HALF_EXTENT` hẹp hơn bề ngang map đã vẽ | Bước 0 |
+| Hoạt ảnh của mình giật nhẹ mỗi lần server ack (không liên quan trạng thái) | `OnMoveStateResult` bị chép đè bản không có `_prevSimState` / `_renderOffset` của Phase 8 | `PlayerMotor.OnMoveStateResult` |
 
 ---
 
@@ -1811,13 +2259,13 @@ theo. Ranh giới đúng chỗ.
 
 Tự trả lời từng câu xong mới mở đáp án của câu đó.
 
-**Câu 1.** Doc nói tầng locomotion "tốn 0 byte", nhưng `EntityState` vẫn phải thêm 2 byte. Mâu thuẫn ở
-đâu, và phát biểu cho đúng thì phải nói thế nào?
+**Câu 1.** Doc nói tầng locomotion "tốn 0 byte", nhưng `EntityState` vẫn phải thêm 3 trường. Mâu thuẫn
+ở đâu, và phát biểu cho đúng thì phải nói thế nào?
 <details>
 <summary><b>📖 Đáp án câu 1</b></summary>
 
 Không mâu thuẫn, mà là phát biểu thiếu chính xác. Đúng phải là: **tầng locomotion không cần byte nào
-cho riêng nó** — 5 giá trị `Idle/Walk/Jump/Fall/Crouch` không bao giờ được gửi. Hai byte thêm vào là
+cho riêng nó** — 5 giá trị `Idle/Walk/Jump/Fall/Crouch` không bao giờ được gửi. Ba trường thêm vào là
 cho *nguyên liệu* mà việc suy không tự có: `Crouching` (ngồi và đứng yên cho cùng một chuỗi vị trí nên
 không phân biệt được) và `FacingLeft` (có trí nhớ), cộng với `Action` vốn thuộc tầng 2.
 
@@ -1861,21 +2309,26 @@ vì `Step` là định nghĩa của "một tick trôi qua", và replay chỉ bi�
 
 </details>
 
-**Câu 4.** Nêu ba lý do độc lập vì sao thời lượng một hành động đếm bằng **tick** chứ không bằng độ
-dài `AnimationClip`.
+**Câu 4.** Thời lượng một hành động được **viết** bằng giây nhưng được **đếm** bằng tick, và **không
+bao giờ** lấy từ độ dài `AnimationClip`. Giải thích cả ba vế.
 <details>
 <summary><b>📖 Đáp án câu 4</b></summary>
 
-(1) **Server không có clip.** `GameServer` là process .NET; ở đó không tồn tại `AnimationClip`. Muốn
-server biết đòn đánh dài bao lâu thì con số ấy phải là con số.
+**Viết bằng giây** vì đó là đơn vị của người sinh ra con số: hoạ sĩ và game designer nói "một phần tư
+giây", "hồi chiêu 3 giây". Bắt họ viết bằng tick là bắt họ biết chi tiết cài đặt của server, và ngày
+đổi tick rate thì mọi số họ từng viết đều sai.
 
-(2) **Clip là tài sản của người làm hình.** Nếu thời lượng ăn theo clip thì thêm 2 frame vung tay cho
-đẹp là **đổi cân bằng game** — mà không ai review một file `.anim` như review một thay đổi cân bằng.
+**Đếm bằng tick** vì mô phỏng cần số nguyên: `ActionTicksLeft--` rồi so `<= 0` là chính xác tuyệt đối
+ở cả hai đầu dây và chạy lại bao nhiêu lần cũng ra đúng thế (replay!). Cộng dồn `elapsedSeconds += dt`
+thì hai bên lệch được ở chữ số cuối, và lệch một tick là một lần rubber-band. Chuyển đổi vì thế nằm ở
+`ToTicks`, chạy một lần lúc dựng bảng — cái giá là thời lượng bị lượng tử hoá theo 50ms.
 
-(3) **Tick là đơn vị duy nhất hai bên cùng đếm được.** Giây thì mỗi máy một đồng hồ, frame thì mỗi máy
-một tốc độ. Tick là nhịp của giao thức, và cả prediction lẫn replay đều đếm bằng nó.
+**Không lấy từ clip** vì ba lý do độc lập: (1) `GameServer` là process .NET, ở đó không tồn tại
+`AnimationClip`; (2) clip là tài sản của người làm hình — thời lượng ăn theo clip thì thêm 2 frame
+vung tay cho đẹp là **đổi cân bằng game**, mà không ai review một file `.anim` như review cân bằng;
+(3) độ dài clip là con số của *một* máy client, không phải của giao thức.
 
-Hệ quả kéo theo: clip phải co giãn cho vừa số tick (`animator.speed`), không phải ngược lại.
+Hệ quả kéo theo: clip phải co giãn cho vừa thời lượng (`animator.speed`), không phải ngược lại.
 
 </details>
 
@@ -1951,6 +2404,76 @@ gửi trọn; không thì gửi đúng thứ vẽ được.
 
 ---
 
+## Bốn thứ bạn định làm tiếp — và ai sở hữu cái gì
+
+Bốn tính năng dưới đây chưa làm ở phase này, nhưng đáng phân loại **ngay bây giờ**: mỗi cái rơi vào một
+ô khác nhau của cùng một bảng, và biết ô nào là biết trước sẽ tốn bao nhiêu.
+
+| Tính năng | Ai sở hữu | Tốn gì trên dây | Làm ở đâu |
+|---|---|---|---|
+| Khói bốc lên ở chân khi tiếp đất | **Client, hoàn toàn** | 0 byte | Ngay sau Phase 9 nếu muốn |
+| Fireball bay ra khi đánh | **Server** — nó là entity | 1 lệnh spawn + vị trí mỗi tick | Phase 14 |
+| Explosion khi fireball trúng | **Client**, kích bởi sự kiện của server | đi ké gói despawn của projectile | Phase 14 |
+| Ngồi để né đạn | **Server** — hộp va chạm | 0 byte (đã có `Crouching`) | Phase 14 |
+
+**Khói ở chân — thứ rẻ nhất, và là bài kiểm tra xem bạn đã tách tầng đúng chưa.** Nó là *hệ quả nhìn
+thấy được* của một chuyển tiếp đã có sẵn trong dữ liệu: `Fall` → (`Idle`|`Walk`). Client chỉ cần nhớ
+`LocomotionState` của frame trước và so với frame này; đổi từ `Fall` sang thứ khác là spawn khói. Đúng
+**một** chỗ làm được cho cả mình lẫn người khác — `CharacterAnimator.Apply` nhận đủ dữ liệu rồi.
+
+Không có `NetCmd` nào, không thêm field nào, server không biết khói tồn tại. Vì sao được phép? Vì khói
+**không ảnh hưởng tới ai**: sai một frame thì không ai chết. Ngày nào khói làm chậm người chạy qua nó
+thì nó thành luật chơi, và luật chơi thì phải về `Shared` + `Step`.
+
+> Một cảnh báo nhỏ: với **người khác**, `Grounded` đang được *suy* từ `Δy ≈ 0` giữa hai mẫu snapshot.
+> Mạng dồn gói có thể cho hai mẫu trùng vị trí giữa lúc họ đang bay → một lần "tiếp đất" giả → khói nở
+> giữa không trung. Hoạt ảnh sai một frame thì không ai thấy, nhưng một cụm khói thì có. Nếu gặp, cách
+> chữa là gửi thẳng `Grounded` trong `EntityState` — thêm đúng 1 byte, và lúc đó nó **xứng đáng**.
+
+**Fireball — chỗ trực giác Unity sai nặng nhất.** Phản xạ tự nhiên: bấm đánh → `Instantiate(fireball)`
+→ `OnTriggerEnter2D` → trừ máu. Cả ba bước đều ở client, và cả ba đều sai:
+
+| | Fireball là particle của client | Fireball là entity của server |
+|---|---|---|
+| Ai thấy nó | chỉ người bắn | mọi người trong tầm nhìn, ở **cùng một chỗ** |
+| Ai quyết định trúng | máy của người bắn | server |
+| Hack bằng cách nào | sửa client là bắn 100 quả, trúng từ bên kia map | không có gì để sửa |
+| Người bị bắn thấy gì | một quả cầu tự nhiên bốc hơi, máu tự trừ | quả cầu bay tới, chạm, nổ |
+
+Nên fireball có `X`, `Y`, `VelX`, một `entityId`, và **được `Step` mỗi tick ở server** y như người chơi.
+Client chỉ vẽ nó — đúng vai trò `RemotePlayerView` đang làm với người khác. Đó là bài của Phase 14, và
+Phase 9 đã dựng sẵn hai mảnh cho nó: hướng bắn (`FacingLeft` do server chốt, khoá trong lúc đánh) và
+nhịp thời gian (`ActionTicksLeft`).
+
+Mảnh còn thiếu, ghi lại để Phase 14 nhớ: **quả cầu bay ra ở tick thứ mấy của đòn đánh?** Không phải
+"khi hoạt ảnh tới frame 2" — client không được quyết cái đó. Nó là thêm một con số trong
+`ActionDefinition`, viết bằng giây như mọi con số khác:
+
+```csharp
+new ActionDefinition(durationSeconds: 0.25f, cooldownSeconds: 0.4f, locksMovement: false,
+                     hitAtSeconds: 0.1f)
+```
+
+Client thì làm điều ngược lại của `animator.speed`: canh clip sao cho **frame vung tay rơi đúng vào
+tick đó**. Hình phục vụ luật, không phải luật chạy theo hình.
+
+**Explosion** thì lại là client thuần, giống khói: server gửi "projectile 77 biến mất vì trúng entity
+12", client dựng hiệu ứng ở chỗ đó. Sự kiện là của server, hạt lửa là của client.
+
+**Ngồi để né đạn — món này Phase 9 đã trả trước gần hết tiền.** Server cần biết thân người cao bao
+nhiêu tại thời điểm va chạm, mà `Crouching` thì **đã nằm trong `MoveState`** và đã được cả hai bên mô
+phỏng giống nhau. Việc còn lại ở Phase 14 chỉ là hai con số nữa trong `CharacterProfile`
+(`standHeight`, `crouchHeight` — đơn vị world, không phải giây) và một phép kiểm hình chữ nhật.
+
+Đây chính là lý do ở Bước 1 ta nhất quyết coi `Crouching` là **sự thật vật lý** chứ không phải chuyện
+hình ảnh, và nhất quyết để `CharacterStates.Derive` ở `Shared` dù server chưa gọi nó lần nào. Nếu hồi
+đó cho `Crouching` sống ở client (một `bool` trong `PlayerMotor`, "chỉ để đổi sprite thôi mà") thì hôm
+nay muốn né đạn sẽ phải làm lại từ đầu: thêm field vào state, thêm vào snapshot, sửa `Step`, sửa cả
+prediction — và trong lúc chưa làm xong thì có một bug rất khó chịu: **người chơi thấy mình ngồi né
+được, server thì không thấy.**
+
+---
+
 ## Để dành (ghi lại, chưa làm)
 
 - **Bảy nhóm sprite còn lại.** `strike` `flyKick` `dizzy` `win` cần giá trị `ActionState` mới → một số
@@ -1967,15 +2490,27 @@ gửi trọn; không thì gửi đúng thứ vẽ được.
 - **Blend giữa hai clip.** Đẹp hơn, nhưng thời gian blend là thời gian **không thuộc về tick nào**, và
   nó làm nhoè đúng cái ranh giới mà phase này vừa dựng. Nếu làm thì blend phải nằm trọn trong số tick
   của trạng thái, không được kéo dài nó.
-- **Nén `Flags` + `Action` vào một byte.** `Action` chỉ cần 2 bit, `Flags` đang dùng 2 bit. Tiết kiệm
-  1 byte × số entity × 20 lần/giây. Chưa đáng làm bây giờ, nhưng đáng biết là chỗ đó còn dư.
-- **Hoạt ảnh cho hiệu ứng** (`fireball`, `explosion` trong `Textures/Dragon Warrior Files/Effects`).
-  Đây **không** phải trạng thái nhân vật mà là entity riêng — và cái bẫy lớn nhất của nó (projectile
-  là entity của server, không phải particle của client) là bài của Phase 14.
+- **Nén cờ vào bit.** `FacingLeft` + `Crouching` + `Action` hiện tốn 3 byte và chỉ dùng hết 4 bit.
+  Ngày số cờ lên 10–15 (choáng, tàng hình, cưỡi thú, đang giao dịch…) **và** profiler chỉ đúng vào băng
+  thông snapshot thì mới nén — nén ở đúng một chỗ trong `Shared`, không phải mặt nạ bit chép tay hai bên.
+  Trước lúc đó thì đây là tối ưu mù, và cái giá của nó là mọi lần đọc code về sau.
+- **Bảng số ra file.** `CharacterProfiles.Build()` đang dựng bằng C#. Phase 11 đổi nó thành đọc từ file
+  (sửa số không cần build lại) + kiểm version lúc đăng nhập để client không bao giờ chạy bảng khác
+  server. Chỗ gọi (`profile.MoveSpeed`, `profile.GetAction(...)`) thì không đổi một dòng.
+- **Từ hành động sang chiêu thức.** `ActionState` hiện là một enum nhỏ đủ cho đánh thường. Khi có skill,
+  hình dạng đúng là `MoveState` mang thêm `skillId`, và bảng tra đổi từ `ActionState → ActionDefinition`
+  thành `skillId → SkillDefinition` (thời lượng, hồi chiêu, thời điểm ra đòn, có khoá thân không —
+  **vẫn viết bằng giây**). Vì `Step` đã nhận bảng qua tham số nên đổi này không lan ra khắp nơi.
+- **Hoạt ảnh cho hiệu ứng** (`fireball`, `explosion` trong `Textures/Dragon Warrior Files/Effects`) —
+  xem mục "Bốn thứ bạn định làm tiếp" ở trên.
 
 ---
 
 **Xong Phase 9 → nhân vật đã biết diễn, và ranh giới "ai quyết cái gì" đã rõ ở tầng hình ảnh.**
-Thế giới thì vẫn là một mặt phẳng vô hình ở `y = 0`, và mọi người vẫn nhận gói của tất cả mọi người.
-[PHASE-10](PHASE-10.md) cho thế giới một hình dạng thật — sàn, tường, bệ xuyên-một-chiều — và cho tầm
-nhìn một giới hạn.
+Thế giới thì vẫn là mặt phẳng tạm của Bước 0, và mọi người vẫn nhận gói của tất cả mọi người.
+
+[PHASE-10](PHASE-10.md) cho thế giới hình dạng thật, và làm theo đúng cách một game thật làm: thêm
+một lớp `Collision` vào tilemap (vẽ tay bằng tile màu: ô đặc, bệ xuyên-một-chiều), một tool trong
+Editor **export ra file map** — kích thước và origin bất kỳ, kèm config riêng của map (điểm spawn,
+cửa sang map khác) — rồi **cả server lẫn client cùng đọc đúng file đó**. Hình dạng map từ đó có một
+nguồn duy nhất, và nguồn ấy chính là thứ bạn nhìn thấy trong Scene view.

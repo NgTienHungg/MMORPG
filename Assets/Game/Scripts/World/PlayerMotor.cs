@@ -20,11 +20,19 @@ namespace MMORPG.Client.World
 
         /// <summary>Lệch hơn mức này thì kéo mượt là dối người chơi — cắt thẳng về vị trí đúng.</summary>
         private const float SNAP_DISTANCE = 2f;
+        
+        [SerializeField] private CharacterAnimator _characterAnimator;
 
         private InputSystem_Actions _inputActions;
 
         private WorldApi _worldApi;
         private WorldNetHandler _worldNetHandler;
+        
+        /// <summary>
+        /// Bộ số của lớp nhân vật mình đang chơi. Client PHẢI dự đoán bằng đúng bảng server dùng —
+        /// lệch một con số là lệch quỹ đạo, và reconciliation sẽ kéo giật liên tục mà không rõ vì sao.
+        /// </summary>
+        private CharacterProfile _profile;
 
         private readonly List<PendingInput> _pending = new();
         private int _nextSeq;
@@ -48,6 +56,12 @@ namespace MMORPG.Client.World
         /// ra thành một đoạn trượt ngắn thay vì một bước nhảy cóc.
         /// </summary>
         private Vector2 _renderOffset;
+        
+        /// <summary>
+        /// Cú bấm đánh đang chờ tick tới tiêu thụ. Cùng lý do như _jumpLatched: Update chạy 60–300Hz
+        /// còn Step chỉ 20Hz, đọc WasPressedThisFrame bên trong vòng tick là bỏ lỡ phần lớn cú bấm.
+        /// </summary>
+        private bool _attackLatched;
 
         private void Awake()
         {
@@ -55,12 +69,17 @@ namespace MMORPG.Client.World
             _inputActions.Player.Enable();
         }
 
-        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos)
+        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos, int classId)
         {
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
+            _profile = CharacterProfiles.Get(classId);
+
             _simState = MoveState.AtRest(spawnPos.x, spawnPos.y);
             _prevSimState = _simState;
+
+            // Animator cần cùng bảng đó, nhưng chỉ để co clip cho vừa thời lượng.
+            _characterAnimator.Init(_profile);
 
             _worldNetHandler.OnMoveStateResult += OnMoveStateResult;
         }
@@ -80,32 +99,37 @@ namespace MMORPG.Client.World
             if (_worldApi == null)
                 return;
 
-            // Chốt cú bấm ngay tại frame nó xảy ra. Xem comment ở khai báo _jumpLatched.
+            // Hai nút dạng CẠNH: chốt ngay tại frame chúng xảy ra.
             if (_inputActions.Player.Jump.WasPressedThisFrame())
                 _jumpLatched = true;
 
-            // Chỉ còn trục ngang. Kẹp [-1,1] giống hệt server: analog stick cho giá trị lẻ,
-            // và bên nào kẹp khác bên kia là bên đó dự đoán lệch.
+            if (_inputActions.Player.Attack.WasPressedThisFrame())
+                _attackLatched = true;
+
             float dirX = Mathf.Clamp(_inputActions.Player.Move.ReadValue<Vector2>().x, -1f, 1f);
 
-            // Vòng accumulator y hệt game loop server: dự đoán theo bậc TICK_DT cố định,
-            // không theo frame — frame rate không được ảnh hưởng tốc độ chạy hay độ cao nhảy.
+            // Trục GIỮ: lấy MỨC tại lúc dựng tick, không chốt và không gộp. Ngồi là một tư thế kéo
+            // dài — thả phím ra là phải đứng dậy ngay tick sau.
+            bool crouch = _inputActions.Player.Crouch.IsPressed();
+
             _accumulator += Time.deltaTime;
             while (_accumulator >= MovementRules.TICK_DT)
             {
                 _accumulator -= MovementRules.TICK_DT;
 
-                // Chốt tick vừa rời đi TRƯỚC khi Step ghi đè _simState — nó là đầu trái của đoạn
-                // nội suy mà các frame sắp tới sẽ đi dọc theo.
                 _prevSimState = _simState;
-                Step(dirX);
+                Step(dirX, crouch);
             }
 
-            // Suy giảm theo hàm mũ để sai lệch tan sau cùng một khoảng THỜI GIAN ở mọi frame rate,
-            // thay vì sau cùng một số FRAME. Nhân trực tiếp: không cần nhớ giá trị ban đầu.
             _renderOffset *= Mathf.Exp(-CORRECTION_DECAY * Time.deltaTime);
 
             transform.position = InterpolatedPosition() + _renderOffset;
+
+            // Hình chạy theo FRAME, không theo tick — gọi ở đây chứ không trong Step.
+            // Đọc thẳng _simState (tick mới nhất) chứ không nội suy: VỊ TRÍ thì nội suy cho mượt,
+            // còn TRẠNG THÁI thì không có "một nửa giữa idle và walk" để nội suy.
+            _characterAnimator.Apply(
+                CharacterStates.Derive(_simState), _simState.Action, _simState.FacingLeft);
         }
 
         /// <summary>
@@ -124,16 +148,23 @@ namespace MMORPG.Client.World
         }
         
         /// <summary>Một bước dự đoán: mô phỏng trước, ghi nợ, gửi lên server. Gửi CẢ khi đứng yên — thả phím cũng là input.</summary>
-        private void Step(float dirX)
+        private void Step(float dirX, bool crouch)
         {
             int seq = ++_nextSeq;
 
-            var intent = new MoveIntent { DirX = dirX, Jump = _jumpLatched };
+            var intent = new MoveIntent
+            {
+                DirX = dirX,
+                Jump = _jumpLatched,
+                Crouch = crouch,
+                Action = _attackLatched ? ActionRequest.Attack : ActionRequest.None,
+            };
 
-            // Tiêu thụ ngay: một lần bấm sinh đúng một MoveIntent có Jump = true.
+            // Tiêu thụ ngay: một lần bấm sinh đúng một MoveIntent mang nó.
             _jumpLatched = false;
+            _attackLatched = false;
 
-            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT);
+            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, _profile);
 
             _pending.Add(new PendingInput(seq, intent));
             _worldApi.Move(seq, intent);
@@ -161,7 +192,7 @@ namespace MMORPG.Client.World
             foreach (PendingInput pending in _pending)
             {
                 previous = state;
-                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT);
+                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT, _profile);
             }
 
             _prevSimState = previous;

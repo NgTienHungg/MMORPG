@@ -16,21 +16,11 @@ namespace MMORPG.Shared.World
         public const int TICK_RATE = 20;
         public const float TICK_DT = 1f / TICK_RATE;
 
-        /// <summary>Tốc độ chạy ngang, world unit/giây.</summary>
-        public const float MOVE_SPEED = 5f;
-
         /// <summary>
         /// Gia tốc rơi, unit/giây². Lớn hơn 9.81 của đời thật rất nhiều — trọng lực "đúng vật lý"
         /// cho cảm giác lơ lửng như trên mặt trăng, không game platformer nào dùng.
         /// </summary>
         public const float GRAVITY = 30f;
-
-        /// <summary>
-        /// Vận tốc bật lên tức thời khi nhảy. Đỉnh nhảy = JUMP_SPEED² / (2·GRAVITY) ≈ 2 unit,
-        /// thời gian bay ≈ 2·JUMP_SPEED/GRAVITY ≈ 0.73s ≈ 15 tick — đủ dài để nội suy phía
-        /// người xem có mẫu mà vẽ đường cong.
-        /// </summary>
-        public const float JUMP_SPEED = 11f;
 
         /// <summary>
         /// Trần tốc độ rơi. Không có nó, rơi từ trên cao đủ lâu sẽ đi hơn một ô mỗi tick và
@@ -59,24 +49,79 @@ namespace MMORPG.Shared.World
         /// </summary>
         public const int EXPIRED = 999;
 
+  /// <summary>
+        /// Quy giây ra tick. Chạy MỘT LẦN lúc dựng bảng, không nằm trong Step — nhờ vậy vòng mô phỏng
+        /// chỉ còn làm việc với số nguyên, và hai đầu dây không có cửa nào để lệch nhau ở chữ số cuối.
+        ///
+        /// Làm tròn LÊN và có sàn 1: một hành động 10ms mà quy ra 0 tick thì nó không tồn tại — phép 0
+        /// của Step sẽ xoá nó ngay tick sau. Hệ quả phải nói trước với người viết số: thời lượng bị
+        /// lượng tử hoá theo 50ms, viết 0.23s hay 0.25s đều ra 5 tick.
+        /// </summary>
+        public static int ToTicks(float seconds)
+        {
+            if (seconds <= 0f)
+                return 0;
+
+            int ticks = (int)MathF.Ceiling(seconds * TICK_RATE);
+
+            return ticks < 1 ? 1 : ticks;
+        }
+
         /// <summary>
         /// Một bước mô phỏng. Hàm THUẦN: không đọc thời gian, không random, không đọc biến ngoài —
-        /// cùng (state, intent, dt) luôn cho cùng kết quả, ở cả hai đầu dây.
+        /// cùng (state, intent, dt, profile) luôn cho cùng kết quả, ở cả hai đầu dây.
+        ///
+        /// profile là bộ số của CHÍNH nhân vật đang được mô phỏng. Nó vào bằng tham số chứ không nằm
+        /// trong MoveState: MoveState đi trên dây mỗi tick, còn profile thì hai bên tra được từ ClassId
+        /// — gửi kèm là trả tiền băng thông 20 lần mỗi giây cho một thứ không bao giờ đổi.
         ///
         /// THỨ TỰ các phép dưới đây là một phần của contract. Đổi thứ tự là đổi kết quả, và vì
         /// hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
         /// </summary>
-        public static MoveState Step(MoveState state, MoveIntent intent, float dt)
+        public static MoveState Step(MoveState state, MoveIntent intent, float dt, CharacterProfile profile)
         {
-            // 1. Vận tốc ngang.
-            state.VelX = intent.DirX * MOVE_SPEED;
+            // 0. Nhịp của tầng action. PHẢI chạy trước phép 5: chạy sau thì đòn vừa bắt đầu ở tick
+            //    này bị trừ mất một tick ngay khi chưa kịp diễn.
+            if (state.ActionTicksLeft > 0)
+                state.ActionTicksLeft--;
 
-            // 2. Trọng lực.
+            if (state.TicksSinceAttack < EXPIRED)
+                state.TicksSinceAttack++;
+
+            // Hết thời lượng thì về None — TRỪ Die. Chết rồi thì hết ticks là hết hoạt ảnh, không
+            // phải hết trạng thái; bỏ nhánh loại trừ này là xác chết đứng dậy đi tiếp sau một giây.
+            if (state.ActionTicksLeft <= 0 && state.Action != ActionState.Die)
+                state.Action = ActionState.None;
+
+            // Tra bảng SAU phép 0, vì phép 0 vừa có thể đưa Action về None. Tra trước thì cả tick này
+            // thân thể còn bị khoá theo một hành động đã hết hạn — trễ một nhịp, đủ để thấy "đơ".
+            bool locked = profile.GetAction(state.Action).LocksMovement;
+
+            // 1. Tư thế. Ngồi chỉ có nghĩa khi chân chạm đất và thân thể còn nghe lời.
+            state.Crouching = intent.Crouch && state.Grounded && !locked;
+
+            // 2. Vận tốc ngang. Ăn đòn / gục thì mất quyền điều khiển; ngồi thì đứng yên tại chỗ.
+            if (locked || state.Crouching)
+            {
+                state.VelX = 0f;
+            }
+            else
+            {
+                state.VelX = intent.DirX * profile.MoveSpeed;
+            }
+
+            // Hướng mặt: chỉ đổi khi đang thật sự dịch chuyển VÀ không vướng hành động nào.
+            // Đứng yên thì giữ hướng cũ (đó là lý do FacingLeft phải là trạng thái, không phải suy ra).
+            // Khoá hướng trong lúc hành động: vung tay mà xoay được người thì đòn đánh quét cả hai bên.
+            if (state.VelX != 0f && state.Action == ActionState.None)
+                state.FacingLeft = state.VelX < 0f;
+
+            // 3. Trọng lực — luật của thế giới, không theo nhân vật.
             state.VelY -= GRAVITY * dt;
             if (state.VelY < -MAX_FALL_SPEED)
                 state.VelY = -MAX_FALL_SPEED;
 
-            // 3a. Hai bộ đếm tha thứ. Kẹp ở EXPIRED để không tăng tới tràn int.
+            // 4a. Hai bộ đếm tha thứ.
             if (state.TicksSinceGrounded < EXPIRED)
                 state.TicksSinceGrounded++;
 
@@ -85,25 +130,36 @@ namespace MMORPG.Shared.World
             else if (state.TicksSinceJumpRequest < EXPIRED)
                 state.TicksSinceJumpRequest++;
 
-            // 3b. Điều kiện nhảy. Lưu ý KHÔNG còn kiểm state.Grounded: đang đứng đất nghĩa là
-            //     TicksSinceGrounded == 0, đã nằm trong ngưỡng coyote rồi. Kiểm thêm Grounded
-            //     là vô hiệu hoá đúng cái tính năng vừa thêm.
-            if (state.TicksSinceJumpRequest <= JUMP_BUFFER_TICKS &&
+            // 4b/4c. Nhảy — thêm điều kiện thân thể còn nghe lời.
+            if (!locked &&
+                state.TicksSinceJumpRequest <= JUMP_BUFFER_TICKS &&
                 state.TicksSinceGrounded <= COYOTE_TICKS)
             {
-                // 3c. Bật lên, và tiêu huỷ CẢ HAI tư cách. Chỉ xoá buffer thì coyote còn hiệu lực ở
-                //     tick sau → nhảy đôi miễn phí. Chỉ xoá coyote thì buffer còn → vừa chạm đất là
-                //     tự nhảy lại, mãi mãi.
-                state.VelY = JUMP_SPEED;
+                state.VelY = profile.JumpSpeed;
                 state.TicksSinceJumpRequest = EXPIRED;
                 state.TicksSinceGrounded = EXPIRED;
             }
 
-            // 4. Tích phân.
+            // 5. Xin hành động. HAI điều kiện chặn khác nhau, cố tình không gộp:
+            //    CanEnter  = "trạng thái hiện tại có cho phép không" (đang choáng thì không)
+            //    cooldown  = "nhịp đánh đã tới chưa"
+            //    Gộp vào một số là mất khả năng diễn đạt "hết cooldown rồi nhưng đang choáng nên vẫn cấm".
+            ActionDefinition attack = profile.GetAction(ActionState.Attack);
+
+            if (intent.Action == ActionRequest.Attack &&
+                state.TicksSinceAttack >= attack.CooldownTicks &&
+                CharacterStates.CanEnter(state.Action, state.ActionTicksLeft, ActionState.Attack))
+            {
+                state.Action = ActionState.Attack;
+                state.ActionTicksLeft = attack.DurationTicks;
+                state.TicksSinceAttack = 0;
+            }
+
+            // 6. Tích phân.
             state.X += state.VelX * dt;
             state.Y += state.VelY * dt;
 
-            // 5. Va chạm sàn.
+            // 7. Va chạm với sàn phẳng.
             if (state.Y <= GROUND_Y)
             {
                 state.Y = GROUND_Y;
@@ -116,7 +172,8 @@ namespace MMORPG.Shared.World
                 state.Grounded = false;
             }
 
-            // 6. Biên ngang tạm, chờ map thật ở Phase 10.
+            // 8. Biên ngang tạm (hoặc hai hằng WORLD_MIN_X / WORLD_MAX_X nếu bạn chọn cách thứ
+            //    hai ở Bước 0). Cả hai đều biến mất ở Phase 10 khi map có tường thật.
             state.X = Math.Clamp(state.X, -WORLD_HALF_EXTENT, WORLD_HALF_EXTENT);
 
             return state;

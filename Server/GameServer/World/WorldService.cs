@@ -4,6 +4,7 @@ using MMORPG.ServerCore;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
+using MMORPG.Shared.World;
 
 namespace MMORPG.GameServer.World
 {
@@ -21,6 +22,10 @@ namespace MMORPG.GameServer.World
         // entity chưa"). ConcurrentDictionary vì Spawn/Despawn chạy từ handler của nhiều session song song.
         private readonly ConcurrentDictionary<int, PlayerEntity> _entities = new();
         private readonly ConcurrentDictionary<long, int> _entityIdByAccount = new();
+
+        // ConcurrentQueue vì bên ghi là luồng đọc phím còn bên đọc là luồng tick. Chỉ hàng đợi này
+        // đi qua ranh giới luồng; entity thì không ai ngoài tick được chạm vào.
+        private readonly ConcurrentQueue<ForcedActionCommand> _forcedActions = new();
 
         private int _nextEntityId;
 
@@ -103,12 +108,30 @@ namespace MMORPG.GameServer.World
                 ClassId = entity.ClassId,
                 X = entity.X,
                 Y = entity.Y,
+
+                // Hiện ra là đã đúng hướng mặt và đúng tư thế, không quay đầu một nhịp sau.
+                FacingLeft = entity.State.FacingLeft,
+                Crouching = entity.State.Crouching,
+                Action = entity.State.Action,
             };
         }
 
         /// <summary>Game loop gọi mỗi tick: mô phỏng mọi entity rồi báo vị trí cho chính chủ.</summary>
         public void Tick(float dt)
         {
+            // Vòng 0: tiêu thụ lệnh đến từ ngoài. Đặt trước vòng tích phân để trạng thái vừa bị áp
+            // đặt được chính tick này diễn tiến (đếm ngược, khoá di chuyển), thay vì trễ một nhịp.
+            while (_forcedActions.TryDequeue(out ForcedActionCommand command))
+            {
+                foreach (PlayerEntity entity in _entities.Values)
+                {
+                    if (command.BypassRules)
+                        entity.Revive();
+                    else
+                        entity.ForceAction(command.Action);
+                }
+            }
+
             // Vòng 1: tích phân TẤT CẢ trước. Trộn tích phân với gửi thì người gửi trước
             // mang vị trí cũ của người tích phân sau — hai client nhìn cùng tick ra hai bức tranh.
             foreach (PlayerEntity entity in _entities.Values)
@@ -144,10 +167,55 @@ namespace MMORPG.GameServer.World
                 if (entity.EntityId == viewer.EntityId)
                     continue;
 
-                states.Add(new EntityState { EntityId = entity.EntityId, X = entity.X, Y = entity.Y });
+                states.Add(new EntityState
+                    {
+                        EntityId = entity.EntityId,
+                        X = entity.X,
+                        Y = entity.Y,
+                        FacingLeft = entity.State.FacingLeft,
+                        Crouching = entity.State.Crouching,
+                        Action = entity.State.Action,
+                    }
+                );
             }
 
             return new WorldSnapshotNotice { States = states.ToArray() };
+        }
+
+        /// <summary>
+        /// Xin gây trạng thái cho TẤT CẢ entity trong world. Gọi được từ luồng bất kỳ — lệnh chỉ
+        /// được xếp hàng ở đây, và chỉ thật sự có hiệu lực ở đầu tick kế tiếp.
+        ///
+        /// Vì sao không sửa thẳng entity tại đây: MoveState là struct hơn 40 byte, ghi nó trong lúc
+        /// luồng tick đang đọc thì người đọc có thể thấy nửa cũ nửa mới. Không exception, không log,
+        /// chỉ là một tick mang toạ độ vô nghĩa — loại lỗi đắt nhất để tìm.
+        /// </summary>
+        public void EnqueueForceAll(ActionState action)
+        {
+            _forcedActions.Enqueue(new ForcedActionCommand(action, bypassRules: false));
+        }
+
+        public void EnqueueReviveAll()
+        {
+            _forcedActions.Enqueue(new ForcedActionCommand(ActionState.None, bypassRules: true));
+        }
+
+        /// <summary>
+        /// Một lệnh đổi trạng thái đến từ NGOÀI luồng tick. Hiện chỉ có nút thử trên console phát ra;
+        /// từ Phase 14 thì sát thương của quái và của người chơi khác cũng đi đường này.
+        /// </summary>
+        private readonly struct ForcedActionCommand
+        {
+            public readonly ActionState Action;
+
+            /// <summary>Bỏ qua bảng chuyển tiếp — chỉ dùng cho hồi sinh, vì Die không có lối ra hợp lệ.</summary>
+            public readonly bool BypassRules;
+
+            public ForcedActionCommand(ActionState action, bool bypassRules)
+            {
+                Action = action;
+                BypassRules = bypassRules;
+            }
         }
     }
 }

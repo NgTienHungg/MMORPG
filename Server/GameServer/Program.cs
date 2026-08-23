@@ -8,6 +8,7 @@ using MMORPG.GameServer.Handlers;
 using MMORPG.GameServer.Net;
 using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
+using MMORPG.Shared.World;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -27,7 +28,6 @@ CharacterHandler.CharacterService = new CharacterService(dbClient, worldService)
 
 TcpDispatcher.RegisterAll();
 
-
 var listener = new TcpListener(IPAddress.Any, PORT);
 listener.Start();
 Log.Info($"Lắng nghe trên {$"0.0.0.0:{PORT}".Green()}");
@@ -39,6 +39,33 @@ Console.CancelKeyPress += (_, e) =>
     e.Cancel = true; // chặn hành vi kill mặc định
     cts.Cancel();
 };
+
+// Console điều khiển — nguồn phát TẠM cho Hurt/Die tới khi có hệ thống sát thương ở Phase 14.
+// Console.ReadKey CHẶN luồng gọi nó, nên phải có luồng riêng: đặt trong vòng accept là treo cả server.
+_ = Task.Run(() =>
+{
+    while (!cts.IsCancellationRequested)
+    {
+        switch (Console.ReadKey(intercept: true).Key)
+        {
+            case ConsoleKey.H:
+                // Không truyền thời lượng: mỗi entity tra bảng của lớp mình.
+                worldService.EnqueueForceAll(ActionState.Hurt);
+                Log.Info($"[thử] Toàn map {"HURT".Yellow()}");
+                break;
+
+            case ConsoleKey.K:
+                worldService.EnqueueForceAll(ActionState.Die);
+                Log.Info($"[thử] Toàn map {"DIE".Red()}");
+                break;
+
+            case ConsoleKey.J:
+                worldService.EnqueueReviveAll();
+                Log.Info($"[thử] Toàn map {"hồi sinh".Green()}");
+                break;
+        }
+    }
+});
 
 // run game loop
 var gameLoop = new GameLoop(worldService);

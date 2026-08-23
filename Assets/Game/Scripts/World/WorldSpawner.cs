@@ -3,6 +3,7 @@ using HungNT;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto.Character;
 using MMORPG.Shared.Dto.World;
+using MMORPG.Shared.World;
 using UnityEngine;
 using VContainer;
 
@@ -60,7 +61,7 @@ namespace MMORPG.Client.World
 
             // Prefab sinh lúc runtime — VContainer không tự inject. Đưa phụ thuộc vào tay.
             var motor = _localPlayerObject.GetComponent<PlayerMotor>();
-            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y));
+            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y), response.ClassId);
 
             _cameraFollow.SetTarget(_localPlayerObject.transform);
 
@@ -90,7 +91,11 @@ namespace MMORPG.Client.World
             remote.name = $"Remote_{notice.EntityId}_{notice.Name}";
 
             var view = remote.GetComponent<RemotePlayerView>();
-            view.PushState(new Vector2(notice.X, notice.Y));
+
+            // Bảng số tra từ ClassId của NGƯỜI KIA, không phải của mình: hai lớp nhân vật có thời
+            // lượng hành động khác nhau, và người xem phải co clip theo bảng của người bị xem.
+            view.Init(CharacterProfiles.Get(notice.ClassId));
+            view.PushState(new Vector2(notice.X, notice.Y), notice.FacingLeft, notice.Crouching, notice.Action);
 
             _remotes[notice.EntityId] = view;
         }
@@ -117,7 +122,7 @@ namespace MMORPG.Client.World
                 if (!_remotes.TryGetValue(state.EntityId, out RemotePlayerView view))
                     continue;
 
-                view.PushState(new Vector2(state.X, state.Y));
+                view.PushState(new Vector2(state.X, state.Y), state.FacingLeft, state.Crouching, state.Action);
             }
         }
 

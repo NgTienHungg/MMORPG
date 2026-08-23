@@ -20,6 +20,8 @@
 | Thể loại | **2D platformer góc nhìn ngang** (kiểu Ninja School / Ngọc Rồng Online) | Chốt ở Phase 7. Asset nhân vật/map góc nhìn ngang dễ kiếm hơn top-down nhiều. Đổi lại phải viết motor có trọng lực + nhảy chạy **giống hệt nhau ở 2 bên** — xem Phase 8 |
 | Motor di chuyển | **Kinematic tự viết, đặt trong `Shared`. Cấm `Rigidbody2D` cho nhân vật** | Physics của Unity không tồn tại trên server .NET. Hai bên tính khác nhau = rubber-band vĩnh viễn. Đây là "contract 1 nguồn" áp lên *hành vi* chứ không chỉ lên *dữ liệu* |
 | Asset | **Dragon Warrior** (nhân vật, 13 nhóm trạng thái + effect fireball/explosion) + tileset **American Forest** | Có sẵn trong `Assets/Game/Textures/`. Chính bộ trạng thái phong phú này là lý do Phase 9 tách riêng thành một phase state machine |
+| Hình dạng map | **Vẽ tay bằng Tilemap trong Unity, một lớp `Collision` riêng → tool Editor export ra file map** (ô đặc / bệ xuyên-một-chiều, origin + kích thước bất kỳ) — cả server lẫn client cùng đọc file đó | Chốt ở Phase 9 (2026-08-22). Map platformer không cố định kích thước nên gõ tay mảng chuỗi trong `Shared` là có hai bản vẽ của cùng một map mà không ai kiểm chúng khớp nhau. Lớp `Collision` tách khỏi lớp trang trí: sửa cây cỏ không được đổi va chạm. Config riêng của map (điểm spawn, cửa sang map khác) đi cùng file này; danh sách quái / drop thêm vào từ Phase 14 |
+| Con số của luật chơi | **Viết bằng giây, lưu trong bảng theo lớp nhân vật** (`CharacterProfile` ở `Shared`: tốc độ chạy, độ cao nhảy, thời lượng + hồi chiêu từng hành động), quy ra tick **một lần** lúc dựng bảng | Chốt ở Phase 9 (2026-08-22), thay cho `const` rải trong `MovementRules`. Người thiết kế và hoạ sĩ nói bằng giây, không nói bằng tick; và trong MMO thì mọi con số này đều khác nhau giữa các lớp nhân vật / chiêu thức. Mô phỏng vẫn đếm bằng tick (số nguyên = không sai số, replay lặp lại được). Phase 11 chỉ đổi *nguồn* của bảng (C# → file + kiểm version), không đổi chỗ gọi |
 | Trạng thái nhân vật | **Hai tầng**: locomotion client tự suy từ motor · action do **server** quyết và đi trong snapshot | Client tự bật `hurt`/`die` là vi phạm quy tắc "server là source of truth" ở dạng hình ảnh. Xem Phase 9 |
 | Unity | 6000.2.9f1, URP 2D, DI = VContainer | Theo `BaseCode_Test` |
 | Assembly client | **Không dùng asmdef** — code game nằm hết trong `Assembly-CSharp` | Assembly do asmdef định nghĩa không tham chiếu được `Assembly-CSharp-firstpass`, mà DOTween Pro nằm ở đó dưới dạng `.cs` không asmdef → mất API Pro. Đổi lại phải compile lại toàn bộ mỗi lần sửa; cỡ dự án này vẫn dưới vài giây. Tách asmdef sau, chỉ cho phần không đụng DOTween |
@@ -161,6 +163,12 @@ server xử lý item B; không lỗi biên dịch, không log, chỉ có bug câ
 
 **Nguyên tắc:** doc mô tả *cái gì* và *vì sao*, kèm code đủ để chép khi bí. Nhưng gõ lại tay vẫn học được nhiều hơn chép.
 
+**Kích thước một phase** (rút ra sau Phase 9 — 2026-08-23): **một phase = một kết quả chạy được, tối đa
+2–3 CHECKPOINT, doc ~400–600 dòng.** Phase 9 dài gấp ba mức đó vì gộp hai việc độc lập (hoạt ảnh theo
+tư thế · tầng hành động do server quyết) — hệ quả là khi có lỗi thì không khoanh được vùng, và một dòng
+thiếu ở server làm hỏng thứ trông giống lỗi client. Từ nay việc nào **tự nó test được** thì tách thành
+phase riêng, kể cả khi hai việc "cùng chủ đề".
+
 **Format doc từ Phase 5:** mỗi bước chia hai tầng — *hướng làm* (mô tả + quyết định thiết kế + code khung)
 hiện sẵn, *lời giải đầy đủ* nằm trong foldout `<details>` mặc định đóng ngay dưới. Câu hỏi "Tự kiểm tra
 hiểu bài" cũng vậy: mỗi câu một foldout `📖 Đáp án câu N` sát ngay dưới câu hỏi. Tự nghĩ và tự làm trước,
@@ -180,10 +188,10 @@ mở lời giải/đáp án sau để đối chiếu.
 | 5 — Vào thế giới | ✅ xong | [`guides/PHASE-5.md`](guides/PHASE-5.md) ✅ |
 | 6 — Game loop & movement | ✅ xong | [`guides/PHASE-6.md`](guides/PHASE-6.md) ✅ |
 | 7 — Multi-player sync | ✅ xong | [`guides/PHASE-7.md`](guides/PHASE-7.md) ✅ |
-| **8 — Motor platformer** 🆕 | ⏳ **làm tiếp theo** | [`guides/PHASE-8.md`](guides/PHASE-8.md) ✅ |
-| 9 — State machine trạng thái 🆕 | ⬜ chưa | [`guides/PHASE-9.md`](guides/PHASE-9.md) ✅ |
-| 10 — Map & AOI | ⬜ chưa | [`guides/PHASE-10.md`](guides/PHASE-10.md) ✅ |
-| 11 — Data & Config | ⬜ chưa | [`guides/PHASE-11.md`](guides/PHASE-11.md) ✅ |
+| 8 — Motor platformer 🆕 | ✅ xong | [`guides/PHASE-8.md`](guides/PHASE-8.md) ✅ |
+| **9 — State machine trạng thái** 🆕 | ⏳ **làm tiếp theo** | [`guides/PHASE-9.md`](guides/PHASE-9.md) ✅ (đã soát lại 2026-08-22 cho khớp code hiện tại) |
+| 10 — Map & AOI | ⬜ chưa | [`guides/PHASE-10.md`](guides/PHASE-10.md) ⚠️ cần viết lại theo pipeline tilemap → file map |
+| 11 — Data & Config | ⬜ chưa | [`guides/PHASE-11.md`](guides/PHASE-11.md) ⚠️ cần soát: bảng số đã có ở Phase 9, phase này chỉ đổi nguồn sang file + kiểm version |
 | 12 — Túi đồ & item | ⬜ chưa | ⬜ chưa viết |
 | 13 — Chỉ số nhân vật 🆕 | ⬜ chưa | ⬜ chưa viết |
 | 14 — Quái, PvP & EXP | ⬜ chưa | ⬜ chưa viết |

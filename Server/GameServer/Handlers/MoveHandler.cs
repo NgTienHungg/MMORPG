@@ -28,15 +28,19 @@ namespace MMORPG.GameServer.Handlers
             // người lạ, chỉ những trường đã qua kiểm mới được đi tiếp vào mô phỏng.
             var intent = new MoveIntent
             {
-                // Chống hack tốc độ: DirX = 10 là chạy nhanh gấp 10. Giờ DirX là số vô hướng nên chỉ
-                // cần kẹp, không phải chuẩn hoá vector như hồi còn hai trục.
+                // Chống hack tốc độ: DirX = 10 là chạy nhanh gấp 10.
                 DirX = Math.Clamp(input.Intent.DirX, -1f, 1f),
 
-                // Jump không cần kiểm: bool chỉ có hai giá trị. Client gian lận gửi Jump = true mỗi
-                // tick cũng không bay được — điều kiện coyote/buffer nằm trong MovementRules.Step và
-                // Step chạy ở đây, không ở máy họ. Thứ duy nhất họ được là tự nhảy lại mỗi lần tiếp
-                // đất, đúng bằng thứ một người bấm Space liên tục cũng có.
+                // Jump và Crouch không cần kiểm: bool chỉ có hai giá trị. Gửi Jump = true mỗi tick
+                // cũng vô ích — điều kiện coyote/buffer nằm trong MovementRules.Step, và Step chạy
+                // ở đây chứ không ở máy họ.
                 Jump = input.Intent.Jump,
+                Crouch = input.Intent.Crouch,
+
+                // Enum trên dây chỉ là một byte do MÁY KHÁC gửi: (ActionRequest)77 hợp lệ hoàn toàn
+                // với C#, không khớp nhánh nào và tuỳ chỗ dùng mà im lặng hoặc nổ. Kiểu dữ liệu bảo
+                // vệ code khỏi chính mình; kiểm miền giá trị mới là thứ bảo vệ server khỏi người khác.
+                Action = Enum.IsDefined(input.Intent.Action) ? input.Intent.Action : ActionRequest.None,
             };
 
             entity.SetInput(input.Seq, intent);
