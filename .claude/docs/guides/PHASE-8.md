@@ -1116,7 +1116,7 @@ phình ra hai `int`. Ghi nhớ cảm giác đó cho Phase 9, nơi mọi thứ đ
 | Nhảy lên bị giật ngược xuống giữa chừng | `PendingInput` mất cờ `Jump`, hoặc `OnMoveStateResult` chỉ nhận X/Y mà giữ `VelY` cũ | `PlayerMotor` |
 | Nhân vật đứng im hoàn toàn, server không log gì | DTO đổi nhưng Unity còn dùng DLL cũ — build `Shared` chưa copy sang `Assets/Plugins/Shared/` | Build lại `Server/Shared`, xem post-build target |
 | Hiển thị tụt lại rất xa mỗi lần rơi rồi mới đuổi kịp | `MoveTowards` còn dùng `MOVE_SPEED` làm tốc độ đuổi | `PlayerMotor.Update` |
-| Người khác nhìn thấy cú nhảy bị "cắt ngọn" | Không phải lỗi Phase 8: `INTERP_DELAY = 0.15f` của Phase 7 đang cắt. Nếu khó chịu thì đó là bài của Phase 10 (AOI) — đừng sửa vội | `RemotePlayerView` |
+| Người khác nhìn thấy cú nhảy bị "cắt ngọn" | Không phải lỗi Phase 8: `INTERP_DELAY = 0.15f` của Phase 7 đang cắt. Nếu khó chịu thì đó là bài của Phase 11 (AOI) — đừng sửa vội | `RemotePlayerView` |
 
 ---
 
@@ -1271,4 +1271,4 @@ thì phase này sẽ phải sửa nó — vì đoán theo đường thẳng trê
 Nhân vật giờ có *vận tốc* và *đang-đứng-đất* — hai thứ mà bước 5 mới chỉ dùng tạm bằng vài dòng `if`.
 [PHASE-9](PHASE-9.md) biến chúng thành một **state machine tử tế**, rồi thêm tầng thứ hai mà client
 không được phép tự quyết: `attack`, `hurt`, `die`. Đó là lần đầu tiên trong dự án một thứ thuần "hình
-ảnh" phải xin phép server — và là nền để Phase 14 chỉ việc gắn sát thương lên trên.
+ảnh" phải xin phép server — và là nền để Phase 15 chỉ việc gắn sát thương lên trên.

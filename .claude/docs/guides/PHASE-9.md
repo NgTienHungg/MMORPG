@@ -189,7 +189,7 @@ mỗi khi tập giá trị hợp lệ của chúng khác nhau.
 
 Lại một lần nữa: **một tính năng "chỉ là cảm giác" làm phình trạng thái.** Phase 8 đã trả hai `int` cho
 coyote time; giờ là năm field cho hoạt ảnh. Đây không phải thiết kế tồi — đây là cái giá thật của
-"server là source of truth", và biết trước nó thì không bị bất ngờ ở Phase 12–14.
+"server là source of truth", và biết trước nó thì không bị bất ngờ ở Phase 14–15.
 
 **(e) `MoveIntent` nở thêm hai field:** `Crouch` (**trục giữ** — bấm là ngồi, thả là đứng) và `Action`
 kiểu `ActionRequest` (**nút cạnh** — như `Jump`). Nhớ luật của Phase 8: trục giữ thì lấy giá trị mới
@@ -698,13 +698,13 @@ vào cũng chịu như nhau. Ranh giới để tự phân loại: *đổi con s�
 
 **Bảng nằm ở đâu bây giờ, và ở đâu về sau.** Phase này dựng bảng **bằng C# ngay trong `Shared`** —
 một hàm `Build()` trả về `Dictionary<int, CharacterProfile>`. Đó chưa phải đích đến, nhưng nó đã đúng
-**hình dạng**: tra theo id, viết bằng giây, quy ra tick một lần. Phase 11 chỉ thay *nguồn* của bảng
+**hình dạng**: tra theo id, viết bằng giây, quy ra tick một lần. Phase 12 chỉ thay *nguồn* của bảng
 (đọc từ file, sửa không cần build lại) mà **không đụng một dòng nào ở chỗ gọi** — `profile.MoveSpeed`,
 `profile.GetAction(...)` giữ nguyên. Đó là toàn bộ ý nghĩa của việc dựng đúng seam trước khi cần tới nó.
 
 Và vì client cũng phải đọc bảng này để dự đoán (nó là **config loại B** trong bảng phân loại ở
 ROADMAP §2b), bảng phải sống ở `Shared` chứ không phải ở `GameServer`. Ngày bảng ra file, hai bên đọc
-**cùng một file**, và lệch version thì bị chặn vào world — cũng là bài của Phase 11.
+**cùng một file**, và lệch version thì bị chặn vào world — cũng là bài của Phase 12.
 
 **Thứ tự các phép trong `Step`** — vẫn là một phần của contract, giờ dài hơn:
 
@@ -738,7 +738,7 @@ Năm chỗ dễ sai, đọc kỹ trước khi gõ:
 - **Phép 0 không được xoá `Die`.** Chết rồi thì hết `ActionTicksLeft` là hết *hoạt ảnh*, không phải
   hết *trạng thái*. Bỏ sót nhánh loại trừ này thì xác chết đứng dậy đi tiếp sau 1 giây.
 - **Hướng mặt khoá khi `Action != None`.** Đang vung tay mà xoay được người là đòn đánh đổi hướng giữa
-  chừng — ở Phase 14 khi đòn đánh có hộp va chạm thật thì đó là lỗ hack: bấm đánh rồi xoay để quét cả
+  chừng — ở Phase 15 khi đòn đánh có hộp va chạm thật thì đó là lỗ hack: bấm đánh rồi xoay để quét cả
   hai bên.
 - **Cooldown đếm từ lúc bắt đầu.** `TicksSinceAttack = 0` đặt cùng lúc với `ActionTicksLeft`. Đếm từ
   lúc kết thúc thì tổng nhịp đánh = thời lượng + hồi chiêu, và mỗi lần chỉnh độ dài đòn đánh là vô
@@ -1087,7 +1087,7 @@ dài bao lâu** — nhờ vậy hai nhân vật khác lớp cùng ăn một đò
 biết gì về chuyện đó. Đây là hệ quả trực tiếp của việc bỏ `const` ở Bước 2, và là chỗ đầu tiên nó trả lãi.
 
 Nó vẫn phải hỏi `CanEnter`: server có quyền hơn client, nhưng không có quyền phá luật (gây `hurt` cho
-một xác chết là vô nghĩa, và ở Phase 14 nó còn là chỗ để một con quái vô tình "hồi sinh" mục tiêu bằng
+một xác chết là vô nghĩa, và ở Phase 15 nó còn là chỗ để một con quái vô tình "hồi sinh" mục tiêu bằng
 cách đánh nó).
 
 Đặt `ForceAction` trên `PlayerEntity` chứ không rải rác trong `WorldService`: một chỗ duy nhất sửa
@@ -1117,8 +1117,8 @@ _forcedActions.Enqueue(...)   // luồng bất kỳ, chỉ ghi vào hàng đợi
 ```
 
 `lock` quanh vòng duyệt cũng chạy được, nhưng hàng đợi mới là hình dạng thật của một game server:
-**mọi thứ muốn đổi thế giới đều xếp hàng, thế giới chỉ đổi bên trong tick.** Phase 14 sẽ cần đúng
-hình dạng này khi sát thương đến từ một entity khác, và Phase 15 cần nó cho chat.
+**mọi thứ muốn đổi thế giới đều xếp hàng, thế giới chỉ đổi bên trong tick.** Phase 15 sẽ cần đúng
+hình dạng này khi sát thương đến từ một entity khác, và Phase 16 cần nó cho chat.
 
 **`Server/GameServer/Handlers/MoveHandler.cs`** — hai field mới đi qua đúng cửa kiểm mà `DirX` đã đi,
 cộng thêm một lớp mà dự án lần đầu gặp:
@@ -1353,7 +1353,7 @@ cả server.
 ```csharp
         /// <summary>
         /// Một lệnh đổi trạng thái đến từ NGOÀI luồng tick. Hiện chỉ có nút thử trên console phát ra;
-        /// từ Phase 14 thì sát thương của quái và của người chơi khác cũng đi đường này.
+        /// từ Phase 15 thì sát thương của quái và của người chơi khác cũng đi đường này.
         /// </summary>
         private readonly struct ForcedActionCommand
         {
@@ -1418,7 +1418,7 @@ và `Tick` mọc thêm một vòng ở **trước** vòng tích phân:
 **`Server/GameServer/Program.cs`** — vòng đọc phím, đặt ngay sau khi `gameLoop` chạy:
 
 ```csharp
-// Console điều khiển — nguồn phát TẠM cho Hurt/Die tới khi có hệ thống sát thương ở Phase 14.
+// Console điều khiển — nguồn phát TẠM cho Hurt/Die tới khi có hệ thống sát thương ở Phase 15.
 // Console.ReadKey CHẶN luồng gọi nó, nên phải có luồng riêng: đặt trong vòng accept là treo cả server.
 _ = Task.Run(() =>
 {
@@ -2212,7 +2212,7 @@ không đụng được vào cân bằng; người làm cân bằng sửa một 
 Thử nốt cái thứ ba cho đủ bộ: đổi `moveSpeed` của `DRAGON_WARRIOR` từ `5f` thành `9f`, **chỉ build lại
 `Shared` cho server mà cố tình không copy DLL sang Unity**. Chạy: nhân vật chạy nhanh trên máy bạn rồi
 bị kéo giật về liên tục. Đó là hình ảnh sống của "hai bên đọc hai bảng khác nhau" — và là lý do bảng
-này phải nằm ở `Shared`, và vì sao Phase 11 sẽ cần kiểm version bảng lúc đăng nhập.
+này phải nằm ở `Shared`, và vì sao Phase 12 sẽ cần kiểm version bảng lúc đăng nhập.
 
 ---
 
@@ -2412,9 +2412,9 @@ Bốn tính năng dưới đây chưa làm ở phase này, nhưng đáng phân l
 | Tính năng | Ai sở hữu | Tốn gì trên dây | Làm ở đâu |
 |---|---|---|---|
 | Khói bốc lên ở chân khi tiếp đất | **Client, hoàn toàn** | 0 byte | Ngay sau Phase 9 nếu muốn |
-| Fireball bay ra khi đánh | **Server** — nó là entity | 1 lệnh spawn + vị trí mỗi tick | Phase 14 |
-| Explosion khi fireball trúng | **Client**, kích bởi sự kiện của server | đi ké gói despawn của projectile | Phase 14 |
-| Ngồi để né đạn | **Server** — hộp va chạm | 0 byte (đã có `Crouching`) | Phase 14 |
+| Fireball bay ra khi đánh | **Server** — nó là entity | 1 lệnh spawn + vị trí mỗi tick | Phase 15 |
+| Explosion khi fireball trúng | **Client**, kích bởi sự kiện của server | đi ké gói despawn của projectile | Phase 15 |
+| Ngồi để né đạn | **Server** — hộp va chạm | 0 byte (đã có `Crouching`) | Phase 15 |
 
 **Khói ở chân — thứ rẻ nhất, và là bài kiểm tra xem bạn đã tách tầng đúng chưa.** Nó là *hệ quả nhìn
 thấy được* của một chuyển tiếp đã có sẵn trong dữ liệu: `Fall` → (`Idle`|`Walk`). Client chỉ cần nhớ
@@ -2441,11 +2441,11 @@ thì nó thành luật chơi, và luật chơi thì phải về `Shared` + `Step
 | Người bị bắn thấy gì | một quả cầu tự nhiên bốc hơi, máu tự trừ | quả cầu bay tới, chạm, nổ |
 
 Nên fireball có `X`, `Y`, `VelX`, một `entityId`, và **được `Step` mỗi tick ở server** y như người chơi.
-Client chỉ vẽ nó — đúng vai trò `RemotePlayerView` đang làm với người khác. Đó là bài của Phase 14, và
+Client chỉ vẽ nó — đúng vai trò `RemotePlayerView` đang làm với người khác. Đó là bài của Phase 15, và
 Phase 9 đã dựng sẵn hai mảnh cho nó: hướng bắn (`FacingLeft` do server chốt, khoá trong lúc đánh) và
 nhịp thời gian (`ActionTicksLeft`).
 
-Mảnh còn thiếu, ghi lại để Phase 14 nhớ: **quả cầu bay ra ở tick thứ mấy của đòn đánh?** Không phải
+Mảnh còn thiếu, ghi lại để Phase 15 nhớ: **quả cầu bay ra ở tick thứ mấy của đòn đánh?** Không phải
 "khi hoạt ảnh tới frame 2" — client không được quyết cái đó. Nó là thêm một con số trong
 `ActionDefinition`, viết bằng giây như mọi con số khác:
 
@@ -2462,8 +2462,9 @@ tick đó**. Hình phục vụ luật, không phải luật chạy theo hình.
 
 **Ngồi để né đạn — món này Phase 9 đã trả trước gần hết tiền.** Server cần biết thân người cao bao
 nhiêu tại thời điểm va chạm, mà `Crouching` thì **đã nằm trong `MoveState`** và đã được cả hai bên mô
-phỏng giống nhau. Việc còn lại ở Phase 14 chỉ là hai con số nữa trong `CharacterProfile`
-(`standHeight`, `crouchHeight` — đơn vị world, không phải giây) và một phép kiểm hình chữ nhật.
+phỏng giống nhau. Việc còn lại chỉ là hai con số nữa trong `CharacterProfile` (chiều cao thân khi đứng và khi ngồi,
+đơn vị world chứ không phải giây) — **Phase 10 thêm chúng vào** để làm hộp va chạm với map — rồi một
+phép kiểm hình chữ nhật ở Phase 15.
 
 Đây chính là lý do ở Bước 1 ta nhất quyết coi `Crouching` là **sự thật vật lý** chứ không phải chuyện
 hình ảnh, và nhất quyết để `CharacterStates.Derive` ở `Shared` dù server chưa gọi nó lần nào. Nếu hồi
@@ -2485,8 +2486,8 @@ prediction — và trong lúc chưa làm xong thì có một bug rất khó ch�
 - **Huỷ đòn (cancel).** Bấm nhảy giữa lúc đánh thì huỷ đòn hay giữ nguyên? Hiện là giữ nguyên (nhảy
   vẫn chạy vì `Attack` không khoá thân). Muốn cho huỷ thì thêm một nhánh vào `CanEnter` — và đó là lúc
   bảng ưu tiên một chiều bắt đầu không đủ, phải có bảng thật.
-- **Hộp va chạm theo tư thế.** Ngồi thì thân thấp hơn nên né được đòn cao. Lúc đó server sẽ gọi
-  `CharacterStates.Derive` lần đầu tiên — và ta sẽ mừng vì đã để nó ở `Shared` từ hôm nay.
+- **Hộp va chạm theo tư thế.** Ngồi thì thân thấp hơn nên né được đòn cao. Phase 10 trả trước phần
+  hình dạng thân (ba con số trong `CharacterProfile`); phần "đòn đánh có hộp" là Phase 15.
 - **Blend giữa hai clip.** Đẹp hơn, nhưng thời gian blend là thời gian **không thuộc về tick nào**, và
   nó làm nhoè đúng cái ranh giới mà phase này vừa dựng. Nếu làm thì blend phải nằm trọn trong số tick
   của trạng thái, không được kéo dài nó.
@@ -2494,7 +2495,7 @@ prediction — và trong lúc chưa làm xong thì có một bug rất khó ch�
   Ngày số cờ lên 10–15 (choáng, tàng hình, cưỡi thú, đang giao dịch…) **và** profiler chỉ đúng vào băng
   thông snapshot thì mới nén — nén ở đúng một chỗ trong `Shared`, không phải mặt nạ bit chép tay hai bên.
   Trước lúc đó thì đây là tối ưu mù, và cái giá của nó là mọi lần đọc code về sau.
-- **Bảng số ra file.** `CharacterProfiles.Build()` đang dựng bằng C#. Phase 11 đổi nó thành đọc từ file
+- **Bảng số ra file.** `CharacterProfiles.Build()` đang dựng bằng C#. Phase 12 đổi nó thành đọc từ file
   (sửa số không cần build lại) + kiểm version lúc đăng nhập để client không bao giờ chạy bảng khác
   server. Chỗ gọi (`profile.MoveSpeed`, `profile.GetAction(...)`) thì không đổi một dòng.
 - **Từ hành động sang chiêu thức.** `ActionState` hiện là một enum nhỏ đủ cho đánh thường. Khi có skill,
