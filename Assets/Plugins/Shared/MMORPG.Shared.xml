@@ -837,6 +837,112 @@
             thời lượng. Viết 16 nhánh cho 16 ô là cách chắc chắn để sai một ô mà không ai biết.
             </summary>
         </member>
+        <member name="T:MMORPG.Shared.World.MapDefinition">
+             <summary>
+             Bản đối chiếu 1-1 với file map JSON. KHÔNG dùng để chạy game — chỉ để đọc/ghi file; kiểu chạy
+             trong game là <see cref="T:MMORPG.Shared.World.MapGrid"/>.
+            
+             Tách hai kiểu vì hai vai khác nhau: trường nào có trong file là chuyện của ĐỊNH DẠNG, còn tra
+             một ô nhanh cỡ nào là chuyện của MÔ PHỎNG. Gộp lại thì mỗi lần đổi định dạng là đụng vào thứ
+             chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (DB) ≠ PlayerEntity (world) ở Phase 5.
+            
+             Mọi trường khai báo tên tường minh bằng [JsonProperty]: đổi tên property C# là chuyện gõ code,
+             đổi tên trường trong file là ĐỔI ĐỊNH DẠNG — không được để một thao tác Rename trong IDE làm cả
+             hai cùng lúc.
+             </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapDefinition.Comment">
+            <summary>Dành cho người mở file ra đọc. JSON chuẩn không có cú pháp chú thích nên nó là một trường thật.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapDefinition.Cells">
+            <summary>Lưới ô, mỗi phần tử là MỘT HÀNG. Hàng đầu là mép TRÊN map — đọc file như nhìn bản vẽ.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.CellPoint">
+            <summary>Một điểm theo toạ độ Ô (số nguyên). Dùng cho origin.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.SpawnPoint">
+            <summary>
+            Một chỗ người chơi có thể xuất hiện, toạ độ WORLD. Có <see cref="P:MMORPG.Shared.World.SpawnPoint.Id"/> vì map cần trỏ tới nhau
+            được bằng tên: một cổng ở map khác phải nói rõ nó dẫn tới điểm nào của map này.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.MapFile">
+            <summary>
+            Đọc và ghi file map JSON. Hai chiều nằm cùng một chỗ có chủ đích: tool export gọi Write, hai
+            đầu dây gọi Parse — nên định dạng chỉ có một bản mô tả duy nhất, và bài test round-trip ở
+            Shared.Tests kiểm được nó bằng máy thay vì bằng mắt.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MapFile.FORMAT_VERSION">
+            <summary>
+            Version của ĐỊNH DẠNG, không phải của map. Luật: thêm một trường tuỳ chọn thì GIỮ NGUYÊN số
+            này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
+            đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
+            file map đọc sai một nửa còn tệ hơn một file map không đọc được.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.CellType">
+            <summary>Loại ô. Ba loại, và loại thứ ba là thứ làm nên thể loại platformer.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.CellType.OneWay">
+            <summary>
+            Bệ xuyên-một-chiều: đứng được ở trên, nhảy từ dưới lên thì lọt qua.
+            Ô này chặn hay không KHÔNG chỉ phụ thuộc vị trí mà còn phụ thuộc vận tốc và vị trí ở
+            tick trước — đó là lý do vận tốc phải là một phần của trạng thái chứ không suy ra được.
+            </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.MapGrid">
+             <summary>
+             Hình dạng một map dạng lưới ô 1×1, kèm vài con số riêng của nó (id, tên, các điểm spawn).
+             Nguồn DUY NHẤT về việc đi được chỗ nào: server va chạm thật và client va chạm dự đoán đều đọc
+             từ đây, và cả hai dựng nó từ cùng một file.
+            
+             Cố tình KHÔNG mô tả hình thức (cỏ, cây, nền trời) — đó là việc của các lớp tilemap khác. Một
+             lưới ba trạng thái không đủ để vẽ đẹp, và một hình đẹp thì thừa thãi với va chạm.
+            
+             Toạ độ ô ở đây LÀ toạ độ ô của Tilemap trong Unity: ô (cx, cy) chiếm vùng world
+             [cx, cx+1] × [cy, cy+1]. Vùng đã vẽ bắt đầu từ (OriginX, OriginY) — có thể âm — và phép dịch
+             về chỉ số mảng nằm gọn trong hàm At, không ai bên ngoài phải biết tới nó.
+             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MapGrid.DEFAULT_SPAWN_ID">
+            <summary>Id của điểm spawn mặc định — chỗ người chơi xuất hiện khi không có nguồn nào khác chỉ định.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapGrid.OriginX">
+            <summary>Ô góc dưới-trái của vùng đã vẽ. Âm là chuyện bình thường.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapGrid.DefaultSpawn">
+            <summary>Điểm spawn mặc định, chốt một lần lúc dựng để chỗ gọi không phải tìm lại mỗi lần.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapGrid.MinX">
+            <summary>Mép trái/phải của map theo world. Thay cho hằng WORLD_HALF_EXTENT của Phase 6.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapGrid.At(System.Int32,System.Int32)">
+            <summary>
+            Ô tại toạ độ ô. Ba phía ngoài lưới trả về ba thứ khác nhau, mỗi thứ một lý do — xem bảng
+            trong tài liệu phase. Đáy lưới là Solid: đó là CẦU CHÌ chứ không phải thiết kế game. Vẽ
+            thiếu một ô sàn thì hệ quả tệ nhất là rơi xuống đáy map rồi đứng đó, chứ không phải Y trôi
+            ra vô cực và mọi phép tính sau đó thành vô nghĩa.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapGrid.Checksum">
+             <summary>
+             Dấu vân tay của LƯỚI (FNV-1a). Hai bên in ra cùng một số nghĩa là đang chạy đúng một map —
+             bằng chứng rẻ nhất có thể có, và là hạt giống cho phép kiểm version ở Phase 12.
+            
+             Cố ý không băm danh sách spawn: câu hỏi con số này trả lời là "hai bên có cùng hình dạng va
+             chạm không", còn điểm spawn thì chỉ server dùng.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapGrid.FindDefaultSpawn(MMORPG.Shared.World.SpawnPoint[])">
+             <summary>
+             Điểm mang id "default"; không có thì lấy điểm đầu tiên.
+            
+             Lùi về điểm đầu chứ không ném: map thiếu điểm mặc định vẫn là map chơi được, và chết lúc
+             khởi động vì một cái tên là cái giá quá đắt. Còn map KHÔNG có điểm spawn nào thì đã bị hàm
+             dựng chặn từ trước — đó mới là thứ không chơi được.
+             </summary>
+        </member>
         <member name="T:MMORPG.Shared.World.MovementRules">
              <summary>
              Luật di chuyển dùng CHUNG: server mô phỏng thật, client dự đoán trước rồi replay.
