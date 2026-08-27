@@ -126,7 +126,7 @@ namespace MMORPG.GameServer.Db
                 }
                 catch (Exception ex)
                 {
-                    Log.Warn($"Mất kết nối DBServer: {ex.GetType().Name.Red()} — {ex.Message}");
+                    // Log.Warn($"Mất kết nối DBServer: {ex.GetType().Name.Red()} — {ex.Message}");
                 }
                 finally
                 {

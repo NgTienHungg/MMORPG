@@ -5,6 +5,7 @@ using MMORPG.GameServer;
 using MMORPG.GameServer.Auth;
 using MMORPG.GameServer.Db;
 using MMORPG.GameServer.Handlers;
+using MMORPG.GameServer.LuaSystem;
 using MMORPG.GameServer.Net;
 using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
@@ -40,33 +41,6 @@ Console.CancelKeyPress += (_, e) =>
     cts.Cancel();
 };
 
-// Console điều khiển — nguồn phát TẠM cho Hurt/Die tới khi có hệ thống sát thương ở Phase 14.
-// Console.ReadKey CHẶN luồng gọi nó, nên phải có luồng riêng: đặt trong vòng accept là treo cả server.
-_ = Task.Run(() =>
-{
-    while (!cts.IsCancellationRequested)
-    {
-        switch (Console.ReadKey(intercept: true).Key)
-        {
-            case ConsoleKey.H:
-                // Không truyền thời lượng: mỗi entity tra bảng của lớp mình.
-                worldService.EnqueueForceAll(ActionState.Hurt);
-                Log.Info($"[thử] Toàn map {"HURT".Yellow()}");
-                break;
-
-            case ConsoleKey.K:
-                worldService.EnqueueForceAll(ActionState.Die);
-                Log.Info($"[thử] Toàn map {"DIE".Red()}");
-                break;
-
-            case ConsoleKey.J:
-                worldService.EnqueueReviveAll();
-                Log.Info($"[thử] Toàn map {"hồi sinh".Green()}");
-                break;
-        }
-    }
-});
-
 // run game loop
 var gameLoop = new GameLoop(worldService);
 _ = gameLoop.RunAsync(cts.Token);
@@ -75,6 +49,14 @@ try
 {
     while (!cts.IsCancellationRequested)
     {
+        // test LUA
+        switch (Console.ReadKey(intercept: true).Key)
+        {
+            case ConsoleKey.L:
+                LuaPlayground.RunFile("02_syntax.lua");
+                break;
+        }
+
         TcpClient tcpClient = await listener.AcceptTcpClientAsync(cts.Token);
 
         // Mỗi kết nối chạy độc lập. KHÔNG await ở đây — await là chỉ phục vụ được 1 client.

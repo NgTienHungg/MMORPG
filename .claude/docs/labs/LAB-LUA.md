@@ -1,863 +1,1394 @@
-# LAB — Nhúng Lua: đổi dữ liệu và luật chơi mà không build lại
+# LAB — Lua từ số 0, rồi ghép vào MMORPG
 
-> **Đây không phải một phase của MMORPG.** Đây là lab học riêng, sống trong đúng một thư mục
-> `Assets/_Sandbox/LuaLab/`, có asmdef riêng, không ai trong `Assets/Game/` biết nó tồn tại. Xoá thư
-> mục đó là dự án trở về y như cũ.
+> **Dành cho người chưa biết Lua.** Phần 1 học Lua bằng một "playground" trên GameServer — chưa cần
+> hiểu gì về mạng, chưa mở Unity, chỉ sửa file `.lua` rồi bấm một phím và đọc console. Phần 2 mới nối
+> Lua vào MMORPG qua **một lệnh mạng mới, độc lập hoàn toàn** với di chuyển và chiến đấu.
 >
-> **Kết quả cuối lab:** một scene Unity trong đó (1) bảng dữ liệu game nằm trong file `.lua`, sửa file
-> rồi bấm `R` là số liệu đổi ngay **giữa Play mode**, không biên dịch lại; (2) hành vi của từng vật
-> phẩm là một file `.lua` riêng — thêm loại vật phẩm mới **không sửa một dòng C# nào**; (3) một nút
-> "Kiểm tra cập nhật" tải script mới từ một thư mục đóng vai CDN về máy, nạp vào, và vật phẩm đổi
-> hành vi — đúng mô hình *"đổi mà không cần build hay up lại game"*.
+> **Kết quả cuối lab:** trong Unity bấm phím `1` → Console in
+> `[ItemDebugProbe] Túi Vàng Nhỏ: nhận 350 vàng`. Bấm `2` → `Rương Gỗ: nhận 1 Bình Máu Nhỏ, 100 vàng`.
+> Toàn bộ "nhận gì, bao nhiêu, tỉ lệ ra sao" nằm trong file `.lua` trên server. Sửa file → bấm `R`
+> trên console server → bấm lại phím `1` trong Unity → **kết quả khác ngay**. Không build lại server,
+> không build lại client, không reconnect, không ai bị rớt.
 >
-> **Bài học chính:** (1) hot-update có **ba mức**, và mức rẻ nhất không cần Lua — nhảy thẳng lên Lua
-> khi chỉ cần mức 1 là tự làm khổ mình; (2) thứ quyết định hệ Lua thành hay bại không phải cú pháp
-> Lua mà là **bề mặt API bạn mở cho nó** — đó là một hợp đồng, mở sai là gãy hết script về sau;
-> (3) trong game online, chỗ đúng của Lua là **server**, không phải client, và vo-lam-genz đúng là
-> làm thế.
+> **Cố tình KHÔNG gắn vào hệ nào chưa có.** Không cần túi đồ, không cần máu, không cần sát thương.
+> Lab chỉ thêm đúng một lệnh `UseItem` và dừng ở `Debug.Log`. Khi nào dự án có túi đồ thật thì đổi
+> **thân một hàm C#**, script Lua không đổi một chữ — mục 5.2 giải thích chỗ đó.
+>
+> **Điều kiện:** dự án đang chạy được (login → vào world → di chuyển). Phase 10 (map) đang dở không
+> ảnh hưởng gì.
+>
+> Sửa dự án thật, nên **tạo nhánh trước**:
+> ```bash
+> git checkout -b lua-item
+> ```
+
+| Phần | Nội dung | Thời lượng | Cần Unity? |
+|---|---|---|---|
+| 1 | Học Lua: cú pháp → gọi qua lại với C# → demo công thức sát thương | ~2.5 giờ | ❌ |
+| 2 | Lệnh `UseItem`: client → server → Lua → client `Debug.Log` | ~3 giờ | ✅ |
+| 3 | Hot reload, nghịch, và an toàn | ~1.5 giờ | ✅ |
 
 Format như các guide phase: **hướng làm** hiện sẵn, **📖 Lời giải** trong foldout — tự code trước rồi
 mới mở.
 
 ---
 
-# PHẦN A — Vì sao có Lua trong game
+## Trước khi bắt đầu: Lua là gì, và vì sao game dùng nó
 
-## A1. Vòng đời của một con số khi không có Lua
+Lua là một ngôn ngữ lập trình **nhỏ** (~200 KB) được thiết kế để **nhúng vào một chương trình khác**.
+Nó không tự chạy thành ứng dụng như C# — nó sống bên trong chương trình chủ, và chương trình chủ quyết
+định script được phép làm gì.
 
-Planner nhắn: *"giảm sát thương Cầu Lửa từ 40 xuống 35"*. Một dòng code. Nhưng:
+Vì sao game server cần nó, gọn trong một bảng:
 
-| Nếu con số đó nằm trong… | Để người chơi thấy con số mới, phải làm gì |
+| Con số `damage = 40` nằm ở đâu | Để đổi thành 35 phải làm gì |
 |---|---|
-| Code client (C#) | sửa → build → QA → nộp store → **chờ Apple duyệt 1–3 ngày** → người chơi tải bản mới → *ai chưa tải thì vẫn 40* |
-| Code server (C#) | sửa → build → **restart GameServer** → *toàn bộ người đang chơi bị rớt* |
-| File cấu hình tải từ server | sửa file → người chơi vào lại là có → **vài phút** |
-| Script Lua trên server | sửa file → nạp lại script → **có ngay, không ai rớt** |
+| Code C# của server | sửa → build → **restart server** → *đá hết người đang chơi* |
+| File cấu hình server đọc lại được | sửa file → nạp lại → vài giây, không ai rớt |
+| Script Lua trên server | sửa file → nạp lại → vài giây, **và luật có `if` cũng đổi được** |
 
-Hai dòng dưới là toàn bộ lý do Lua tồn tại trong ngành game. Không phải vì Lua nhanh hay đẹp, mà vì
-**nó tách nhịp thay đổi của luật chơi ra khỏi nhịp phát hành phần mềm**. Game vận hành lâu dài là
-game phải chỉnh số mỗi ngày; mỗi lần chỉnh mà tốn một lần phát hành thì không sống nổi.
+Dòng cuối là toàn bộ lý do. Một game vận hành lâu dài phải chỉnh số mỗi ngày; mỗi lần chỉnh mà tốn
+một lần restart thì không sống nổi.
 
-## A2. Ba mức "đổi mà không build" — và mức nào thật sự cần Lua
+Còn vì sao là **server** chứ không phải client: file `.lua` trên máy người chơi là văn bản thuần, sửa
+dễ hơn sửa DLL. Hot-update ở client làm game **dễ hack hơn**, không phải khó hơn. Golden rule #2 của
+dự án — server là source of truth — vẫn đúng nguyên.
 
-Đây là chỗ dễ vung tay quá trán nhất. Có ba mức, độ phức tạp tăng gấp bội mỗi mức:
-
-**Mức 1 — dữ liệu thuần: số, tên, bảng.** `damage = 35`, `dropRate = 0.25`, danh sách phần thưởng
-đăng nhập. Giải pháp đúng: **file cấu hình tải từ server / CDN** (JSON, XML, ScriptableObject tải
-động). **Không cần Lua.** Ước chừng 80% nhu cầu "đổi mà không build" nằm ở mức này.
-
-**Mức 2 — dữ liệu có nhánh và công thức riêng cho từng thứ.** *"Bình máu hồi 50 HP"* là mức 1.
-*"Bình máu hồi 50 HP, nhưng dưới 30% máu thì hồi gấp đôi, và không dùng được khi đang giao chiến"*
-là mức 2. Bạn có hai đường: hoặc đẻ thêm 15 trường vào JSON (`healBonusThreshold`,
-`healBonusMultiplier`, `forbidInCombat`…) và mỗi vật phẩm lạ lại thêm trường, hoặc để **hành vi là
-một hàm** — và đó là Lua.
-
-**Mức 3 — vá logic đã ship.** Bug trong code C# của bản đã lên store. Cần **hotfix**: xLua/ToLua
-(thay thân hàm C# bằng Lua lúc chạy) hoặc HybridCLR (nạp assembly C# dạng thông dịch). Đắt, phức
-tạp, và chỉ đáng làm khi vòng phát hành thật sự đau.
-
-> **Dấu hiệu bạn đang ở mức 2 và cần Lua:** file JSON của bạn bắt đầu mọc ra những trường tên kiểu
-> `conditionType`, `operator`, `thresholdValue`. Đó là lúc bạn đang tự phát minh một ngôn ngữ lập
-> trình bên trong JSON, và sớm muộn sẽ phải tự viết trình thông dịch cho nó — trong khi có sẵn một
-> cái tên là Lua, 200 KB, đã chạy 30 năm.
-
-## A3. vo-lam-genz làm chuyện này như thế nào (có dẫn chứng)
-
-Điều bạn nghe được là thật, và nó nằm ở **GameServer chứ không phải client**. Trong
-`../vo-lam-genz-server`:
-
-```
-GameServer/KiemThe/LuaSystem/
-├── KTLuaEnvironment.cs          ← dựng môi trường, gắn thư viện C# vào Lua
-├── KTLuaScript.cs               ← quét thư mục .lua, nạp lười, chạy qua hàng đợi worker
-└── Logic/KTLuaLib_*.cs          ← 15 file: Player, Item, Dialog, Timer, GUI, Math...
-
-GameServer/bin/Debug/LuaScripts/  ← thư mục script chạy thật, ~70 file .lua
-└── Item/Common/RandomBox.lua
-```
-
-Bốn mảnh ghép, và lab này sẽ dựng lại đúng bốn mảnh đó ở quy mô nhỏ:
-
-**(1) Một máy ảo MoonSharp duy nhất, gắn các lớp static C# thành biến global của Lua** —
-`KTLuaEnvironment.Init()`:
-
-```csharp
-LuaEnv.Globals["Player"] = typeof(KTLuaLib_Player);
-LuaEnv.Globals["Item"]   = typeof(KTLuaLib_Class);
-LuaEnv.Globals["Dialog"] = typeof(KTLuaLib_Dialog);
-LuaEnv.Globals["Timer"]  = typeof(KTLuaLib_Timer);
-```
-
-Bề mặt API mở cho Lua chỉ gồm những lớp `KTLuaLib_*` này — **không phải toàn bộ codebase**. Đây là
-quyết định thiết kế quan trọng nhất của cả hệ.
-
-**(2) Mỗi vật phẩm "có script" trỏ tới một file `.lua` bằng `ScriptID`.** Item nào có
-`Genre = 18 (item_script)` và `ScriptID != -1` thì lúc người chơi bấm dùng, server không chạy code
-C# nào của riêng nó cả — nó đi tìm script.
-
-**(3) File script khai báo một "class" rồi cài các hàm callback vào đó** —
-`LuaScripts/Item/Common/RandomBox.lua`, chép nguyên văn:
-
-```lua
-local RandomBox = Item.GetClass("RandomBox")
-
-function RandomBox:OnPreCheckCondition(scene, item, player, otherParams)
-  return true
-end
-
-function RandomBox:OnUse(scene, item, player, otherParams)
-  local boxName = item:GetName()
-
-  if not Player.OpenRandomBox(player, item:GetID()) then
-    return
-  end
-
-  Player.RemoveItem(player, item:GetID())
-  player:AddNotification("Mở " .. boxName .. ", nhận được phần thưởng ngẫu nhiên!")
-end
-```
-
-Để ý hai kiểu gọi cùng tồn tại — chúng sẽ quay lại ở Bước 3 của lab:
-`player:AddNotification(...)` là **method trên đối tượng bọc**, còn `Player.RemoveItem(player, id)`
-là **hàm thư viện** nhận đối tượng làm tham số.
-
-**(4) C# gọi ngược vào script, và truyền vào đối tượng *bọc* chứ không phải đối tượng game trần** —
-`KTLuaEnvironment_Methods.ExecuteItemScript_OnUse`:
-
-```csharp
-Lua_Item luaItem = new() { RefObject = itemGD, CurrentScene = luaScene };
-Lua_Player luaPlayer = new() { RefObject = player, CurrentScene = luaScene };
-
-KTLuaScript.ExecuteFunctionAsync(LuaEnv, scriptID, "OnUse",
-    new object[] { luaScene, luaItem, luaPlayer, ReverseKey(otherParams) }, ...);
-```
-
-`KPlayer` — lớp người chơi thật với hàng trăm thành viên — **không bao giờ lộ sang Lua**. Cái lộ ra
-là `Lua_Player`, một lớp mỏng chỉ có đúng những hàm script được phép gọi.
-
-**Thành quả:** thêm một loại Hộp Thái Cực mới = thêm một dòng trong file cấu hình item + (nếu là
-loại hành vi mới) một file `.lua`. **Không build lại GameServer, không đụng client, không ai bị rớt.**
-Đó chính xác là câu bạn nghe được.
-
-Và một ranh giới phải nhớ, vì nó là golden rule #2 của dự án này: hệ Lua ấy nằm ở **server**. Client
-chỉ nhận kết quả. Nếu đặt luật ở client thì dù có Lua hay không, người chơi vẫn sửa được — hot-update
-không cứu được một kiến trúc tin client.
-
-## A4. Cái giá — nói ra được thì mới là hiểu
-
-| Được | Mất |
-|---|---|
-| Đổi luật không cần build | **Mất kiểm tra kiểu lúc biên dịch.** Gõ nhầm tên hàm thì phải chạy đúng nhánh đó mới biết |
-| Người không phải lập trình viên cũng sửa được số | Sai một dấu chấm là im lặng trả `nil`, không nổ ngay |
-| Nội dung mới không tốn một lần phát hành | Chậm hơn C# ~10–100 lần; và mỗi lần qua lại C#↔Lua đều tốn |
-| Cô lập được lỗi (một script hỏng ≠ sập server) | Debug khó: stack trace hai tầng, IDE không nhảy được vào |
-| | **Bề mặt API thành hợp đồng vĩnh viễn** — đổi tên một hàm trong `KTLuaLib_Player` là gãy hết script đang chạy |
-| | Ở client mobile IL2CPP còn thêm chuyện AOT/reflection |
-
-Câu tóm lại: **Lua không làm code dễ hơn, nó làm việc phát hành dễ hơn.** Đổi lấy một phần an toàn
-lúc biên dịch để mua tốc độ vận hành.
+Trong dự án này, `../vo-lam-genz-server` đang làm đúng như vậy: `GameServer/KiemThe/LuaSystem/` +
+~70 file `.lua` trong `bin/Debug/LuaScripts/`. Lab sẽ dựng lại bộ khung đó ở quy mô nhỏ nhất mà vẫn
+thật.
 
 ---
 
-# PHẦN B — LAB
+# PHẦN 1 — Học Lua từ số 0
 
-Lab dựng lại đúng bốn mảnh ghép ở mục A3, nhưng trong Unity cho dễ bấm Play. **Mô hình giống hệt
-khi bê sang server** — cùng thư viện MoonSharp, cùng cách gắn global, cùng cách gọi callback; chỉ
-khác chỗ ngồi.
+## Bước 1 — Dựng playground (30 phút)
 
-## Những file sẽ có
+Mục tiêu: bấm một phím trên console server → nó chạy file `.lua` → in kết quả ra console. Có vòng lặp
+đó rồi thì học cú pháp chỉ là sửa file và bấm phím.
 
-```
-Assets/_Sandbox/LuaLab/
-├── LuaLab.asmdef
-├── Plugins/
-│   └── MoonSharp.Interpreter.dll
-├── Scripts/
-│   ├── PlayerState.cs          ← đối tượng game thật, KHÔNG lộ sang Lua
-│   ├── LuaPlayer.cs            ← lớp bọc mỏng, đây mới là thứ Lua thấy
-│   ├── PlayerLib.cs            ← thư viện hàm cho Lua gọi (đối ứng KTLuaLib_Player)
-│   ├── LuaEnvironment.cs       ← máy ảo + sandbox + đăng ký global (đối ứng KTLuaEnvironment)
-│   ├── LuaScriptStore.cs       ← script lấy từ đâu: dev / bản tải về / bản đóng gói
-│   ├── LuaUpdater.cs           ← tải manifest + script mới từ "CDN"
-│   └── LuaLabRunner.cs         ← MonoBehaviour trong scene, phím tắt điều khiển
-├── Resources/LuaBundled/       ← bản đóng gói theo build (.lua.txt để Unity nhận là TextAsset)
-│   ├── config.lua.txt
-│   ├── HealPotion.lua.txt
-│   └── RandomBox.lua.txt
-├── LuaScripts/                 ← bản dev, sửa trực tiếp khi đang chạy trong Editor
-│   ├── config.lua
-│   ├── HealPotion.lua
-│   └── RandomBox.lua
-├── RemoteRoot~/                ← "CDN" giả lập; Unity bỏ qua mọi thư mục kết thúc bằng ~
-│   ├── manifest.json
-│   └── (các .lua phiên bản mới)
-└── Scenes/
-    └── LuaLab.unity
-```
+**Vì sao MoonSharp:** đó là Lua **viết lại hoàn toàn bằng C#**, cài bằng một gói NuGet, không kéo theo
+file native nào (quan trọng khi sau này deploy Linux), có sandbox sẵn. Và đó chính là thứ vo-lam-genz
+đang chạy.
 
----
+Việc của bạn:
 
-## Bước 0 — Setup: đưa MoonSharp vào Unity (25 phút)
+- Thêm gói (đường dẫn tính từ **gốc repo**, không phải từ `Server/`):
+  ```bash
+  dotnet add Server/GameServer/GameServer.csproj package MoonSharp --version 2.0.0
+  ```
 
-### 0.1 Chọn thư viện
+  <details>
+  <summary><b>🔧 Nếu báo "No .NET SDKs were found"</b></summary>
 
-| | MoonSharp | xLua / ToLua |
-|---|---|---|
-| Là gì | Lua **viết lại hoàn toàn bằng C#** | bọc thư viện Lua gốc viết bằng C |
-| Cài | thả 1 file DLL | import package + chạy generate code binding |
-| Tốc độ | chậm hơn | nhanh hơn nhiều |
-| IL2CPP / iOS | cần cẩn thận reflection | có sinh code sẵn, đã chinh chiến nhiều |
-| Hotfix code C# đã ship | không | **có** (`[Hotfix]`) |
-| Dùng ở | server .NET, tool, prototype | client mobile production |
+  Không phải sai lệnh — đó là **`dotnet` trên PATH trỏ vào bản chỉ có runtime**. Kiểm hai chỗ:
 
-Lab dùng **MoonSharp** vì đúng ba lý do: setup 2 phút, chạy được cả trong .NET server lẫn Unity, và
-**đó chính là thứ vo-lam-genz đang dùng**. Học xong hiểu nguyên lý thì chuyển sang xLua chỉ là đổi
-cú pháp binding.
+  ```bash
+  where dotnet
+  dir "C:\Program Files\dotnet\sdk"
+  ```
 
-### 0.2 Ba quyết định cách ly
+  Không có thư mục `sdk` ở đó nghĩa là máy chỉ cài .NET **Runtime**. SDK thật thường nằm ở bản cài
+  theo user (script `dotnet-install`, hoặc Rider tự tải về):
 
-**Quyết định 1 — lab có asmdef riêng, dù `Assets/Game/` thì không.**
-`CLAUDE.md` cấm asmdef cho `Assets/Game/` vì code game phải với tới DOTween Pro nằm trong
-`Assembly-CSharp-firstpass`. Lab không cần DOTween, mà lại rất cần điều ngược lại: **cách ly**.
-Không asmdef thì file lab rơi vào `Assembly-CSharp` chung với toàn bộ game — một lỗi cú pháp lúc học
-sẽ làm cả dự án không biên dịch được.
+  ```bash
+  dir "%USERPROFILE%\.dotnet\sdk"
+  ```
 
-**Quyết định 2 — MoonSharp đặt trong thư mục lab, không cài qua NuGetForUnity.**
-NuGetForUnity ghi vào `Assets/packages.config` và `Assets/Packages/` — tức chạm vào dự án chính.
-Thả thẳng DLL vào `Assets/_Sandbox/LuaLab/Plugins/` thì xoá thư mục lab là sạch trơn.
+  Có thì chạy tạm bằng đường dẫn đầy đủ:
 
-**Quyết định 3 — tắt Auto Reference của DLL.**
-Mặc định mọi DLL trong `Assets/` được `Assembly-CSharp` tự tham chiếu, nghĩa là code game *nhìn thấy*
-MoonSharp. Tắt đi thì chỉ assembly nào khai báo tường minh mới dùng được.
+  ```bash
+  "%USERPROFILE%\.dotnet\dotnet.exe" add Server\GameServer\GameServer.csproj package MoonSharp --version 2.0.0
+  ```
 
-### 0.3 Việc của bạn
+  Sửa hẳn: chèn bản user lên trước PATH (PowerShell, chạy **một lần**, rồi mở terminal mới):
 
-- Lấy DLL: vào `https://www.nuget.org/packages/MoonSharp` → Download package → đổi đuôi `.nupkg`
-  thành `.zip` → giải nén → trong `lib/` chọn `netstandard2.0` (không có thì `net40`) → chép
-  `MoonSharp.Interpreter.dll` vào `Assets/_Sandbox/LuaLab/Plugins/`.
-  *(Cách khác: `../vo-lam-genz/Assets/Plugins/MoonSharp/` có sẵn bản mã nguồn — nhưng chép nguyên
-  thư mục source vào sẽ kéo theo cả debugger, nặng hơn cần thiết. Dùng DLL.)*
-- Chọn DLL trong Unity → Inspector → **bỏ tick Auto Reference** → Apply.
-- Tạo `LuaLab.asmdef` ở gốc thư mục lab. Ba trường dễ quên: `overrideReferences: true` và
-  `precompiledReferences: ["MoonSharp.Interpreter.dll"]` (bắt buộc vì vừa tắt Auto Reference), và
-  `autoReferenced: false` (để code game không thấy lab).
-- Tạo scene rỗng `Scenes/LuaLab.unity`.
-- Viết một MonoBehaviour tạm 5 dòng chạy thử `new Script().DoString("return 1+1")` để chắc chắn DLL
-  đã nạp được.
+  ```powershell
+  [Environment]::SetEnvironmentVariable('DOTNET_ROOT', "$env:USERPROFILE\.dotnet", 'User'); [Environment]::SetEnvironmentVariable('Path', "$env:USERPROFILE\.dotnet;" + [Environment]::GetEnvironmentVariable('Path','User'), 'User')
+  ```
+
+  Kiểm lại bằng `dotnet --list-sdks` — phải thấy một bản **8.x**, vì `Server/global.json` ghim
+  `8.0.0` với `rollForward: latestMinor` (nhận 8.x, **không** nhận SDK 10).
+
+  Cách khác, không cần CLI: mở `Server/GameServer/GameServer.csproj` thêm tay
+  `<PackageReference Include="MoonSharp" Version="2.0.0" />` vào một `<ItemGroup>` rồi để Rider
+  restore. `dotnet add package` chỉ là công cụ sửa hộ đúng dòng XML đó.
+
+  </details>
+- Tạo hai thư mục: `Server/GameServer/LuaSystem/` (code C#) và `Server/GameServer/LuaScripts/`
+  (file `.lua`).
+- Viết `LuaSystem/LuaScriptPaths.cs` — chỗ duy nhất biết file `.lua` nằm ở đâu.
+  **Bẫy:** server chạy từ `bin/Debug/net8.0/` nên đường dẫn tương đối không trỏ vào thư mục nguồn.
+  Và **đừng** dùng `CopyToOutputDirectory` — làm vậy thì server đọc bản copy trong `bin/`, sửa file
+  nguồn không có tác dụng, mà đó lại là toàn bộ điểm của lab. Cách đơn giản nhất: dò ngược lên các
+  thư mục cha cho tới khi thấy `LuaScripts`.
+- Viết `LuaSystem/LuaPlayground.cs` với một hàm static `RunFile(string)`:
+  máy ảo dùng một lần rồi vứt, `print` của Lua nối vào `Log`, và **bắt riêng hai loại exception**
+  (`SyntaxErrorException` — sai cú pháp, lộ ngay lúc nạp; `ScriptRuntimeException` — chạy tới dòng đó
+  mới nổ). Cả hai có `DecoratedMessage` kèm tên file + số dòng.
+- Trong `Program.cs`, thêm phím `L` vào khối `Console.ReadKey` đang có (chỗ phím `H`/`K`/`J` của
+  Phase 9).
+- Viết `LuaScripts/01_hello.lua` in ra một dòng.
 
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự làm</b></summary>
 
-**`Assets/_Sandbox/LuaLab/LuaLab.asmdef`**:
-
-```json
-{
-    "name": "LuaLab",
-    "rootNamespace": "LuaLab",
-    "references": [
-        "HungNT.Core"
-    ],
-    "includePlatforms": [],
-    "excludePlatforms": [],
-    "allowUnsafeCode": false,
-    "overrideReferences": true,
-    "precompiledReferences": [
-        "MoonSharp.Interpreter.dll"
-    ],
-    "autoReferenced": false,
-    "defineConstraints": [],
-    "versionDefines": [],
-    "noEngineReferences": false
-}
-```
-
-Bản chạy thử:
+**`Server/GameServer/LuaSystem/LuaScriptPaths.cs`**:
 
 ```csharp
-using HungNT;
-using MoonSharp.Interpreter;
-using UnityEngine;
+using MMORPG.ServerCore;
 
-namespace LuaLab
+namespace MMORPG.GameServer.LuaSystem
 {
-    public sealed class LuaSmokeTest : MonoBehaviour
+    /// <summary>
+    /// Chỗ duy nhất biết thư mục script nằm ở đâu. Cố tình đọc thẳng từ thư mục nguồn thay vì bản
+    /// copy trong bin/: có vậy sửa file lúc server đang chạy mới có tác dụng.
+    /// </summary>
+    public static class LuaScriptPaths
     {
-        private void Start()
+        private const string FOLDER_NAME = "LuaScripts";
+
+        private static string _cached;
+
+        /// <summary>Dò ngược từ thư mục chạy (bin/Debug/net8.0) lên tới khi thấy LuaScripts.</summary>
+        public static string Dir
         {
-            DynValue result = new Script().DoString("return 1 + 1");
-            this.Log($"Lua nói 1 + 1 = {result.Number}");
+            get
+            {
+                if (_cached != null)
+                    return _cached;
+
+                var dir = new DirectoryInfo(AppContext.BaseDirectory);
+                while (dir != null)
+                {
+                    string candidate = Path.Combine(dir.FullName, FOLDER_NAME);
+                    if (Directory.Exists(candidate))
+                    {
+                        _cached = candidate;
+                        return _cached;
+                    }
+
+                    dir = dir.Parent;
+                }
+
+                Log.Error($"Không tìm thấy thư mục {FOLDER_NAME} từ {AppContext.BaseDirectory} trở lên.");
+                _cached = AppContext.BaseDirectory;
+                return _cached;
+            }
+        }
+
+        /// <summary>Đọc nội dung một script. Trả chuỗi rỗng nếu không có file — chỗ gọi tự báo lỗi.</summary>
+        public static string Read(string relativePath)
+        {
+            string path = Path.Combine(Dir, relativePath);
+            if (!File.Exists(path))
+            {
+                Log.Error($"Không có file {relativePath} trong {Dir}");
+                return string.Empty;
+            }
+
+            return File.ReadAllText(path);
         }
     }
 }
 ```
 
+**`Server/GameServer/LuaSystem/LuaPlayground.cs`**:
+
+```csharp
+using MMORPG.ServerCore;
+using MoonSharp.Interpreter;
+
+namespace MMORPG.GameServer.LuaSystem
+{
+    /// <summary>
+    /// Chỗ chạy thử script khi học. Mỗi lần chạy dựng một máy ảo mới rồi vứt, nên không bao giờ
+    /// chạm vào máy ảo đang phục vụ game — console là luồng khác, và máy ảo Lua không an toàn đa luồng.
+    /// </summary>
+    public static class LuaPlayground
+    {
+        public static void RunFile(string relativePath)
+        {
+            string code = LuaScriptPaths.Read(relativePath);
+            if (string.IsNullOrEmpty(code))
+                return;
+
+            // Preset_SoftSandbox: có sẵn string/math/table/os.time, nhưng đã cắt io, os.execute,
+            // require, load — script không đọc/ghi file, không chạy lệnh hệ thống, không nạp thêm mã.
+            var script = new Script(CoreModules.Preset_SoftSandbox);
+
+            // print() của Lua mặc định đi thẳng ra stdout, không tag không màu. Nối vào Log.
+            script.Options.DebugPrint = message => Log.Info($"{"[lua]".Cyan()} {message}");
+
+            try
+            {
+                // Tham số thứ 3 là tên hiển thị trong thông báo lỗi. Không truyền thì lỗi ghi
+                // "chunk_1:12" và không ai biết chunk_1 là file nào.
+                DynValue result = script.DoString(code, null, relativePath);
+
+                if (result.Type != DataType.Void && result.Type != DataType.Nil)
+                    Log.Info($"{relativePath} trả về: {result.ToPrintString().Green()}");
+            }
+            catch (SyntaxErrorException ex)
+            {
+                // Sai cú pháp: phát hiện ngay lúc nạp, chưa chạy dòng nào.
+                Log.Error($"Sai cú pháp trong {relativePath}: {ex.DecoratedMessage.Red()}");
+            }
+            catch (ScriptRuntimeException ex)
+            {
+                // Lỗi lúc chạy: gọi hàm không tồn tại, cộng chuỗi với số... chỉ nổ khi tới đúng dòng đó.
+                Log.Error($"Lỗi khi chạy {relativePath}: {ex.DecoratedMessage.Red()}");
+            }
+        }
+    }
+}
+```
+
+**`Server/GameServer/Program.cs`** — thêm `using MMORPG.GameServer.LuaSystem;` và một nhánh vào khối
+`Console.ReadKey` đang có:
+
+```csharp
+case ConsoleKey.L:
+    LuaPlayground.RunFile("01_hello.lua");
+    break;
+```
+
+**`Server/GameServer/LuaScripts/01_hello.lua`**:
+
+```lua
+-- Dòng bắt đầu bằng -- là comment.
+print("Xin chào từ Lua!")
+print("2 + 3 =", 2 + 3)
+
+return "xong"
+```
+
 </details>
 
-**✅ CHECKPOINT 0:** Console in `[LuaSmokeTest] Lua nói 1 + 1 = 2`. Rồi mở một file bất kỳ trong
-`Assets/Game/` gõ `MoonSharp.` — IDE **không** gợi ý gì. Đó là bằng chứng lab đã cách ly.
+**✅ CHECKPOINT 1:** Chạy server, bấm `L`:
+
+```
+INFO  [LuaPlayground] [lua] Xin chào từ Lua!
+INFO  [LuaPlayground] [lua] 2 + 3 =	5
+INFO  [LuaPlayground] 01_hello.lua trả về: xong
+```
+
+Tiếng Việt có dấu hiện đúng vì `Program.cs` đã đặt `Console.OutputEncoding = Encoding.UTF8` từ Phase 1,
+và `File.ReadAllText` tự nhận UTF-8. Ra một đống `?` hoặc `Ã¬` thì kiểm ba chỗ theo thứ tự: dòng
+`OutputEncoding` còn đó không; file `.lua` đã lưu bằng **UTF-8** chưa (Rider/VS Code mặc định đúng,
+Notepad cũ thì không); và font của cửa sổ console có phải font Unicode không (Consolas / Cascadia Mono —
+Raster Fonts không vẽ được chữ có dấu).
+
+Rồi **cố ý gõ sai**: xoá dấu `)` ở dòng đầu, bấm `L` lại → phải thấy
+`ERROR ... Sai cú pháp trong 01_hello.lua:(2,20-21)` và **server vẫn sống**. Sửa lại, bấm `L`, chạy
+tiếp. Vòng lặp "sửa file → bấm L → xem log" này là công cụ học của cả Phần 1.
 
 ---
 
-## Bước 1 — Viết Lua: chín chỗ nó khác C# (45 phút)
+## Bước 1.5 — Cho IDE hiểu Lua (15 phút)
 
-Lua nhỏ đến mức cả ngôn ngữ vừa một buổi chiều. Chín chỗ dưới đây là nơi người quen C# mắc lỗi, và
-tất cả đều là lỗi **chạy mới biết** vì Lua không có kiểu tĩnh:
+Không có bước này thì viết Lua như viết trong Notepad: không màu, không gợi ý, gõ sai tên hàm tới lúc
+chạy mới biết.
 
-1. **Biến mặc định là global.** Quên `local` là ghi vào không gian chung của cả máy ảo — mà máy ảo
-   thì dùng chung cho mọi script. Đây là nguồn bug số một của hệ Lua nhiều file.
-2. **`table` là cấu trúc dữ liệu *duy nhất*.** Mảng, dictionary, object, module, namespace — tất cả
-   là table. Không có class, không có struct.
-3. **Đánh số từ 1.** `t[1]` là phần tử đầu. `#t` chỉ đúng khi mảng liền mạch không có lỗ `nil`.
-4. **Chỉ `nil` và `false` là falsy.** `0` là **true**, `""` là **true**. `if hp then` với `hp = 0`
-   vẫn chạy vào trong.
-5. **Xoá phần tử = gán `nil`.**
-6. **Toán tử lạ:** nối chuỗi là `..`, khác là `~=`, không có `++`, không có `+=`.
-7. **Trả về nhiều giá trị:** `local a, b = f()`. Thiếu thì bù `nil`, thừa thì cắt — không báo lỗi.
-8. **Hàm là giá trị,** và có hai cách gắn vào table: `function T.f(x)` (như static) vs
-   `function T:f(x)` (tự có `self`, như method). **Nhớ kỹ chỗ này** — Bước 3 sống chết vì nó.
-9. **Metatable là cơ chế OOP duy nhất.** `__index` trỏ tới table khác chính là "kế thừa".
+**Cài plugin.** Rider → Settings → Plugins → Marketplace → **EmmyLua**
+(`plugins.jetbrains.com/plugin/9768-emmylua`). Cài được vào mọi IDE JetBrains, không riêng IntelliJ
+IDEA. JetBrains không có plugin Lua chính thức nào nên đây là lựa chọn thực tế duy nhất trên Rider.
+Restart xong là có tô màu, đi tới định nghĩa, đổi tên biến.
 
-Thêm hai điều: **không có `continue`** (Lua 5.2+ có `goto ::label::`, nhưng MoonSharp không hỗ trợ
-`goto` — phải đảo ngược điều kiện), và **`pcall`** là cách duy nhất bắt lỗi. Cũng là bài học đầu về
-ngôn ngữ nhúng: **"Lua" của mỗi chương trình là một phương ngữ hơi khác nhau**; luôn đọc phần
-"differences from standard Lua" của bản mình đang dùng trước khi trách mình viết sai.
-
-Việc của bạn: viết `00_basics.lua` tự chứng minh 9 điều trên bằng `print`, và chạy nó. Chưa cần
-`LuaScriptStore` — đọc file bằng `File.ReadAllText` với đường dẫn thẳng cũng được, Bước 4 sẽ thay.
-
-Một chi tiết nhỏ nhưng phải làm ngay từ giờ: nối `print` của Lua vào Console của Unity qua
-`script.Options.DebugPrint`, và bắt riêng **hai** loại exception — `SyntaxErrorException` (sai cú
-pháp, lộ ngay lúc nạp) và `ScriptRuntimeException` (chạy tới dòng đó mới nổ). Cả hai đều có
-`DecoratedMessage` chứa tên file + số dòng. Không làm việc này thì mọi lỗi Lua sẽ hiện ra dưới dạng
-exception C# đỏ chóe không ai đọc được.
-
-<details>
-<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
-
-**`Scripts/00_basics.lua`** (đặt tạm trong `LuaScripts/`):
+**Nhưng plugin không cứu được chỗ quan trọng nhất.** Lua không có kiểu tĩnh, nên khi tới Bước 5 bạn
+viết:
 
 ```lua
--- 00_basics.lua — chín chỗ Lua khác C#, tự chứng minh bằng print.
+function WoodenChest:OnUse(ctx)
+    ctx:                  -- ← IDE không biết ctx là cái gì, không gợi ý được gì
+```
 
-print("=== 1. local vs global ===")
-diem = 10                 -- không có 'local' => biến toàn cục của cả máy ảo
-local diemCucBo = 20
-print("global thi moi script deu thay:", diem, "| local thi khong:", diemCucBo)
+`ctx` là một đối tượng C# do server truyền vào lúc chạy. Cách duy nhất để IDE biết nó có những hàm
+nào là **tự khai báo**, bằng chú thích EmmyLua — một file `.lua` chứa các hàm **thân rỗng** chỉ để
+IDE đọc, không bao giờ chạy:
 
-print("=== 2 & 3. table la tat ca, va dem tu 1 ===")
-local mang = { "kiem", "khien", "giap" }
-print("phan tu dau:", mang[1], "| mang[0] la:", tostring(mang[0]), "| #mang =", #mang)
+```lua
+---@class Vidu
+local Vidu = {}
 
-local tuDien = { hp = 100, mp = 50 }
-print("truy cap kieu object:", tuDien.hp, "| kieu key:", tuDien["mp"])
+--- Mô tả hiện ra khi rê chuột
+---@param ten string
+---@return number
+function Vidu:Demo(ten) end
+```
 
-mang.chuSoHuu = "Hung"    -- cùng một table vừa là mảng vừa là dictionary
-print("#mang van la", #mang, "vi key chu khong tinh vao do dai")
+Rồi ở chỗ dùng, gắn kiểu cho tham số:
 
-print("=== 4. chi nil va false la falsy ===")
+```lua
+---@param ctx LuaUseContext
+function WoodenChest:OnUse(ctx)
+    ctx:Add            -- ← giờ mới ra AddGold, AddItem
+```
+
+Đây không phải mẹo vặt: `../vo-lam-genz-server` có nguyên một bộ khai báo như vậy trong
+`GameServer/bin/Debug/LuaScripts/.vscode/jx/` (`Lua_Item.lua`, `Lua_Player.lua`, `Lua_Scene.lua`…),
+và `KTLuaScript.Init()` có đúng một dòng `if (path.Contains(".vscode")) continue;` để bỏ qua chúng
+khi quét script thật. Mở một file trong đó ra đọc — nó là ví dụ tốt nhất về việc mô tả một API C#
+cho người viết script.
+
+**File khai báo cho lab này** viết ở Bước 5, sau khi bề mặt API đã chốt. Ở đây chỉ cần cài plugin và
+hiểu ba chú thích `---@class`, `---@param`, `---@return` để lát nữa đọc được.
+
+> **Muốn gợi ý mạnh hơn nữa:** mở riêng thư mục `Server/GameServer/LuaScripts/` bằng VS Code +
+> extension **Lua** của sumneko (Lua Language Server) — nó phân tích tốt hơn EmmyLua, và **dùng đúng
+> bộ chú thích ấy**, không phải viết lại. Team vo-lam-genz làm vậy: cạnh thư mục `jx/` của họ có
+> `settings.json` với `"Lua.workspace.library": [".vscode/jx"]`. Giữ C# ở Rider, Lua ở VS Code là một
+> cách chia hợp lý — nhưng chỉ đáng làm khi bạn viết Lua nhiều.
+
+**✅ CHECKPOINT 1.5:** Mở `01_hello.lua` trong Rider → chữ có màu, gõ `pri` ra gợi ý `print`.
+
+---
+
+## Bước 2 — Cú pháp Lua qua bảy mẩu (60 phút)
+
+Đọc từng mẩu, tự viết vào `LuaScripts/02_syntax.lua`, bấm `L` (nhớ đổi tên file trong `Program.cs`
+hoặc thêm phím khác). Mỗi mẩu có một câu **"khác C# ở đâu"** — đó là chỗ dễ mắc lỗi nhất, và vì Lua
+không có kiểu tĩnh nên mọi lỗi đều chỉ lộ ra lúc chạy.
+
+### 2.1 Biến — và cái bẫy `local`
+
+```lua
+local ten = "Hùng"        -- biến cục bộ, chỉ sống trong file/khối này
+diem = 100                -- KHÔNG có local => biến TOÀN CỤC của cả máy ảo
+
+print("tên:", ten, "| điểm:", diem)
+```
+
+Không khai kiểu, không `int`/`string`/`var` gì cả. **Khác C#:** quên `local` không phải lỗi — nó âm
+thầm tạo biến toàn cục. Máy ảo dùng chung cho mọi script, nên một file quên `local` là làm bẩn không
+gian của mọi file khác. Đây là **nguồn bug số một** của hệ Lua nhiều file. Quy tắc: *luôn `local`, trừ
+khi thật sự muốn chia sẻ.*
+
+### 2.2 Kiểu dữ liệu và "đúng/sai"
+
+```lua
+local a = 10          -- number  (Lua không phân biệt int/float; MoonSharp lưu tất cả là double)
+local b = "chuỗi"     -- string
+local c = true        -- boolean
+local d = nil         -- nil = "không có gì", tương đương null
+
+-- type() cho biết kiểu của một giá trị. tostring() cần cho nil vì print bỏ qua giá trị nil đứng cuối.
+print("kiểu của a:", type(a), "| b:", type(b), "| c:", type(c), "| d:", tostring(d))
+```
+
+**Khác C# — nhớ kỹ:** chỉ `nil` và `false` là "sai". **`0` là đúng. `""` là đúng.**
+
+```lua
 local hp = 0
-if hp then print("hp = 0 nhung van vao nhanh nay! (khac C#)") end
-if hp == 0 then print("muon kiem tra 0 thi phai so sanh tuong minh") end
+if hp then print("hp = 0 mà vẫn vào được nhánh này! C# thì không.") end
+if hp == 0 then print("muốn kiểm tra 0 thì phải so sánh tường minh") end
+```
 
-print("=== 5. xoa = gan nil ===")
-tuDien.mp = nil
-print("sau khi gan nil, tuDien.mp =", tostring(tuDien.mp))
+### 2.3 `table` — cấu trúc dữ liệu **duy nhất** của Lua
 
-print("=== 6. toan tu ===")
-print("noi chuoi bang '..':", "sat thuong " .. 42)
-print("khac nhau dung '~=':", 1 ~= 2)
+Không có class, không có struct, không có array riêng, không có List, không có Dictionary. Chỉ có
+`table`, và nó làm hết mọi vai.
 
-print("=== 7. tra ve nhieu gia tri ===")
+```lua
+-- dùng như MẢNG (chú ý: đếm từ 1, không phải 0)
+local tui = { "kiếm", "khiên", "giáp" }
+print("phần tử đầu:", tui[1])                 -- kiếm
+print("phần tử số 0:", tostring(tui[0]))      -- nil  ← không có phần tử số 0
+print("số phần tử:", #tui)                    -- 3    (# là toán tử "độ dài")
+
+-- dùng như OBJECT / DICTIONARY
+local item = { id = 1001, ten = "Bình Máu Nhỏ", gia = 50 }
+print("tên vật phẩm:", item.ten)              -- Bình Máu Nhỏ
+print("giá:", item["gia"])                    -- 50   (hai cách viết tương đương)
+
+-- LỒNG NHAU — đây là cách một bảng cấu hình game trông như thế nào
+local phanThuong = {
+    { ten = "vàng",  soLuong = 100, tyLe = 60 },
+    { ten = "ngọc",  soLuong = 1,   tyLe = 40 },
+}
+print("phần thưởng đầu tiên:", phanThuong[1].ten, "x", phanThuong[1].soLuong)
+print("có mấy loại phần thưởng:", #phanThuong)
+
+-- xoá một khoá = gán nil
+item.gia = nil
+print("giá sau khi xoá:", tostring(item.gia))  -- nil
+```
+
+**Khác C#:** đếm từ **1**; `#t` chỉ đúng khi mảng liền mạch (có lỗ `nil` ở giữa là con số vô nghĩa);
+và một table vừa là mảng vừa là dictionary cùng lúc cũng hợp lệ.
+
+### 2.4 Hàm
+
+```lua
+local function tinhTong(a, b)
+    return a + b
+end
+
+print("2 + 3 =", tinhTong(2, 3))     -- 5
+-- print(tinhTong(2))                -- LỖI: b là nil, nil + number không cộng được.
+                                     -- Bỏ dấu -- ở dòng trên để xem thông báo lỗi trông thế nào.
+
+-- TRẢ VỀ NHIỀU GIÁ TRỊ — chuyện thường ở Lua
 local function chiaLayDu(a, b)
     return math.floor(a / b), a % b
 end
 local thuong, du = chiaLayDu(17, 5)
-print("17 / 5 =", thuong, "du", du)
+print("17 chia 5 được", thuong, "dư", du)
 
-print("=== 8. dot vs colon — CHO NAY QUAN TRONG NHAT ===")
-local Vatpham = {}
-function Vatpham.Tao(ten)           -- dau '.' : nhu static
-    return setmetatable({ ten = ten }, { __index = Vatpham })
-end
-function Vatpham:MoTa()             -- dau ':' : tu co bien 'self'
-    return "Vat pham: " .. self.ten
-end
--- 'function T:f()' chi la duong cu phap cua 'function T.f(self)'.
--- Nen goi tu C# phai TU TAY truyen table lam tham so dau tien.
-
-print("=== 9. metatable = ke thua ===")
-local binh = Vatpham.Tao("Binh mau nho")
-print(binh:MoTa())                  -- goi bang ':' de truyen 'binh' vao self
-print("binh khong he co truong MoTa; Lua khong tim thay nen hoi metatable.__index")
-
-print("=== bonus: khong co continue ===")
--- MoonSharp khong ho tro 'goto', nen phai dao nguoc dieu kien.
-local soLe = ""
-for i = 1, 5 do
-    if i % 2 == 1 then
-        soLe = soLe .. i .. " "
-    end
-end
-print("so le:", soLe)
-
-print("=== bonus: pcall de bat loi ===")
-local ok, err = pcall(function() error("co chuyen gi do") end)
-print("pcall tra ve:", ok, err)
-
-return "00_basics chay xong"
+-- hàm là GIÁ TRỊ: gán được, truyền được, nhét vào table được
+local phepTinh = { cong = tinhTong }
+print("gọi hàm nằm trong table:", phepTinh.cong(1, 1))
 ```
 
-Bản chạy tạm (sẽ bị `LuaEnvironment` ở Bước 3 thay thế):
+**Khác C#:** không khai kiểu tham số, gọi thiếu tham số **không phải lỗi** — tham số thiếu thành
+`nil` và chỉ nổ khi bị dùng tới. Gọi thừa tham số thì phần thừa bị bỏ lặng lẽ.
+
+### 2.5 Điều kiện và vòng lặp
+
+```lua
+local hp = 30
+
+if hp <= 0 then
+    print("đã chết")
+elseif hp < 50 then           -- elseif, viết liền
+    print("nguy kịch")
+else
+    print("còn khoẻ")
+end
+
+-- for theo số: from, to, step (to là BAO GỒM, khác C#)
+for i = 1, 3 do print("đếm lên:", i) end
+for i = 10, 1, -2 do print("đếm ngược:", i) end
+
+-- for theo mảng: ipairs cho phần mảng, pairs cho mọi khoá
+for index, giaTri in ipairs(tui) do print("ô", index, "chứa", giaTri) end
+for khoa, giaTri in pairs(item) do print("khoá", khoa, "=", giaTri) end
+
+-- while
+local n = 0
+while n < 3 do n = n + 1 end
+
+-- KHÔNG có continue. MoonSharp cũng không hỗ trợ 'goto'. Phải đảo ngược điều kiện:
+for i = 1, 5 do
+    if i % 2 == 1 then
+        print("số lẻ:", i)
+    end
+end
+```
+
+**Khác C#:** `then`/`do`/`end` thay cho `{ }`; `~=` thay cho `!=`; **không có `++`, không có `+=`**
+(phải viết `n = n + 1`); `and` / `or` / `not` thay cho `&&` / `||` / `!`; và `for i = 1, 3` chạy cả
+`i = 3`.
+
+### 2.6 Chuỗi
+
+```lua
+local ten = "Hùng"
+print("Xin chào " .. ten)                            -- .. là nối chuỗi (không phải +)
+print("Sát thương: " .. 42)                          -- số tự đổi thành chuỗi
+print(("%s gây %d sát thương"):format(ten, 42))      -- format kiểu printf
+print(("Rơi ra %s x%d"):format("Ngọc Rồng", 2))
+```
+
+Chú ý `("..."):format(...)` — dấu ngoặc quanh chuỗi là **bắt buộc** khi gọi method trực tiếp trên một
+chuỗi hằng.
+
+**Bẫy tiếng Việt — đáng biết ngay lúc này:** với Lua, một chuỗi là **một dãy byte**, không phải một
+dãy ký tự. Chữ có dấu trong UTF-8 chiếm 2–3 byte, nên:
+
+```lua
+print(#"Hung")            -- 4
+print(#"Hùng")            -- 5  ← 'ù' chiếm 2 byte
+print(("Hùng"):sub(1, 2)) -- "H" + nửa ký tự 'ù' => ra rác
+print(("Hùng"):upper())   -- "HùNG" — upper() chỉ biết bảng chữ ASCII
+```
+
+Rút ra: **tiếng Việt dùng thoải mái để hiển thị** (nối chuỗi, `format`, in ra) — chỗ nào cũng đúng.
+Nhưng `#`, `sub`, `upper`, `lower` thì chỉ tin được với chuỗi thuần ASCII. Trong lab này ta chỉ hiển
+thị nên không vướng, còn khi nào cần cắt chuỗi tiếng Việt thì phải làm bên C# rồi truyền sang.
+
+Đó cũng là lý do quy ước của dự án (`CLAUDE.md`) bắt **mọi định danh trong code là tiếng Anh**, tiếng
+Việt chỉ dùng cho comment và chuỗi hiển thị: đặt tên biến/khoá table bằng tiếng Việt có dấu là tự chuốc
+lấy đúng nhóm bẫy này.
+
+### 2.7 `.` và `:` — mẩu quan trọng nhất
+
+Phần 2 sống chết vì mẩu này, đọc chậm.
+
+```lua
+local NhanVat = {}
+
+-- Khai bằng DẤU CHẤM: như static, không có 'self'
+function NhanVat.Tao(ten)
+    local o = { ten = ten, hp = 100 }
+    setmetatable(o, { __index = NhanVat })   -- xem giải thích bên dưới
+    return o
+end
+
+-- Khai bằng DẤU HAI CHẤM: tự có biến 'self'
+function NhanVat:GioiThieu()
+    return ("Tôi là %s, máu %d"):format(self.ten, self.hp)
+end
+
+local a = NhanVat.Tao("Chiến binh")
+print(a:GioiThieu())            -- gọi bằng ':' để truyền 'a' vào self
+print(NhanVat.GioiThieu(a))     -- Y HỆT dòng trên, chỉ là viết tường minh
+```
+
+Hai điều phải khắc vào đầu:
+
+1. **`function T:M(a, b)` chỉ là đường cú pháp của `function T.M(self, a, b)`.** Dấu `:` không tạo ra
+   phép màu gì — nó chỉ thêm một tham số ẩn tên `self` vào đầu. Tương tự, `obj:M(x)` là cách viết
+   ngắn của `obj.M(obj, x)`.
+2. **`metatable` là cơ chế OOP duy nhất của Lua.** `a` không hề có trường `GioiThieu`; khi Lua tra
+   `a.GioiThieu` không thấy, nó hỏi metatable, thấy `__index = NhanVat`, và tra tiếp trong `NhanVat`.
+   "Kế thừa" của Lua chỉ có vậy — một con trỏ `__index`.
+
+Hệ quả trực tiếp cho Phần 2: khi **C# gọi một hàm Lua khai bằng `:`**, C# phải **tự tay truyền
+`self`**. Quên là mọi tham số lệch một nấc, và lỗi hiện ra ở tận bên trong script dưới dạng
+`attempt to index a nil value` — nhìn thông báo đó thì tưởng tham số bị null, đi sửa đúng chỗ không
+có lỗi. Đây là lỗi tốn thời gian nhất của người mới nhúng Lua.
+
+### 2.8 Bắt lỗi: `pcall`
+
+```lua
+local ok, err = pcall(function()
+    error("có chuyện gì đó")
+end)
+print("chạy ổn không:", ok, "| lỗi:", err)
+-- chạy ổn không:	false	| lỗi:	02_syntax.lua:2: có chuyện gì đó
+```
+
+Không có `try/catch`. `pcall` (protected call) chạy một hàm và trả về `ok, kết quả-hoặc-lỗi`.
+
+**✅ CHECKPOINT 2:** Chạy được cả 8 mẩu. Ba câu tự hỏi, trả lời được là xong bước này:
+`tui[0]` là gì? Vì sao `if 0 then` vào được nhánh trong? `a:GioiThieu()` khác `a.GioiThieu()` chỗ nào?
+
+---
+
+## Bước 3 — C# ↔ Lua: gọi qua lại, và demo sửa công thức sát thương (60 phút)
+
+Học cú pháp xong thì Lua vẫn còn vô dụng: nó phải nói chuyện được với C#. Có đúng hai chiều, và bước
+này làm cả hai.
+
+### 3.1 Chiều Lua → C#: cho script gọi hàm của mình
 
 ```csharp
-using System.IO;
-using HungNT;
-using MoonSharp.Interpreter;
-using UnityEngine;
+var script = new Script(CoreModules.Preset_SoftSandbox);
 
-namespace LuaLab
+// Cách 1 — gắn một delegate: Lua gọi được ngay.
+script.Globals["Log"] = (Action<string>)(message => Log.Info($"[lua] {message}"));
+
+// Cách 2 — gắn cả một class static: Lua gọi được mọi hàm public của nó.
+UserData.RegisterType(typeof(GameLib));   // BẮT BUỘC đăng ký trước
+script.Globals["Game"] = typeof(GameLib);
+```
+
+Trong Lua:
+
+```lua
+Log("script vừa chạy tới đây")
+local n = Game.Random(100)
+```
+
+**Cạm bẫy C# chắc chắn gặp:** class `static` **không** dùng được `UserData.RegisterType<T>()` — C#
+không cho static class làm tham số generic. Phải gọi bản nhận `Type`:
+
+```csharp
+UserData.RegisterType(typeof(GameLib));   // ✅
+UserData.RegisterType<GameLib>();         // ❌ không biên dịch được
+```
+
+### 3.2 Chiều C# → Lua: lấy hàm trong script ra rồi gọi
+
+```csharp
+// File .lua return một table chứa các hàm:
+//   return { CalcDamage = function(atk, def) ... end }
+DynValue module = script.DoString(code, null, "03_damage.lua");
+
+DynValue fn = module.Table.Get("CalcDamage");        // lấy hàm ra
+DynValue result = script.Call(fn, 100, 20);         // gọi với 2 tham số
+
+double damage = result.Number;                       // đọc kết quả
+```
+
+Ba điều phải biết:
+
+- **`DynValue` là "một giá trị Lua bất kỳ".** Đọc ra kiểu C# bằng `.Number`, `.String`, `.Boolean`,
+  `.Table`. Kiểm `result.Type` trước khi tin — `DataType.Number`, `DataType.String`, `DataType.Nil`…
+- **Mọi số trong MoonSharp là `double`.** Lua 5.2 không có kiểu integer, nên ép về `int`/`float` là
+  việc của phía C#.
+- **`Table.Get("khong-ton-tai")` trả `DynValue.Nil`, không ném exception.** Nên gõ sai tên trường là
+  một **bug câm**: `.Number` ra `0` và không ai báo gì. Trường nào bắt buộc thì phải tự kiểm
+  `Type != DataType.Nil` rồi log lỗi rõ ràng.
+
+### 3.3 Demo: công thức sát thương sửa được mà không build
+
+Đây là bài tập chính của Phần 1, và là ví dụ nhỏ nhất cho thấy vì sao Lua đáng giá.
+
+Công thức sát thương là thứ **planner chỉnh mỗi ngày**: đổi hệ số, thêm ngưỡng, thêm chí mạng. Nếu nó
+nằm trong C# thì mỗi lần chỉnh là một lần build + restart. Đưa vào Lua thì:
+
+```
+sửa 03_damage.lua  →  bấm L  →  bảng số mới hiện ra ngay
+```
+
+Việc của bạn:
+
+- `LuaScripts/03_damage.lua` `return` một table có hàm
+  `CalcDamage(attack, defense, isCrit)` trả về **một con số**. Công thức đầu tiên cứ đơn giản:
+  `(attack - defense * 0.5)`, chí mạng thì `× 2`, và không bao giờ nhỏ hơn 1.
+- Thêm một hàm C# `LuaPlayground.RunDamageDemo()`: nạp file, lấy hàm ra, gọi với **ba bộ số cố định**
+  rồi in thành bảng. Bộ số cố định là có chủ đích — nhìn cùng ba dòng đó trước/sau khi sửa công thức
+  mới so sánh được.
+- Nối vào phím `D` trên console.
+
+<details>
+<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
+
+**`Server/GameServer/LuaScripts/03_damage.lua`**:
+
+```lua
+-- 03_damage.lua — công thức sát thương.
+-- Sửa file này rồi bấm D trên console server là thấy số mới ngay, không build lại gì.
+
+local M = {}
+
+local CRIT_MULTIPLIER = 2.0
+local DEFENSE_FACTOR  = 0.5
+local MIN_DAMAGE      = 1
+
+--- @param attack  number  chỉ số công của người đánh
+--- @param defense number  chỉ số phòng của mục tiêu
+--- @param isCrit  boolean  có chí mạng không
+--- @return number sát thương cuối cùng
+function M.CalcDamage(attack, defense, isCrit)
+    local damage = attack - defense * DEFENSE_FACTOR
+
+    if isCrit then
+        damage = damage * CRIT_MULTIPLIER
+    end
+
+    -- Đánh vào mục tiêu phòng ngự cực cao vẫn phải trúng ít nhất 1 — không thì người chơi
+    -- nghĩ là game lỗi. Đúng loại luật mà planner muốn tự chỉnh.
+    if damage < MIN_DAMAGE then
+        damage = MIN_DAMAGE
+    end
+
+    return math.floor(damage)
+end
+
+return M
+```
+
+**`Server/GameServer/LuaSystem/LuaPlayground.cs`** — thêm method:
+
+```csharp
+/// <summary>
+/// Gọi công thức sát thương viết bằng Lua với ba bộ số cố định. Bộ số cố định là có chủ đích:
+/// so sánh cùng ba dòng đó trước và sau khi sửa công thức mới thấy được thay đổi.
+/// </summary>
+public static void RunDamageDemo()
 {
-    public sealed class LuaBasicsRunner : MonoBehaviour
+    const string FILE = "03_damage.lua";
+
+    string code = LuaScriptPaths.Read(FILE);
+    if (string.IsNullOrEmpty(code))
+        return;
+
+    var script = new Script(CoreModules.Preset_SoftSandbox);
+    script.Options.DebugPrint = message => Log.Info($"{"[lua]".Cyan()} {message}");
+
+    try
     {
-        private void Start()
+        DynValue module = script.DoString(code, null, FILE);
+        if (module.Type != DataType.Table)
         {
-            string path = Path.Combine(Application.dataPath, "_Sandbox/LuaLab/LuaScripts/00_basics.lua");
-            var script = new Script(CoreModules.Preset_SoftSandbox);
+            Log.Error($"{FILE} phải return một table.");
+            return;
+        }
 
-            // print() của Lua mặc định đi ra stdout — Unity không thấy. Nối vào Console.
-            script.Options.DebugPrint = message => this.Log(message);
+        DynValue function = module.Table.Get("CalcDamage");
+        if (function.Type != DataType.Function)
+        {
+            // Get trên khoá không tồn tại trả Nil chứ không ném lỗi — nên gõ sai tên hàm
+            // là một bug hoàn toàn im lặng nếu không kiểm ở đây.
+            Log.Error($"{FILE} thiếu hàm CalcDamage.");
+            return;
+        }
 
-            try
+        Log.Info($"{"atk".Yellow()}  {"def".Yellow()}  {"crit".Yellow()}  → sát thương");
+
+        RunCase(script, function, 100, 20, false);
+        RunCase(script, function, 100, 20, true);
+        RunCase(script, function, 100, 500, false);
+    }
+    catch (SyntaxErrorException ex)
+    {
+        Log.Error($"Sai cú pháp trong {FILE}: {ex.DecoratedMessage.Red()}");
+    }
+    catch (ScriptRuntimeException ex)
+    {
+        Log.Error($"Lỗi khi chạy {FILE}: {ex.DecoratedMessage.Red()}");
+    }
+}
+
+private static void RunCase(Script script, DynValue function, int attack, int defense, bool isCrit)
+{
+    DynValue result = script.Call(function, attack, defense, isCrit);
+
+    // Mọi số trong MoonSharp là double — ép kiểu là việc của phía C#.
+    int damage = (int)result.Number;
+
+    Log.Info($"{attack,3}  {defense,3}  {isCrit,-5} → {damage.ToString().Green()}");
+}
+```
+
+**`Program.cs`**:
+
+```csharp
+case ConsoleKey.D:
+    LuaPlayground.RunDamageDemo();
+    break;
+```
+
+</details>
+
+**✅ CHECKPOINT 3 — lần đầu thấy Lua đáng giá.** Bấm `D`:
+
+```
+atk  def  crit  → sát thương
+100   20  False → 90
+100   20  True  → 180
+100  500  False → 1
+```
+
+Giờ **không tắt server**. Mở `03_damage.lua`, đổi `CRIT_MULTIPLIER = 2.0` thành `3.5`, thêm một luật
+mới — ví dụ *"phòng ngự cao hơn công thì chỉ ăn 5% sát thương"*:
+
+```lua
+if defense > attack then
+    damage = attack * 0.05
+end
+```
+
+Lưu, bấm `D`:
+
+```
+atk  def  crit  → sát thương
+100   20  False → 90
+100   20  True  → 315
+100  500  False → 5
+```
+
+**Không biên dịch, không restart.** Đó là toàn bộ ý tưởng, và Phần 2 chỉ là đưa cơ chế này ra tới
+người chơi thật.
+
+---
+
+# PHẦN 2 — Ghép vào MMORPG
+
+## Bước 4 — Lệnh mạng `UseItem`: đường ống trước, Lua sau (60 phút)
+
+**Quy tắc của bước này: chưa có Lua gì cả.** Server trả về một câu cố định. Lý do: nếu nối cả đường
+ống *và* Lua trong một bước rồi client không thấy gì, bạn sẽ không biết hỏng ở đâu — mạng, DI của
+client, hay script. Tách hai bước là tự cho mình một điểm mốc để chia đôi vùng nghi vấn.
+
+Đi theo đúng checklist "thêm một lệnh mạng mới" trong `CLAUDE.md`:
+
+**1. `NetCmd`** — dải inventory là 400–499 (xem `ROADMAP.md` §2), nên `UseItem = 400`. Chỉ cần **một**
+giá trị: `NetResult.Ok(...)` trả response về đúng cmd của request.
+
+**2. DTO** trong `Server/Shared/Dto/Inventory/ItemDto.cs`. Ba lớp, tất cả
+`[MemoryPackable] public partial class`:
+
+```csharp
+UseItemRequest   { int ItemId }
+UseItemResponse  { bool Ok, string Message, RewardLine[] Rewards }
+RewardLine       { string Name, int Count }
+```
+
+Vì sao response có **cả `Message` lẫn `Rewards`**, nghe như trùng: `Message` là câu cho người đọc
+("Bạn mở Rương Gỗ và nhận được…"), `Rewards` là **dữ liệu** để sau này UI vẽ icon từng món. Lab dừng
+ở `Debug.Log` nên tạm thời in cả hai, nhưng hình dạng dữ liệu thì đúng ngay từ đầu — đổi hình dạng DTO
+về sau là đổi giao thức, đắt hơn nhiều.
+
+**3. Build `Shared`** để DLL tự sang Unity (target `CopySharedToUnity` đã có sẵn):
+```bash
+dotnet build Server/Shared/Shared.csproj
+```
+
+**4. Handler server** `Server/GameServer/Handlers/ItemHandler.cs`:
+`[TcpHandler(NetCmd.UseItem, MinState = SessionState.InWorld)]`. Bước này trả cứng một
+`UseItemResponse`. `MinState = SessionState.InWorld` vì dùng item cần có nhân vật trong world — cùng
+mức với `MoveHandler`.
+
+**5. Client** — bốn mảnh, theo đúng khuôn `WorldApi` / `WorldNetHandler` đã có:
+- `Assets/Game/Scripts/Inventory/ItemApi.cs` — chiều **gửi**.
+- `Assets/Game/Scripts/Network/Handlers/ItemNetHandler.cs` — chiều **nhận**, bắn event.
+- `Assets/Game/Scripts/Inventory/ItemDebugProbe.cs` — MonoBehaviour bấm phím `1`/`2`/`3` để gửi, và
+  `Debug.Log` kết quả nhận về.
+- **Đăng ký vào `GameLifetimeScope`** — đây là dòng dễ quên nhất và **không có lỗi biên dịch**:
+  ```csharp
+  builder.Register<ItemApi>(Lifetime.Singleton);
+  builder.Register<ItemNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+  builder.RegisterComponentInHierarchy<ItemDebugProbe>();
+  ```
+  Thiếu `.As<INetHandlerGroup>()` thì gói server gửi về rơi vào hư không, im lặng. Thiếu
+  `RegisterComponentInHierarchy` thì `[Inject]` không bao giờ chạy và field vẫn `null`, cũng im lặng.
+- Gắn `ItemDebugProbe` lên một GameObject trong scene `Bootstrap`.
+
+Input: client dùng Input System, nên đọc phím bằng `Keyboard.current.digit1Key.wasPressedThisFrame`
+(`using UnityEngine.InputSystem;`) — không cần sửa file `.inputactions`.
+
+<details>
+<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
+
+**`Server/Shared/Net/NetCmd.cs`** — thêm một region mới sau region World:
+
+```csharp
+#region Inventory (400–499)
+
+/// <summary>
+/// Dùng một vật phẩm. Hiệu ứng do script Lua trên server quyết định.
+/// Request: <see cref="Dto.Inventory.UseItemRequest"/> · Response: <see cref="Dto.Inventory.UseItemResponse"/>
+/// Client chủ động gửi.
+/// </summary>
+UseItem = 400,
+
+#endregion
+```
+
+**`Server/Shared/Dto/Inventory/ItemDto.cs`** (file mới):
+
+```csharp
+using MemoryPack;
+
+namespace MMORPG.Shared.Dto.Inventory
+{
+    /// <summary>Client xin dùng một vật phẩm. Chỉ gửi id — mọi thứ khác server tự tra.</summary>
+    [MemoryPackable]
+    public partial class UseItemRequest
+    {
+        public int ItemId { get; set; }
+    }
+
+    /// <summary>Một dòng phần thưởng. Dữ liệu để UI vẽ được, không phải câu chữ.</summary>
+    [MemoryPackable]
+    public partial class RewardLine
+    {
+        public string Name { get; set; } = string.Empty;
+        public int Count { get; set; }
+    }
+
+    /// <summary>
+    /// Kết quả dùng vật phẩm.
+    ///
+    /// Có cả Message lẫn Rewards là chủ ý: Message là câu cho người đọc (script tự viết, đổi được
+    /// nóng), Rewards là dữ liệu có cấu trúc để UI sau này vẽ icon từng món. Lab in cả hai ra
+    /// Debug.Log, nhưng hình dạng DTO thì đúng ngay từ đầu — đổi DTO về sau là đổi giao thức.
+    /// </summary>
+    [MemoryPackable]
+    public partial class UseItemResponse
+    {
+        public bool Ok { get; set; }
+
+        /// <summary>Câu hiển thị cho người chơi. Rỗng khi Ok = false và không có lý do cụ thể.</summary>
+        public string Message { get; set; } = string.Empty;
+
+        public RewardLine[] Rewards { get; set; } = System.Array.Empty<RewardLine>();
+    }
+}
+```
+
+**`Server/GameServer/Handlers/ItemHandler.cs`** (bản Bước 4 — trả cứng):
+
+```csharp
+using MMORPG.GameServer.Net;
+using MMORPG.GameServer.World;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+
+namespace MMORPG.GameServer.Handlers
+{
+    public static class ItemHandler
+    {
+        [TcpHandler(NetCmd.UseItem, MinState = SessionState.InWorld)]
+        public static Task<NetResult> OnUseItem(NetRequest req)
+        {
+            var request = req.GetData<UseItemRequest>();
+            PlayerEntity entity = req.Session.Entity;
+
+            // MinState đã chặn phần lớn, nhưng LeaveWorld có thể xảy ra giữa lúc gói đang bay.
+            if (entity == null)
+                return Task.FromResult(NetResult.None);
+
+            var response = new UseItemResponse
             {
-                // Tham số thứ 3 là tên hiển thị trong thông báo lỗi; không truyền thì lỗi ghi
-                // "chunk_1:12" và không ai biết chunk_1 là file nào.
-                DynValue result = script.DoString(File.ReadAllText(path), null, "00_basics.lua");
-                this.Log($"Lua tra ve: {result.ToPrintString()}");
-            }
-            catch (SyntaxErrorException ex)
-            {
-                // Sai cú pháp: lộ ngay lúc nạp, chưa chạy dòng nào.
-                this.LogError($"Sai cu phap: {ex.DecoratedMessage}");
-            }
-            catch (ScriptRuntimeException ex)
-            {
-                // Lỗi lúc chạy: gọi nil, cộng chuỗi với số... chỉ nổ khi tới đúng dòng đó.
-                this.LogError($"Loi khi chay: {ex.DecoratedMessage}");
-            }
+                Ok = true,
+                Message = $"(tạm) {entity.Name} dùng vật phẩm {request.ItemId}",
+                Rewards = new[] { new RewardLine { Name = "vàng", Count = 123 } },
+            };
+
+            return Task.FromResult(NetResult.Ok(response));
         }
     }
 }
 ```
 
+**`Assets/Game/Scripts/Inventory/ItemApi.cs`**:
+
+```csharp
+using HungNT;
+using MMORPG.Client.Network;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+
+namespace MMORPG.Client.Inventory
+{
+    /// <summary>
+    /// Gom mọi lệnh vật phẩm mà client GỬI ĐI. Đối xứng với
+    /// <see cref="Network.Handlers.ItemNetHandler"/> ở chiều nhận.
+    /// </summary>
+    public sealed class ItemApi
+    {
+        private readonly NetService _netService;
+
+        public ItemApi(NetService netService)
+        {
+            _netService = netService;
+        }
+
+        public void UseItem(int itemId)
+        {
+            this.Log($"Xin dùng vật phẩm {itemId}");
+            _netService.Send(NetCmd.UseItem, new UseItemRequest { ItemId = itemId });
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Network/Handlers/ItemNetHandler.cs`**:
+
+```csharp
+using System;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+
+namespace MMORPG.Client.Network.Handlers
+{
+    public class ItemNetHandler : INetHandlerGroup
+    {
+        public event Action<UseItemResponse> OnUseItemResult;
+
+        [NetHandler(NetCmd.UseItem)]
+        private void HandleUseItem(NetPacket packet)
+        {
+            OnUseItemResult?.Invoke(packet.GetData<UseItemResponse>());
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Inventory/ItemDebugProbe.cs`**:
+
+```csharp
+using System.Text;
+using HungNT;
+using MMORPG.Client.Network.Handlers;
+using MMORPG.Shared.Dto.Inventory;
+using UnityEngine;
+using UnityEngine.InputSystem;
+using VContainer;
+
+namespace MMORPG.Client.Inventory
+{
+    /// <summary>
+    /// Bàn thử vật phẩm: phím 1/2/3 gửi lệnh dùng vật phẩm, kết quả in ra Console.
+    /// Chưa có UI túi đồ nên đây là toàn bộ "giao diện" của tính năng.
+    /// </summary>
+    public sealed class ItemDebugProbe : MonoBehaviour
+    {
+        /// <summary>Id ứng với phím 1, 2, 3 — khớp bảng trong config.lua bên server.</summary>
+        [SerializeField] private int[] _itemIds = { 1001, 1002, 1003 };
+
+        private ItemApi _itemApi;
+        private ItemNetHandler _itemNetHandler;
+
+        [Inject]
+        public void Construct(ItemApi itemApi, ItemNetHandler itemNetHandler)
+        {
+            _itemApi = itemApi;
+            _itemNetHandler = itemNetHandler;
+        }
+
+        private void Start()
+        {
+            _itemNetHandler.OnUseItemResult += OnUseItemResult;
+        }
+
+        private void OnDestroy()
+        {
+            // Construct chưa chạy nếu container build lỗi — đừng để OnDestroy nổ chồng lên lỗi gốc.
+            if (_itemNetHandler == null)
+                return;
+
+            // ItemNetHandler là singleton, sống lâu hơn scene này.
+            _itemNetHandler.OnUseItemResult -= OnUseItemResult;
+        }
+
+        private void Update()
+        {
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard == null)
+                return;
+
+            if (keyboard.digit1Key.wasPressedThisFrame)
+                Use(0);
+            else if (keyboard.digit2Key.wasPressedThisFrame)
+                Use(1);
+            else if (keyboard.digit3Key.wasPressedThisFrame)
+                Use(2);
+        }
+
+        private void Use(int slot)
+        {
+            if (slot >= _itemIds.Length)
+                return;
+
+            _itemApi.UseItem(_itemIds[slot]);
+        }
+
+        private void OnUseItemResult(UseItemResponse response)
+        {
+            if (!response.Ok)
+            {
+                this.LogWarning($"Không dùng được: {response.Message}");
+                return;
+            }
+
+            var builder = new StringBuilder(response.Message);
+
+            foreach (RewardLine reward in response.Rewards)
+                builder.Append($"\n   + {reward.Count} {reward.Name}");
+
+            this.Log(builder.ToString());
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Boot/GameLifetimeScope.cs`** — thêm vào cuối `Configure`:
+
+```csharp
+// Inventory, UseItem
+builder.Register<ItemApi>(Lifetime.Singleton);
+builder.Register<ItemNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+builder.RegisterComponentInHierarchy<ItemDebugProbe>();
+```
+
+(kèm `using MMORPG.Client.Inventory;`)
+
 </details>
 
-**✅ CHECKPOINT 1:** Console in đủ 9 mục. Kiểm ba chỗ dễ sốc nhất: `mang[0]` là `nil`, `hp = 0` vẫn
-vào nhánh `if hp then`, `binh:MoTa()` chạy được dù `binh` không có trường đó. Rồi cố ý gõ sai một
-chữ trong file `.lua` → Console phải in `Sai cu phap: 00_basics.lua:(12,4-5)...` chứ **không** văng
-exception C#.
+**✅ CHECKPOINT 4:** Chạy DBServer + GameServer, vào game, bấm `1`:
+
+```
+[ItemApi] Xin dùng vật phẩm 1001
+[ItemDebugProbe] (tạm) Hung dùng vật phẩm 1001
+   + 123 vàng
+```
+
+Thấy đủ hai dòng nghĩa là **đường ống thông cả hai chiều** và DI của client đã đúng. Chưa có Lua nào
+tham gia. Nếu không thấy dòng thứ hai: xem lại ba dòng đăng ký trong `GameLifetimeScope`, và xem
+`ItemDebugProbe` đã gắn lên GameObject trong scene `Bootstrap` chưa.
 
 ---
 
-## Bước 2 — Lua làm bảng dữ liệu, và hot-reload (45 phút)
+## Bước 5 — Cho Lua quyết định (75 phút)
 
-Đây là mức 1½ của mục A2: dữ liệu vẫn chủ yếu là số, nhưng đã được viết bằng Lua để chuẩn bị cho
-mức 2. Mục tiêu của bước này là **cảm nhận được vòng lặp sửa-thấy-ngay**.
+### 5.1 Bề mặt API — quyết định quan trọng nhất
 
-`config.lua` `return` một table:
+Trước khi viết dòng Lua nào, phải chốt: **script gọi được những gì?** Đây là hợp đồng; khi đã có 20
+file script đang chạy thì đổi tên một hàm là gãy hết.
+
+Ba tầng, chép đúng cấu trúc vo-lam-genz:
+
+| Tầng | Lớp | Lua thấy | Vai trò |
+|---|---|---|---|
+| Miền | `PlayerEntity` | ❌ **không bao giờ** | state thật, hàng chục thành viên |
+| Bọc | `LuaUseContext` | ✅ `ctx:AddGold(100)` | lớp mỏng, chỉ hàm script được phép |
+| Thư viện | `GameLib` (global `Game`) | ✅ `Game.Random(100)` | tiện ích chung |
+
+Vì sao phải có tầng bọc? Vì `UserData.RegisterType` mở **toàn bộ thành viên public** của kiểu đó cho
+script — không chọn lọc từng cái được. Đăng ký thẳng `PlayerEntity` là ngày mai một file `.lua` viết
+được `player.MapId = 99` hoặc gọi `player.Integrate(...)`.
+
+Lớp bọc còn là **chỗ neo của hợp đồng**: đổi tên `PlayerEntity.Name` chỉ cần sửa một dòng trong
+`LuaUseContext`, mọi script đang chạy không hề hấn gì.
+
+Bề mặt tối thiểu của lab — cố tình nhỏ, thêm thì dễ, bớt thì không:
+
+```
+ctx  (LuaUseContext)                    Game  (thư viện)
+  :GetItemName()                          .Random(max)        → 1..max
+  :GetPlayerName()
+  :GetPlayerLevel()                     Item  (thư viện)
+  :Say(message)                           .GetClass(name)
+  :AddGold(amount)
+  :AddItem(name, count)
+  :Fail(reason)
+```
+
+### 5.2 `LuaUseContext` là một **phiếu kết quả**, không phải cái ví
+
+Chỗ này là mấu chốt để lab không phải chờ hệ túi đồ:
+
+`ctx:AddGold(350)` **không** cộng vàng vào đâu cả. Nó **ghi một dòng vào phiếu**. Script chạy xong,
+C# đọc phiếu, đóng thành `UseItemResponse` gửi về client, client `Debug.Log`.
+
+Vì sao đó là thiết kế đúng chứ không phải cắt góc:
+
+- Script viết **y hệt** như khi có túi đồ thật. Nó gọi `ctx:AddGold(350)` và không quan tâm phía sau
+  là ghi DB, là in log, hay là gửi mail.
+- Ngày dự án có túi đồ thật, bạn sửa **thân hàm `AddGold`** để cộng vào `PlayerEntity` và lưu DB.
+  **Không một file `.lua` nào phải sửa.** Đó chính là giá trị của lớp bọc, và bạn đang được thấy nó
+  trước khi cần tới nó.
+- Nếu bây giờ cho script sửa thẳng state, thì lúc có túi đồ thật bạn sẽ phải đi sửa tất cả script.
+
+### 5.3 Chạy trên luồng nào — bẫy kỹ thuật thật của bước này
+
+`ItemHandler` chạy trên **luồng đọc socket của session**. Mỗi client một luồng riêng, nên **hai người
+chơi bấm dùng item cùng lúc là hai luồng cùng gọi vào máy ảo Lua** — mà MoonSharp **không an toàn đa
+luồng**. Hỏng ở đây không phải exception mà là bộ nhớ trong của máy ảo bị xoắn, kiểu hỏng không tái
+hiện được.
+
+Cách xử trong lab: **một `lock` quanh lời gọi script.** Đúng, đơn giản, và đủ — dùng vật phẩm là hành
+động **thưa** (vài lần mỗi giây cho cả server), khác hẳn di chuyển 20 gói/giây/người. Lock không thành
+nút cổ chai.
+
+Cách đúng ở quy mô lớn: đẩy lời gọi vào **hàng đợi của luồng tick**, hoặc một **worker riêng có
+timeout** — đó là điều `KTLuaScript` bên vo-lam-genz làm (`Channel` + `ExecuteFunctionAsync`). Đổi lại
+handler thành bất đồng bộ và phải nghĩ về thứ tự. Biết là có, đừng nhét vào lab.
+
+Reload cũng đi qua **cùng cái lock đó** — nhờ vậy hoán đổi môi trường không bao giờ xảy ra giữa lúc
+một script đang chạy.
+
+### 5.4 Việc của bạn
+
+- `LuaSystem/LuaEnvironment.cs` — máy ảo + sandbox + bề mặt API + bảng `className → Table` +
+  `CallMethod` **tự truyền `self`**.
+- `LuaSystem/LuaUseContext.cs` — phiếu kết quả.
+- `LuaSystem/GameLib.cs` — `Random`.
+- `LuaSystem/ItemScriptHost.cs` — nạp `config.lua` + các script, `lock`, và `UseItem(entity, itemId)`
+  trả về `UseItemResponse`.
+- `LuaScripts/config.lua` — bảng vật phẩm: id, tên, script.
+- `LuaScripts/Items/GoldPouch.lua`, `LuaScripts/Items/WoodenChest.lua`.
+- `LuaScripts/_meta/api.lua` — file khai báo cho IDE (Bước 1.5). Viết nó **ngay sau khi chốt bề mặt
+  API ở mục 5.1**, trước khi viết script đầu tiên: có nó thì gõ `ctx:` là ra danh sách hàm, không có
+  thì tra ngược sang file C# mỗi lần.
+- `Program.cs`: dựng `ItemScriptHost`, gán vào `ItemHandler` (khuôn `SystemHandler.DbClient` đã có),
+  và sửa `ItemHandler` gọi nó thay vì trả cứng.
+
+Gợi ý cho `config.lua` — hình dạng nhỏ nhất mà vẫn đủ dùng:
 
 ```lua
 return {
-    version = 1,
-    dropRate = 0.25,
-    dailyReward = { gold = 100, exp = 50 },
     items = {
-        { id = 1001, name = "Bình máu nhỏ",     script = "HealPotion", value = 50 },
-        { id = 1002, name = "Rương ngẫu nhiên", script = "RandomBox" },
+        { id = 1001, name = "Túi Vàng Nhỏ", script = "GoldPouch" },
+        { id = 1002, name = "Rương Gỗ",     script = "WoodenChest" },
     },
 }
 ```
 
-Ba điều phải nắm khi đọc table Lua từ C#:
-
-- **Mọi số trong MoonSharp đều là `double`.** Lua 5.2 không có kiểu integer, nên `DynValue.Number`
-  luôn là `double`; ép về `int`/`float` là việc của bạn.
-- **`table.Pairs` duyệt mọi cặp key/value; `table.Values` duyệt phần mảng.** Với `items` (mảng) thì
-  dùng `Values`; với table dạng object thì dùng `Get("tên")`.
-- **`Get` trên key không tồn tại trả về `DynValue.Nil`, không ném exception.** Nên `skill.Get("gia")
-  .Number` sẽ ra `0` chứ không báo lỗi — sai chính tả tên trường là bug câm. Nếu trường bắt buộc thì
-  phải tự kiểm `Type != DataType.Nil` và báo lỗi rõ ràng.
-
-Việc của bạn: viết `config.lua`, một class `GameConfig` bên C# đọc nó ra, và trong `LuaLabRunner`
-thêm phím `R` để **dựng lại máy ảo và nạp lại**.
-
-Quyết định thiết kế của phím `R`: **vứt cả máy ảo cũ đi, tạo máy ảo mới**, không chạy đè `DoString`
-lên máy ảo đang sống. Chạy đè thì biến global cũ còn nguyên, hàm bị xoá trong file mới vẫn tồn tại
-trong bộ nhớ — bạn sẽ debug một trạng thái nửa cũ nửa mới. (Hệ hot-update sản phẩm thật *có* vá tại
-chỗ để giữ state người chơi, và đó chính là lý do chúng khó.)
-
 <details>
 <summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
 
-**`LuaScripts/config.lua`**: như đoạn trên.
-
-**`Scripts/GameConfig.cs`**:
+**`Server/GameServer/LuaSystem/GameLib.cs`**:
 
 ```csharp
-using System.Collections.Generic;
-using HungNT;
-using MoonSharp.Interpreter;
-
-namespace LuaLab
-{
-    /// <summary>Một dòng trong bảng vật phẩm, đọc từ config.lua.</summary>
-    public sealed class ItemDef
-    {
-        public int Id;
-        public string Name;
-        public string ScriptName;   // tên file .lua chứa hành vi; rỗng = vật phẩm thường
-        public int Value;
-    }
-
-    /// <summary>Ảnh chụp toàn bộ cấu hình game tại một thời điểm, dựng từ table Lua.</summary>
-    public sealed class GameConfig
-    {
-        public int Version;
-        public float DropRate;
-        public int DailyGold;
-        public int DailyExp;
-        public readonly List<ItemDef> Items = new List<ItemDef>();
-
-        /// <summary>Dựng cấu hình từ giá trị mà config.lua return. Trả null nếu dữ liệu không hợp lệ.</summary>
-        public static GameConfig FromLua(DynValue value)
-        {
-            if (value.Type != DataType.Table)
-            {
-                DebugEx.LogError("[GameConfig] config.lua phải return một table.");
-                return null;
-            }
-
-            Table root = value.Table;
-            var config = new GameConfig
-            {
-                // Mọi số trong MoonSharp là double — ép kiểu là việc của phía C#.
-                Version = (int)root.Get("version").Number,
-                DropRate = (float)root.Get("dropRate").Number,
-            };
-
-            DynValue daily = root.Get("dailyReward");
-            if (daily.Type == DataType.Table)
-            {
-                config.DailyGold = (int)daily.Table.Get("gold").Number;
-                config.DailyExp = (int)daily.Table.Get("exp").Number;
-            }
-
-            DynValue items = root.Get("items");
-            if (items.Type != DataType.Table)
-            {
-                DebugEx.LogError("[GameConfig] config.lua thiếu bảng 'items'.");
-                return config;
-            }
-
-            // Values duyệt phần mảng của table (phần đánh số 1..n).
-            foreach (DynValue entry in items.Table.Values)
-            {
-                if (entry.Type != DataType.Table)
-                {
-                    continue;
-                }
-
-                Table row = entry.Table;
-                config.Items.Add(new ItemDef
-                {
-                    Id = (int)row.Get("id").Number,
-                    Name = row.Get("name").String,
-                    // Get trên key không tồn tại trả Nil chứ không ném lỗi — nên .String ra null,
-                    // và sai chính tả tên trường sẽ là một bug hoàn toàn im lặng.
-                    ScriptName = row.Get("script").String,
-                    Value = (int)row.Get("value").Number,
-                });
-            }
-
-            return config;
-        }
-    }
-}
-```
-
-Phần thêm vào `LuaLabRunner` (bản đầy đủ ở Bước 3):
-
-```csharp
-private void Update()
-{
-    if (Input.GetKeyDown(KeyCode.R))
-    {
-        this.Log("Nạp lại toàn bộ script...");
-        Reload();
-    }
-}
-```
-
-</details>
-
-**✅ CHECKPOINT 2:** Play → Console in ra version, drop rate và 2 vật phẩm. **Không thoát Play mode**,
-mở `config.lua`, đổi `dropRate = 0.25` thành `0.9` và thêm một vật phẩm thứ ba, lưu, quay lại Unity
-bấm `R` → số mới hiện ra. Không domain reload, không biên dịch lại. Đây là bản thu nhỏ của thứ đang
-chạy trên server vo-lam-genz.
-
----
-
-## Bước 3 — Hành vi cũng là script: dựng lại khuôn của vo-lam-genz (90 phút)
-
-Giờ mới tới mức 2. Yêu cầu nghiệp vụ:
-
-- **Bình máu nhỏ**: hồi 50 HP; nếu máu dưới 30% thì hồi gấp đôi; máu đầy thì không cho dùng.
-- **Rương ngẫu nhiên**: mở ra một trong ba phần thưởng theo tỉ lệ, rồi tự trừ chính nó.
-
-Thử nhét vào JSON đi rồi sẽ thấy vì sao phải là Lua.
-
-### 3.1 Bề mặt API — quyết định quan trọng nhất của cả hệ
-
-Trước khi viết dòng Lua nào, phải chốt: **script được phép gọi những gì?** Đây là hợp đồng, và một
-khi có 50 file script đang chạy thì không đổi được nữa.
-
-Chép đúng cấu trúc của vo-lam-genz, ba tầng:
-
-| Tầng | Lớp | Lua thấy | Vai trò |
-|---|---|---|---|
-| Miền | `PlayerState` | ❌ **không bao giờ** | trạng thái thật: HP, vàng, túi đồ |
-| Bọc | `LuaPlayer` | ✅ `player:GetHp()` | lớp mỏng, chỉ có hàm script được phép |
-| Thư viện | `PlayerLib` | ✅ `Player.Heal(player, 50)` | thao tác cần kiểm tra/ghi log/đụng hệ thống khác |
-
-Vì sao phải có tầng bọc mà không đưa thẳng `PlayerState` cho Lua? Vì `UserData.RegisterType<T>()`
-mở **toàn bộ thành viên public** của `T` cho script. Đưa lớp thật ra là ngày mai ai đó viết
-`player.Hp = 99999` trong một file `.lua` mà không qua kiểm tra nào. Lớp bọc biến "mọi thứ public"
-thành "đúng những gì tôi cho phép" — và đó cũng chính là lý do vo-lam-genz có
-`Lua_Player`/`Lua_Item` chứ không đưa `KPlayer` trần.
-
-Vì sao lại có **hai** kiểu gọi (`player:GetHp()` và `Player.Heal(player, ...)`)? Quy ước thực dụng:
-**đọc thì gọi method trên đối tượng; thao tác có hệ quả thì gọi hàm thư viện.** Nhìn vào script là
-biết ngay dòng nào chỉ xem, dòng nào làm thay đổi thế giới.
-
-### 3.2 Cái bẫy `:` và `self`
-
-`function RandomBox:OnUse(item, player)` chỉ là đường cú pháp của
-`function RandomBox.OnUse(self, item, player)`. Nghĩa là khi C# gọi hàm này, nó **phải tự tay truyền
-table class làm tham số đầu tiên**:
-
-```csharp
-_script.Call(fn, classTable, luaItem, luaPlayer);
-//               ^^^^^^^^^^ chính là 'self'
-```
-
-Quên nó thì `item` nhận nhầm giá trị của `self`, `player` nhận nhầm `item`, và lỗi hiện ra ở tận
-dòng nào đó bên trong script dưới dạng "attempt to index a userdata value" — mất nửa buổi.
-
-### 3.3 Việc của bạn
-
-- `PlayerState.cs`, `LuaPlayer.cs`, `PlayerLib.cs` theo bảng ba tầng ở trên.
-- `LuaEnvironment.cs` — đối ứng của `KTLuaEnvironment`: dựng `Script` sandbox, `UserData.RegisterType`
-  cho các lớp lộ ra, gắn global `Player` và `Item`, quản lý bảng `className → Table`, và có hàm
-  `CallMethod(className, methodName, args)` tự truyền `self`.
-  `Item.GetClass(name)` bên C# **tạo mới table nếu chưa có** rồi trả về — để script chỉ việc
-  `local X = Item.GetClass("X")` rồi gắn hàm vào.
-- `HealPotion.lua` và `RandomBox.lua`.
-- `LuaLabRunner`: phím `1` dùng bình máu, `2` mở rương, `R` nạp lại.
-
-Phép thử cuối cùng của bước này: **thêm loại vật phẩm thứ ba mà không mở Visual Studio.**
-
-<details>
-<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
-
-**`Scripts/PlayerState.cs`**:
-
-```csharp
-using System.Collections.Generic;
-
-namespace LuaLab
-{
-    /// <summary>Trạng thái người chơi thật. Lớp này KHÔNG được đăng ký với MoonSharp.</summary>
-    public sealed class PlayerState
-    {
-        public string Name = "Hùng";
-        public int Hp = 30;
-        public int MaxHp = 100;
-        public int Gold = 0;
-        public readonly List<string> Bag = new List<string>();
-
-        public float HpRatio
-        {
-            get { return MaxHp <= 0 ? 0f : (float)Hp / MaxHp; }
-        }
-    }
-}
-```
-
-**`Scripts/LuaPlayer.cs`**:
-
-```csharp
-using HungNT;
-
-namespace LuaLab
+namespace MMORPG.GameServer.LuaSystem
 {
     /// <summary>
-    /// Lớp bọc mỏng quanh PlayerState — đây là thứ duy nhất script Lua nhìn thấy.
-    /// Mọi thành viên public ở đây là một cam kết: đã có script gọi thì không đổi tên được nữa.
+    /// Tiện ích chung cho mọi script, lộ ra dưới tên global "Game".
+    /// Đối ứng thu nhỏ của KTLuaLib_Math/KTLuaLib_System bên vo-lam-genz.
     /// </summary>
-    public sealed class LuaPlayer
+    public static class GameLib
     {
-        private readonly PlayerState _state;
+        private static readonly Random _random = new Random();
 
-        public LuaPlayer(PlayerState state)
-        {
-            _state = state;
-        }
-
-        /// <summary>Trạng thái thật, chỉ cho C# trong cùng assembly — internal nên Lua không thấy.</summary>
-        internal PlayerState State
-        {
-            get { return _state; }
-        }
-
-        public string GetName()
-        {
-            return _state.Name;
-        }
-
-        public int GetHp()
-        {
-            return _state.Hp;
-        }
-
-        public int GetMaxHp()
-        {
-            return _state.MaxHp;
-        }
-
-        /// <summary>Tỉ lệ máu 0..1 — để script khỏi phải tự chia và tự lo chia cho 0.</summary>
-        public float GetHpRatio()
-        {
-            return _state.HpRatio;
-        }
-
-        public void AddNotification(string message)
-        {
-            this.Log($"<color=#7fd67f>[Người chơi] {message}</color>");
-        }
-    }
-}
-```
-
-**`Scripts/PlayerLib.cs`**:
-
-```csharp
-using HungNT;
-
-namespace LuaLab
-{
-    /// <summary>
-    /// Thư viện hàm cho Lua gọi, lộ ra dưới tên global "Player" — đối ứng của KTLuaLib_Player
-    /// bên vo-lam-genz. Mọi thao tác làm thay đổi thế giới đều đi qua đây để còn kiểm tra và ghi log.
-    /// </summary>
-    public static class PlayerLib
-    {
-        /// <summary>Hồi máu. Trả false khi không hồi được, để script tự quyết định làm gì tiếp.</summary>
-        public static bool Heal(LuaPlayer player, int amount)
-        {
-            if (player == null || amount <= 0)
-            {
-                return false;
-            }
-
-            PlayerState state = player.State;
-            if (state.Hp >= state.MaxHp)
-            {
-                return false;
-            }
-
-            int before = state.Hp;
-            state.Hp = UnityEngine.Mathf.Min(state.MaxHp, state.Hp + amount);
-            DebugEx.Log($"[PlayerLib] Hồi máu {before} → {state.Hp}");
-            return true;
-        }
-
-        public static void AddGold(LuaPlayer player, int amount)
-        {
-            player.State.Gold += amount;
-            DebugEx.Log($"[PlayerLib] Vàng +{amount} = {player.State.Gold}");
-        }
-
-        public static void AddItem(LuaPlayer player, string itemName)
-        {
-            player.State.Bag.Add(itemName);
-            DebugEx.Log($"[PlayerLib] Nhận {itemName} (túi có {player.State.Bag.Count} món)");
-        }
-
-        /// <summary>Số ngẫu nhiên 1..max. Lua có math.random, nhưng bản server phải dùng RNG chung
-        /// để còn replay được — nên tập thói quen gọi qua thư viện ngay từ đầu.</summary>
+        /// <summary>
+        /// Số nguyên 1..max. Lua có math.random, nhưng script phải dùng nguồn của server để sau
+        /// này còn ghi lại và dựng lại được một phiên chơi khi cần điều tra khiếu nại.
+        /// </summary>
         public static int Random(int max)
         {
-            return UnityEngine.Random.Range(1, max + 1);
+            if (max <= 1)
+                return 1;
+
+            // lock vì hàm này gọi từ luồng của nhiều session; Random của .NET không thread-safe.
+            lock (_random)
+            {
+                return _random.Next(1, max + 1);
+            }
         }
     }
 }
 ```
 
-**`Scripts/LuaEnvironment.cs`**:
+**`Server/GameServer/LuaSystem/LuaUseContext.cs`**:
 
 ```csharp
-using System.Collections.Generic;
-using HungNT;
-using MoonSharp.Interpreter;
+using MMORPG.GameServer.World;
+using MMORPG.Shared.Dto.Inventory;
 
-namespace LuaLab
+namespace MMORPG.GameServer.LuaSystem
 {
     /// <summary>
-    /// Máy ảo Lua của lab: sandbox, bề mặt API lộ cho script, bảng class đã nạp, và cách gọi
-    /// callback từ C#. Đối ứng thu nhỏ của KTLuaEnvironment + KTLuaScript bên vo-lam-genz.
+    /// PHIẾU KẾT QUẢ của một lần dùng vật phẩm, và cũng là thứ duy nhất script Lua nhìn thấy về
+    /// người chơi. Đối ứng của Lua_Player + Lua_Item bên vo-lam-genz, gộp lại cho gọn.
+    ///
+    /// AddGold/AddItem KHÔNG cộng vào đâu cả — chúng ghi một dòng vào phiếu, C# đọc phiếu rồi gói
+    /// thành UseItemResponse. Ngày dự án có túi đồ thật thì sửa THÂN hai hàm đó để ghi vào entity
+    /// và lưu DB; không một file .lua nào phải sửa. Đó là toàn bộ lý do tồn tại của lớp bọc này.
+    ///
+    /// Mọi thành viên public ở đây là một cam kết: đã có script gọi thì không đổi tên được nữa.
+    /// </summary>
+    public sealed class LuaUseContext
+    {
+        private readonly PlayerEntity _entity;
+        private readonly string _itemName;
+        private readonly List<RewardLine> _rewards = new();
+        private readonly List<string> _messages = new();
+
+        private string _failReason;
+
+        public LuaUseContext(PlayerEntity entity, string itemName)
+        {
+            _entity = entity;
+            _itemName = itemName;
+        }
+
+        public string GetItemName()
+        {
+            return _itemName;
+        }
+
+        public string GetPlayerName()
+        {
+            return _entity.Name;
+        }
+
+        public int GetPlayerLevel()
+        {
+            return _entity.Level;
+        }
+
+        /// <summary>Thêm một câu vào thông báo gửi về client.</summary>
+        public void Say(string message)
+        {
+            if (!string.IsNullOrEmpty(message))
+                _messages.Add(message);
+        }
+
+        public void AddGold(double amount)
+        {
+            AddItem("vàng", amount);
+        }
+
+        public void AddItem(string name, double count)
+        {
+            // Script là dữ liệu do người khác viết — kiểm ở biên giới, y như kiểm gói tin của client.
+            // NaN/Infinity lây qua mọi phép toán, và số âm ở đây là "cấp phần thưởng âm".
+            if (string.IsNullOrEmpty(name) || !double.IsFinite(count) || count <= 0)
+                return;
+
+            _rewards.Add(new RewardLine { Name = name, Count = (int)count });
+        }
+
+        /// <summary>Script tự từ chối: không đủ điều kiện dùng. Ghi nhận lý do và bỏ mọi phần thưởng.</summary>
+        public void Fail(string reason)
+        {
+            _failReason = string.IsNullOrEmpty(reason) ? "Không dùng được vật phẩm này." : reason;
+        }
+
+        /// <summary>Đóng phiếu thành gói tin trả về client. Chỉ C# gọi — không lộ sang Lua.</summary>
+        internal UseItemResponse ToResponse()
+        {
+            if (_failReason != null)
+                return new UseItemResponse { Ok = false, Message = _failReason };
+
+            return new UseItemResponse
+            {
+                Ok = true,
+                Message = _messages.Count > 0
+                    ? string.Join(" ", _messages)
+                    : $"Đã dùng {_itemName}.",
+                Rewards = _rewards.ToArray(),
+            };
+        }
+    }
+}
+```
+
+> `ToResponse` là `internal`: cùng assembly C# gọi được, còn MoonSharp chỉ thấy thành viên `public`
+> nên script không gọi được. `internal` là công cụ chính để giữ bề mặt API đúng bằng cái mình muốn.
+
+**`Server/GameServer/LuaSystem/LuaEnvironment.cs`**:
+
+```csharp
+using MMORPG.ServerCore;
+using MoonSharp.Interpreter;
+
+namespace MMORPG.GameServer.LuaSystem
+{
+    /// <summary>
+    /// Một máy ảo Lua trọn vẹn: sandbox, bề mặt API lộ cho script, bảng class đã nạp, và cách gọi
+    /// callback từ C#. Đối ứng thu nhỏ của KTLuaEnvironment bên vo-lam-genz.
+    ///
+    /// Cả đối tượng này là MỘT PHIÊN BẢN của luật chơi: muốn đổi luật thì dựng cái mới rồi hoán
+    /// đổi, không sửa cái đang chạy — xem <see cref="ItemScriptHost"/>.
     /// </summary>
     public sealed class LuaEnvironment
     {
         private readonly Script _script;
 
         /// <summary>Bảng "tên class → table Lua". Script tự đăng ký vào đây qua Item.GetClass.</summary>
-        private readonly Dictionary<string, Table> _classes = new Dictionary<string, Table>();
+        private readonly Dictionary<string, Table> _classes = new();
 
         public LuaEnvironment()
         {
-            // SoftSandbox đã cắt io, phần lớn os, require, load, dofile: script không mở được file,
-            // không chạy được lệnh hệ thống. Xem Bước 5 để hiểu vì sao đây là mặc định đúng.
             _script = new Script(CoreModules.Preset_SoftSandbox);
-            _script.Options.DebugPrint = message => DebugEx.Log($"[Lua] {message}");
+            _script.Options.DebugPrint = message => Log.Info($"{"[lua]".Cyan()} {message}");
 
-            // Đăng ký kiểu C# mà script được phép cầm. Chỉ những kiểu ở đây mới qua được biên giới.
-            UserData.RegisterType<LuaPlayer>();
-            UserData.RegisterType<PlayerLib>();
+            // Chỉ những kiểu đăng ký ở đây mới qua được biên giới. Đây CHÍNH LÀ bề mặt API.
+            UserData.RegisterType<LuaUseContext>();
+            // GameLib là class static nên không dùng được bản generic — phải truyền Type.
+            UserData.RegisterType(typeof(GameLib));
 
-            // Gán một Type làm global => Lua gọi được các hàm static của nó: Player.Heal(...)
-            _script.Globals["Player"] = typeof(PlayerLib);
+            // Gán một Type làm global => Lua gọi được hàm static của nó: Game.Random(100)
+            _script.Globals["Game"] = typeof(GameLib);
 
-            // "Item" là một table thường có đúng một hàm, vì GetClass cần chạm vào state của
-            // instance này (bảng _classes) nên không làm static được như bên server.
+            // "Item" là table thường vì GetClass phải chạm vào state của chính instance này
+            // (bảng _classes), nên không làm static như bên server thật được.
             var itemLib = new Table(_script);
-            itemLib["GetClass"] = (System.Func<string, Table>)GetOrCreateClass;
+            itemLib["GetClass"] = (Func<string, Table>)GetOrCreateClass;
             _script.Globals["Item"] = itemLib;
         }
 
         /// <summary>
         /// Trả về table của class, tạo mới nếu chưa có. Script gọi hàm này ở dòng đầu tiên rồi gắn
-        /// các callback vào table nhận được — nên sau khi nạp file xong, C# đã có sẵn mọi hàm.
+        /// callback vào table nhận được — nên nạp file xong là C# đã có sẵn mọi hàm.
         /// </summary>
         private Table GetOrCreateClass(string className)
         {
             if (_classes.TryGetValue(className, out Table existing))
-            {
                 return existing;
-            }
 
             var table = new Table(_script);
 
-            // __index trỏ về chính nó: đủ để 'obj:Method()' tìm được hàm nếu sau này script tạo
-            // instance từ class. Đây là toàn bộ "hệ OOP" của Lua.
+            // __index trỏ về chính nó: đủ để 'obj:Method()' tìm được hàm nếu script tạo instance
+            // từ class này. Đây là toàn bộ "hệ OOP" của Lua — xem mẩu 2.7.
             var meta = new Table(_script);
             meta["__index"] = table;
             table.MetaTable = meta;
@@ -866,20 +1397,23 @@ namespace LuaLab
             return table;
         }
 
-        /// <summary>Nạp và chạy một chunk Lua. Trả về giá trị chunk đó return.</summary>
-        public DynValue Load(string chunkName, string code)
+        /// <summary>Nạp và chạy một chunk. Trả về giá trị chunk đó return, hoặc Nil nếu lỗi.</summary>
+        public DynValue Load(string relativePath, string code)
         {
+            if (string.IsNullOrEmpty(code))
+                return DynValue.Nil;
+
             try
             {
-                return _script.DoString(code, null, chunkName);
+                return _script.DoString(code, null, relativePath);
             }
             catch (SyntaxErrorException ex)
             {
-                DebugEx.LogError($"[LuaEnvironment] Sai cú pháp trong {chunkName}: {ex.DecoratedMessage}");
+                Log.Error($"Sai cú pháp trong {relativePath}: {ex.DecoratedMessage.Red()}");
             }
             catch (ScriptRuntimeException ex)
             {
-                DebugEx.LogError($"[LuaEnvironment] Lỗi khi nạp {chunkName}: {ex.DecoratedMessage}");
+                Log.Error($"Lỗi khi nạp {relativePath}: {ex.DecoratedMessage.Red()}");
             }
 
             return DynValue.Nil;
@@ -891,763 +1425,512 @@ namespace LuaLab
         }
 
         /// <summary>
-        /// Tạo một table thuộc về máy ảo này. Table phải có chủ thì mới truyền qua biên giới được —
-        /// MoonSharp kiểm tra quyền sở hữu để không cho giá trị của máy ảo này lọt sang máy ảo khác.
+        /// Gọi một callback của class. Trả false nếu class/hàm không có hoặc script nổ — một script
+        /// hỏng chỉ được phép làm hỏng đúng vật phẩm của nó.
         /// </summary>
-        public Table NewTable()
-        {
-            return new Table(_script);
-        }
-
-        /// <summary>
-        /// Gọi một callback của class. Trả về Nil nếu class/hàm không tồn tại hoặc script nổ —
-        /// một script hỏng không được phép làm hỏng cả hệ thống.
-        /// </summary>
-        public DynValue CallMethod(string className, string methodName, params object[] args)
+        public bool CallMethod(string className, string methodName, params object[] args)
         {
             if (!_classes.TryGetValue(className, out Table classTable))
             {
-                DebugEx.LogError($"[LuaEnvironment] Không có script tên '{className}'.");
-                return DynValue.Nil;
+                Log.Error($"Không có script tên '{className}'.");
+                return false;
             }
 
             DynValue function = classTable.Get(methodName);
             if (function.Type != DataType.Function)
             {
-                DebugEx.LogWarning($"[LuaEnvironment] '{className}' không có hàm {methodName}.");
-                return DynValue.Nil;
+                Log.Error($"'{className}' không có hàm {methodName}.");
+                return false;
             }
 
-            // 'function T:M(a, b)' là đường cú pháp của 'function T.M(self, a, b)'.
-            // Nên tham số đầu tiên BẮT BUỘC là chính table class, không thì mọi tham số lệch một nấc.
+            // 'function T:M(a)' là đường cú pháp của 'function T.M(self, a)' — xem mẩu 2.7.
+            // Tham số đầu BẮT BUỘC là chính table class, không thì mọi tham số lệch một nấc.
             var arguments = new object[args.Length + 1];
             arguments[0] = classTable;
             args.CopyTo(arguments, 1);
 
             try
             {
-                return _script.Call(function, arguments);
+                _script.Call(function, arguments);
+                return true;
             }
             catch (ScriptRuntimeException ex)
             {
-                DebugEx.LogError($"[LuaEnvironment] Lỗi trong {className}.{methodName}: {ex.DecoratedMessage}");
-                return DynValue.Nil;
+                Log.Error($"Lỗi trong {className}.{methodName}: {ex.DecoratedMessage.Red()}");
+                return false;
             }
         }
     }
 }
 ```
 
-**`LuaScripts/HealPotion.lua`**:
+**`Server/GameServer/LuaSystem/ItemScriptHost.cs`**:
+
+```csharp
+using MMORPG.GameServer.World;
+using MMORPG.ServerCore;
+using MMORPG.Shared.Dto.Inventory;
+using MoonSharp.Interpreter;
+
+namespace MMORPG.GameServer.LuaSystem
+{
+    /// <summary>
+    /// Giữ phiên bản luật vật phẩm đang có hiệu lực và cách thay nó khi server đang chạy.
+    /// Đối ứng thu nhỏ của KTLuaScript bên vo-lam-genz.
+    /// </summary>
+    public sealed class ItemScriptHost
+    {
+        private const string CONFIG_FILE = "config.lua";
+        private const string USE_METHOD = "OnUse";
+
+        /// <summary>Một dòng trong bảng vật phẩm, đọc từ config.lua.</summary>
+        private sealed class ItemDef
+        {
+            public int Id;
+            public string Name;
+            public string ScriptName;
+        }
+
+        /// <summary>
+        /// Handler chạy trên luồng đọc socket của từng session, nên nhiều người chơi bấm cùng lúc là
+        /// nhiều luồng cùng gọi vào máy ảo — mà MoonSharp KHÔNG an toàn đa luồng. Reload cũng đi qua
+        /// đúng cái lock này, nhờ vậy hoán đổi môi trường không xảy ra giữa lúc script đang chạy.
+        ///
+        /// Lock là đủ vì dùng vật phẩm là hành động THƯA. Nếu sau này có thứ gọi script mỗi tick thì
+        /// phải đổi sang hàng đợi/worker, không phải nới lock ra.
+        /// </summary>
+        private readonly object _gate = new();
+
+        private LuaEnvironment _environment;
+        private Dictionary<int, ItemDef> _itemsById = new();
+
+        /// <summary>
+        /// Dựng bộ luật mới từ đĩa và chỉ hoán đổi khi chắc chắn nó sống được. Trả false nghĩa là
+        /// bản đang chạy vẫn nguyên vẹn — người chơi không hề biết có chuyện gì.
+        /// </summary>
+        public bool Reload()
+        {
+            var candidate = new LuaEnvironment();
+
+            DynValue configValue = candidate.Load(CONFIG_FILE, LuaScriptPaths.Read(CONFIG_FILE));
+            if (configValue.Type != DataType.Table)
+            {
+                Log.Error($"{CONFIG_FILE} phải return một table — giữ nguyên bộ luật đang chạy.");
+                return false;
+            }
+
+            DynValue itemsValue = configValue.Table.Get("items");
+            if (itemsValue.Type != DataType.Table)
+            {
+                Log.Error($"{CONFIG_FILE} thiếu mảng 'items'.");
+                return false;
+            }
+
+            var items = new Dictionary<int, ItemDef>();
+
+            // Values duyệt phần mảng của table (phần đánh số 1..n).
+            foreach (DynValue entry in itemsValue.Table.Values)
+            {
+                if (entry.Type != DataType.Table)
+                    continue;
+
+                Table row = entry.Table;
+
+                // Mọi số trong MoonSharp là double — ép kiểu là việc của phía C#.
+                var def = new ItemDef
+                {
+                    Id = (int)row.Get("id").Number,
+                    Name = row.Get("name").String,
+                    ScriptName = row.Get("script").String,
+                };
+
+                if (def.Id <= 0 || string.IsNullOrEmpty(def.Name) || string.IsNullOrEmpty(def.ScriptName))
+                {
+                    // Get trên khoá không tồn tại trả Nil chứ không ném lỗi, nên gõ sai tên trường
+                    // sẽ là bug câm nếu không kiểm ở đây.
+                    Log.Error($"{CONFIG_FILE}: một dòng items thiếu id/name/script.");
+                    return false;
+                }
+
+                if (!LoadItemScript(candidate, def.ScriptName))
+                    return false;
+
+                items[def.Id] = def;
+            }
+
+            if (items.Count == 0)
+            {
+                Log.Error($"{CONFIG_FILE}: bảng items rỗng.");
+                return false;
+            }
+
+            // Toàn bộ việc hoán đổi nằm trong khối này. Cùng lock với chỗ gọi script, nên không có
+            // lời gọi nào đang chạy giữa lúc đổi.
+            lock (_gate)
+            {
+                _environment = candidate;
+                _itemsById = items;
+            }
+
+            Log.Info($"{"[lua]".Cyan()} Nạp xong {items.Count.ToString().Green()} vật phẩm: " +
+                     $"{string.Join(", ", items.Values.Select(i => $"{i.Id} {i.Name}"))}");
+            return true;
+        }
+
+        /// <summary>Nạp một file script và kiểm nó có thật sự dùng được không.</summary>
+        private static bool LoadItemScript(LuaEnvironment environment, string scriptName)
+        {
+            if (environment.HasClass(scriptName))
+                return true;
+
+            string relativePath = Path.Combine("Items", $"{scriptName}.lua");
+            environment.Load(relativePath, LuaScriptPaths.Read(relativePath));
+
+            // Nạp xong mà class không xuất hiện = file sai cú pháp, hoặc quên dòng Item.GetClass.
+            if (!environment.HasClass(scriptName))
+            {
+                Log.Error($"{relativePath} không đăng ký được class '{scriptName}' — huỷ đợt nạp.");
+                return false;
+            }
+
+            return true;
+        }
+
+        /// <summary>
+        /// Người chơi dùng một vật phẩm. Trả về gói tin để handler gửi thẳng về client.
+        /// Gọi được từ luồng bất kỳ.
+        /// </summary>
+        public UseItemResponse UseItem(PlayerEntity entity, int itemId)
+        {
+            lock (_gate)
+            {
+                if (_environment == null)
+                    return Fail("Hệ vật phẩm chưa sẵn sàng.");
+
+                if (!_itemsById.TryGetValue(itemId, out ItemDef def))
+                    return Fail($"Không có vật phẩm {itemId}.");
+
+                var context = new LuaUseContext(entity, def.Name);
+
+                if (!_environment.CallMethod(def.ScriptName, USE_METHOD, context))
+                    return Fail($"Script của {def.Name} lỗi — xem log server.");
+
+                return context.ToResponse();
+            }
+        }
+
+        private static UseItemResponse Fail(string message)
+        {
+            return new UseItemResponse { Ok = false, Message = message };
+        }
+    }
+}
+```
+
+**`Server/GameServer/Handlers/ItemHandler.cs`** — thay phần trả cứng:
+
+```csharp
+public static class ItemHandler
+{
+    /// <summary>Gán một lần lúc khởi động, cùng khuôn với SystemHandler.DbClient.</summary>
+    public static ItemScriptHost ScriptHost;
+
+    [TcpHandler(NetCmd.UseItem, MinState = SessionState.InWorld)]
+    public static Task<NetResult> OnUseItem(NetRequest req)
+    {
+        var request = req.GetData<UseItemRequest>();
+        PlayerEntity entity = req.Session.Entity;
+
+        if (entity == null)
+            return Task.FromResult(NetResult.None);
+
+        UseItemResponse response = ScriptHost.UseItem(entity, request.ItemId);
+        return Task.FromResult(NetResult.Ok(response));
+    }
+}
+```
+
+**`Server/GameServer/Program.cs`** — cạnh mấy dòng gán handler đang có:
+
+```csharp
+var itemScriptHost = new ItemScriptHost();
+itemScriptHost.Reload();
+ItemHandler.ScriptHost = itemScriptHost;
+```
+
+**`Server/GameServer/LuaScripts/config.lua`**:
 
 ```lua
--- HealPotion.lua — hành vi của bình máu.
--- Đây là thứ KHÔNG diễn đạt được bằng JSON: có điều kiện, có nhánh, có thông báo khác nhau.
+-- config.lua — bảng vật phẩm của server.
+-- Thêm một dòng ở đây + một file trong Items/ là có vật phẩm mới, không build lại gì.
 
-local HealPotion = Item.GetClass("HealPotion")
+return {
+    items = {
+        { id = 1001, name = "Túi Vàng Nhỏ", script = "GoldPouch" },
+        { id = 1002, name = "Rương Gỗ",     script = "WoodenChest" },
+    },
+}
+```
 
--- Trả false thì C# sẽ không gọi OnUse. Tách riêng phần kiểm tra giúp UI làm mờ nút được
--- mà không phải chạy thử hành vi.
-function HealPotion:OnPreCheckCondition(item, player)
-    if player:GetHp() >= player:GetMaxHp() then
-        player:AddNotification("Máu đang đầy, không cần dùng " .. item.name .. ".")
-        return false
-    end
-    return true
+**`Server/GameServer/LuaScripts/Items/GoldPouch.lua`**:
+
+```lua
+-- GoldPouch.lua — túi vàng: số vàng nhận được phụ thuộc cấp nhân vật.
+-- Đây là thứ KHÔNG diễn đạt được bằng một file cấu hình thuần: nó là một công thức.
+
+local GoldPouch = Item.GetClass("GoldPouch")
+
+local BASE_GOLD      = 100
+local GOLD_PER_LEVEL = 50
+
+---@param ctx LuaUseContext
+function GoldPouch:OnUse(ctx)
+    local level = ctx:GetPlayerLevel()
+    local gold = BASE_GOLD + level * GOLD_PER_LEVEL
+
+    ctx:AddGold(gold)
+    ctx:Say(("%s mở %s (cấp %d)."):format(ctx:GetPlayerName(), ctx:GetItemName(), level))
 end
+```
 
-function HealPotion:OnUse(item, player)
-    local amount = item.value
+**`Server/GameServer/LuaScripts/Items/WoodenChest.lua`**:
 
-    -- Luật "dưới 30% máu thì hồi gấp đôi": ba dòng này là toàn bộ lý do tồn tại của Lua ở đây.
-    if player:GetHpRatio() < 0.3 then
-        amount = amount * 2
-        player:AddNotification("Nguy kịch! " .. item.name .. " phát huy gấp đôi công dụng.")
-    end
+```lua
+-- WoodenChest.lua — rương ngẫu nhiên theo tỉ lệ.
+-- Bảng quà nằm ngay trong script: đổi tỉ lệ, thêm phần thưởng = sửa file này rồi bấm R.
 
-    if not Player.Heal(player, amount) then
+local WoodenChest = Item.GetClass("WoodenChest")
+
+local MIN_LEVEL = 2
+
+-- Tổng ty_le nên bằng 100 cho dễ nghĩ, nhưng thuật toán dưới không bắt buộc thế.
+local REWARDS = {
+    { ty_le = 55, ten = "vàng",          so_luong = 100 },
+    { ty_le = 30, ten = "Bình Máu Nhỏ",  so_luong = 1   },
+    { ty_le = 14, ten = "Đá Cường Hoá",  so_luong = 1   },
+    { ty_le = 1,  ten = "Ngọc Rồng",     so_luong = 1   },
+}
+
+---@param ctx LuaUseContext
+function WoodenChest:OnUse(ctx)
+    -- Script tự từ chối được: đây là luật chơi, nên nó thuộc về script chứ không phải C#.
+    if ctx:GetPlayerLevel() < MIN_LEVEL then
+        ctx:Fail(("Cần đạt cấp %d mới mở được %s."):format(MIN_LEVEL, ctx:GetItemName()))
         return
     end
 
-    player:AddNotification(("Dùng %s, hồi %d HP. Còn %d/%d.")
-        :format(item.name, amount, player:GetHp(), player:GetMaxHp()))
-end
-```
-
-**`LuaScripts/RandomBox.lua`** (viết theo đúng khuôn file thật của vo-lam-genz):
-
-```lua
--- RandomBox.lua — rương quà ngẫu nhiên.
--- Bảng quà nằm ngay trong script: thêm phần thưởng mới = sửa file này, không build lại.
-
-local RandomBox = Item.GetClass("RandomBox")
-
-local PHAN_THUONG = {
-    { ty_le = 60, loai = "gold", so_luong = 100, ten = "100 vàng" },
-    { ty_le = 30, loai = "item", ten = "Bình máu nhỏ" },
-    { ty_le = 10, loai = "gold", so_luong = 1000, ten = "1000 vàng" },
-}
-
-function RandomBox:OnPreCheckCondition(item, player)
-    return true
-end
-
-function RandomBox:OnUse(item, player)
-    local roll = Player.Random(100)
+    local roll = Game.Random(100)
     local moc = 0
 
-    for _, qua in ipairs(PHAN_THUONG) do
+    for _, qua in ipairs(REWARDS) do
         moc = moc + qua.ty_le
+
         if roll <= moc then
-            if qua.loai == "gold" then
-                Player.AddGold(player, qua.so_luong)
-            else
-                Player.AddItem(player, qua.ten)
-            end
-            player:AddNotification(("Mở %s, nhận được %s! (roll %d)")
-                :format(item.name, qua.ten, roll))
+            ctx:AddItem(qua.ten, qua.so_luong)
+            ctx:Say(("Mở %s, nhận được %s! (roll %d)"):format(ctx:GetItemName(), qua.ten, roll))
             return
         end
     end
+
+    -- Tới đây nghĩa là tổng ty_le < 100 và roll rơi vào khoảng trống. Không im lặng: một phần
+    -- thưởng "biến mất" mà không ai biết là loại bug tệ nhất của hệ ngẫu nhiên.
+    ctx:Say(("Mở %s nhưng rỗng không (roll %d) — kiểm lại tổng tỉ lệ."):format(ctx:GetItemName(), roll))
 end
 ```
 
-**`Scripts/LuaLabRunner.cs`** (bản Bước 3):
+**`Server/GameServer/LuaScripts/_meta/api.lua`** — file khai báo cho IDE (Bước 1.5):
 
-```csharp
-using System.Collections.Generic;
-using HungNT;
-using MoonSharp.Interpreter;
-using UnityEngine;
+```lua
+---@meta
+--- File này KHÔNG BAO GIỜ CHẠY. Mọi hàm ở đây thân rỗng, chỉ tồn tại để EmmyLua (Rider) và
+--- Lua Language Server (VS Code) biết script được phép gọi những gì.
+---
+--- ItemScriptHost chỉ nạp đúng những file mà config.lua nhắc tới, nên thư mục _meta không bao
+--- giờ được nạp. (vo-lam-genz làm cùng ý nhưng phải lọc tay: KTLuaScript.Init bỏ qua mọi đường
+--- dẫn chứa ".vscode".)
+---
+--- MỖI LẦN THÊM MỘT HÀM VÀO LuaUseContext / GameLib BÊN C# THÌ THÊM MỘT DÒNG Ở ĐÂY.
+--- Quên thì không có lỗi gì cả — chỉ là IDE im lặng không gợi ý, và bạn sẽ tưởng hàm đó không tồn tại.
 
-namespace LuaLab
-{
-    /// <summary>
-    /// Scene test của lab. Phím 1/2 dùng vật phẩm, R nạp lại toàn bộ script.
-    /// </summary>
-    public sealed class LuaLabRunner : MonoBehaviour
-    {
-        private LuaEnvironment _environment;
-        private GameConfig _config;
-        private PlayerState _state;
-        private LuaPlayer _luaPlayer;
+---------------------------------------------------------------------
+--- Phiếu kết quả của một lần dùng vật phẩm. C# truyền vào OnUse.
+---@class LuaUseContext
+local LuaUseContext = {}
 
-        private void Start()
-        {
-            _state = new PlayerState();
-            _luaPlayer = new LuaPlayer(_state);
-            Reload();
-        }
+--- Tên vật phẩm đang dùng, lấy từ config.lua.
+---@return string
+function LuaUseContext:GetItemName() end
 
-        private void Update()
-        {
-            if (Input.GetKeyDown(KeyCode.R))
-            {
-                Reload();
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha1))
-            {
-                UseItem(1001);
-            }
-            else if (Input.GetKeyDown(KeyCode.Alpha2))
-            {
-                UseItem(1002);
-            }
-        }
+---@return string
+function LuaUseContext:GetPlayerName() end
 
-        private void Reload()
-        {
-            // Vứt máy ảo cũ, dựng máy ảo mới. Chạy đè lên máy ảo cũ sẽ để lại global và hàm của
-            // bản script trước — trạng thái nửa cũ nửa mới là thứ không debug nổi.
-            _environment = new LuaEnvironment();
+---@return number
+function LuaUseContext:GetPlayerLevel() end
 
-            _config = GameConfig.FromLua(_environment.Load("config.lua", LuaScriptStore.Read("config.lua")));
-            if (_config == null)
-            {
-                return;
-            }
+--- Thêm một câu vào thông báo gửi về client. Gọi nhiều lần thì các câu nối lại.
+---@param message string
+function LuaUseContext:Say(message) end
 
-            // Nạp mọi file hành vi mà bảng vật phẩm có nhắc tới. Nạp xong là các class đã nằm
-            // trong LuaEnvironment, sẵn sàng để CallMethod.
-            var loaded = new HashSet<string>();
-            foreach (ItemDef item in _config.Items)
-            {
-                if (string.IsNullOrEmpty(item.ScriptName) || !loaded.Add(item.ScriptName))
-                {
-                    continue;
-                }
+--- Ghi một dòng phần thưởng "vàng" vào phiếu.
+---@param amount number
+function LuaUseContext:AddGold(amount) end
 
-                string fileName = $"{item.ScriptName}.lua";
-                _environment.Load(fileName, LuaScriptStore.Read(fileName));
-            }
+--- Ghi một dòng phần thưởng vào phiếu. Số âm, NaN hoặc tên rỗng bị bỏ qua.
+---@param name string
+---@param count number
+function LuaUseContext:AddItem(name, count) end
 
-            this.Log($"Đã nạp config v{_config.Version}: {_config.Items.Count} vật phẩm, " +
-                     $"{loaded.Count} script hành vi. Máu {_state.Hp}/{_state.MaxHp}.");
-        }
+--- Từ chối: không đủ điều kiện dùng. Bỏ mọi phần thưởng đã ghi.
+---@param reason string
+function LuaUseContext:Fail(reason) end
 
-        private void UseItem(int itemId)
-        {
-            ItemDef def = _config?.Items.Find(i => i.Id == itemId);
-            if (def == null)
-            {
-                this.LogWarning($"Không có vật phẩm {itemId} trong config.");
-                return;
-            }
+---------------------------------------------------------------------
+--- Tiện ích chung, global "Game".
+---@class GameLib
+Game = {}
 
-            if (string.IsNullOrEmpty(def.ScriptName) || !_environment.HasClass(def.ScriptName))
-            {
-                this.LogWarning($"{def.Name} không gắn script nào.");
-                return;
-            }
+--- Số nguyên ngẫu nhiên trong [1, max].
+---@param max number
+---@return number
+function Game.Random(max) end
 
-            // Đưa dữ liệu vật phẩm sang Lua dưới dạng table, không phải userdata: script chỉ cần
-            // đọc mấy trường, mà table thì đúng chất Lua hơn và không mở thêm bề mặt API nào.
-            Table itemTable = _environment.NewTable();
-            itemTable["id"] = def.Id;
-            itemTable["name"] = def.Name;
-            itemTable["value"] = def.Value;
+---------------------------------------------------------------------
+--- Đăng ký class, global "Item".
+---@class ItemLib
+Item = {}
 
-            DynValue canUse = _environment.CallMethod(def.ScriptName, "OnPreCheckCondition",
-                itemTable, _luaPlayer);
-            if (canUse.Type == DataType.Boolean && !canUse.Boolean)
-            {
-                return;
-            }
-
-            _environment.CallMethod(def.ScriptName, "OnUse", itemTable, _luaPlayer);
-        }
-    }
-}
+--- Lấy (hoặc tạo) bảng class để gắn callback vào. Luôn là dòng đầu của một file script.
+---@param name string
+---@return table
+function Item.GetClass(name) end
 ```
-
-> Table phải được tạo **từ chính máy ảo sẽ nhận nó** (`_environment.NewTable()`). MoonSharp kiểm tra
-> quyền sở hữu khi giá trị đi qua biên giới; `new Table(null)` hoặc table của một `Script` khác sẽ
-> bị từ chối ngay lúc gọi.
 
 </details>
 
-**✅ CHECKPOINT 3:** Play. Máu bắt đầu 30/100 (dưới 30%) → bấm `1` → thấy *"Nguy kịch!"* và hồi 100.
-Bấm `1` lần nữa → *"Máu đang đầy"*. Bấm `2` vài lần → phần thưởng khác nhau theo tỉ lệ.
+> Nếu dùng VS Code cho thư mục `LuaScripts/`, thêm `.vscode/settings.json` để Lua Language Server
+> nạp thư mục khai báo — giống hệt cấu hình của vo-lam-genz:
+> ```json
+> {
+>   "Lua.workspace.library": ["_meta"],
+>   "Lua.diagnostics.globals": ["Game", "Item"]
+> }
+> ```
+> Rider + EmmyLua thì không cần cấu hình gì: file `_meta/api.lua` nằm trong cây thư mục của project
+> nên nó tự index.
 
-Rồi **phép thử thật sự**: thêm vật phẩm thứ ba mà **không mở Visual Studio**.
-1. Tạo `LuaScripts/GoldPouch.lua`: `local GoldPouch = Item.GetClass("GoldPouch")` + hàm `OnUse` gọi
-   `Player.AddGold(player, item.value)`.
-2. Thêm một dòng vào `items` trong `config.lua`: `{ id = 1003, name = "Túi vàng", script = "GoldPouch", value = 500 }`.
-3. Bấm `R`, rồi thêm phím `3` gọi `UseItem(1003)`… — à mà không, cả cái đó cũng phải sửa C#. Đó
-   chính là bài học: **ranh giới của hot-update nằm ở chỗ bạn vẽ nó.** Bảng vật phẩm và hành vi thì
-   đổi được nóng; còn "phím nào gọi hàm gì" là code khung, vẫn phải build. Hệ thật giải chuyện này
-   bằng cách để **UI cũng lấy danh sách từ config** — thử đổi `LuaLabRunner` để phím `1..9` ánh xạ
-   theo thứ tự trong `_config.Items` xem, rồi vật phẩm mới sẽ tự có phím mà không cần sửa gì thêm.
+**✅ CHECKPOINT 5:** Trong Unity bấm `1` rồi bấm `2`:
+
+```
+[ItemDebugProbe] Hung mở Túi Vàng Nhỏ (cấp 1).
+   + 150 vàng
+
+[ItemDebugProbe] Không dùng được: Cần đạt cấp 2 mới mở được Rương Gỗ.
+```
+
+Toàn bộ hai câu đó do **file `.lua`** viết ra. Đổi `MIN_LEVEL = 2` thành `1`, khởi động lại server,
+bấm `2` vài lần → phần thưởng khác nhau theo tỉ lệ. Bước 6 làm cho khỏi phải khởi động lại.
 
 ---
 
-## Bước 4 — Cập nhật từ xa: "không cần build hay up lại game" (75 phút)
+# PHẦN 3 — Hot reload, nghịch, và an toàn
 
-Ba bước trên vẫn phải **sửa file trong dự án**. Bây giờ mới tới phần thật: người chơi đã cài game
-rồi, script mới đến với họ bằng cách nào.
+## Bước 6 — Sửa file là có hiệu lực ngay (20 phút)
 
-### 4.1 Ba nguồn script, thứ tự ưu tiên
-
-Script trong một game đã phát hành có thể đến từ ba nơi, và `LuaScriptStore` là chỗ **duy nhất**
-biết luật ưu tiên giữa chúng:
-
-| Ưu tiên | Nguồn | Ở đâu | Có trong bản build? |
-|---|---|---|---|
-| 1 | **Thư mục dev** | `Assets/_Sandbox/LuaLab/LuaScripts/` | ❌ chỉ Editor, bọc `#if UNITY_EDITOR` |
-| 2 | **Bản đã tải về** | `Application.persistentDataPath/lua/` | ✅ nếu người chơi đã cập nhật |
-| 3 | **Bản đóng gói** | `Resources/LuaBundled/*.lua.txt` | ✅ luôn có, là lưới an toàn cuối |
-
-Ba chi tiết đáng nhớ:
-
-- **`persistentDataPath` là nơi duy nhất ghi được trên mọi nền tảng** và tồn tại qua các lần mở app.
-  Đó là lý do bản tải về nằm ở đó chứ không nằm cạnh file game.
-- **Bản đóng gói phải có đuôi `.lua.txt`** — Unity không biết `.lua` là gì nên không import; đổi
-  thành `.txt` thì nó thành `TextAsset` và `Resources.Load<TextAsset>` đọc được. Đây là mẹo mà mọi
-  dự án nhúng Lua vào Unity đều phải dùng.
-- **Thư mục dev đứng trên cùng, nhưng phải tắt được.** Không tắt thì Bước 4 sẽ không bao giờ thấy
-  bản tải về, vì bản dev luôn thắng. Đặt một `bool` trên runner để bật/tắt.
-
-### 4.2 "CDN" giả lập
-
-Không cần dựng server thật. Tạo thư mục `Assets/_Sandbox/LuaLab/RemoteRoot~/` — Unity **bỏ qua mọi
-thư mục có tên kết thúc bằng `~`**, nên nó nằm trong dự án mà không bị import, đúng như một máy chủ
-ở xa. Trong đó:
-
-```json
-{
-  "version": 2,
-  "files": [
-    { "name": "config.lua" },
-    { "name": "HealPotion.lua" },
-    { "name": "RandomBox.lua" }
-  ]
-}
-```
-
-Đọc bằng `UnityWebRequest` với URL `file://…`. Không phải để cho phức tạp: **cùng một dòng code sẽ
-chạy với `https://cdn.game.com/…`** khi có server thật. Chuyển thư mục thành HTTP chỉ là đổi
-`_baseUrl`. Đổi đường dẫn Windows thành URL đúng chuẩn thì dùng `new System.Uri(path).AbsoluteUri` —
-tự lo cả dấu `\` lẫn dấu cách trong tên thư mục.
-
-### 4.3 Luồng cập nhật
-
-```
-Bấm nút "Kiểm tra cập nhật"
-        │
-        ├─► tải manifest.json từ CDN
-        │        │ lỗi mạng? → dùng bản đang có, KHÔNG báo lỗi to  ← game vẫn phải chơi được
-        │        ▼
-        ├─► remote.version > local.version ?
-        │        │ không → "đã là mới nhất", dừng
-        │        ▼
-        ├─► tải từng file trong danh sách về persistentDataPath/lua/
-        │        │ một file lỗi → BỎ toàn bộ đợt cập nhật này, giữ nguyên bản cũ
-        │        ▼                 (nửa cũ nửa mới còn tệ hơn cũ hoàn toàn)
-        ├─► ghi version mới xuống local
-        └─► Reload() — nạp lại máy ảo từ nguồn mới
-```
-
-Dòng quan trọng nhất của cả sơ đồ là **"một file lỗi → bỏ cả đợt"**. Cập nhật phải **nguyên tử**:
-`config.lua` v2 nhắc tới `GoldPouch.lua` mà file đó tải hụt thì game hỏng theo kiểu khó hiểu nhất.
-Tải hết vào thư mục tạm, đủ mới đổi sang thư mục thật — đó là mẫu chuẩn của mọi hệ cập nhật.
-
-### 4.4 Việc của bạn
-
-- `LuaScriptStore.cs` — ba nguồn, `Read(fileName)`, `WriteCache`, đọc/ghi version local
-  (`PlayerPrefs` là đủ cho lab).
-- `LuaUpdater.cs` — MonoBehaviour dùng coroutine + `UnityWebRequest`. (Dự án chính dùng UniTask,
-  nhưng coroutine giữ cho lab không phụ thuộc gì thêm.)
-- Trong `RemoteRoot~/` đặt `manifest.json` version 2 cùng bản `config.lua` sửa số và
-  `HealPotion.lua` sửa hành vi.
-- Runner: phím `U` để kiểm tra cập nhật, và tắt cờ ưu tiên thư mục dev trước khi thử.
-
-<details>
-<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
-
-**`Scripts/LuaScriptStore.cs`**:
+`ItemScriptHost.Reload()` đã viết ở Bước 5 và đã tự lo phần khoá. Giờ chỉ cần một cách gọi nó mà
+không tắt server: thêm phím `R` vào khối `Console.ReadKey`.
 
 ```csharp
-using System.IO;
-using HungNT;
-using UnityEngine;
-
-namespace LuaLab
-{
-    /// <summary>
-    /// Chỗ duy nhất biết một file .lua lấy từ đâu. Ba nguồn theo thứ tự ưu tiên:
-    /// thư mục dev (chỉ Editor) → bản đã tải về → bản đóng gói theo build.
-    /// </summary>
-    public static class LuaScriptStore
-    {
-        private const string VERSION_KEY = "LuaLab.ScriptVersion";
-        private const string RESOURCE_FOLDER = "LuaBundled";
-
-        /// <summary>Bật thì thư mục dev thắng mọi nguồn khác. Tắt đi để thử luồng cập nhật thật.</summary>
-        public static bool PreferDevFolder = true;
-
-        /// <summary>Nơi ghi được trên mọi nền tảng và sống qua các lần mở app.</summary>
-        public static string CacheDir
-        {
-            get { return Path.Combine(Application.persistentDataPath, "lua"); }
-        }
-
-        /// <summary>Phiên bản bộ script đang có trên máy này.</summary>
-        public static int LocalVersion
-        {
-            get { return PlayerPrefs.GetInt(VERSION_KEY, 0); }
-            set
-            {
-                PlayerPrefs.SetInt(VERSION_KEY, value);
-                PlayerPrefs.Save();
-            }
-        }
-
-        /// <summary>Đọc nội dung một script. Trả chuỗi rỗng nếu không nguồn nào có.</summary>
-        public static string Read(string fileName)
-        {
-#if UNITY_EDITOR
-            if (PreferDevFolder)
-            {
-                string devPath = Path.Combine(Application.dataPath, "_Sandbox/LuaLab/LuaScripts", fileName);
-                if (File.Exists(devPath))
-                {
-                    return File.ReadAllText(devPath);
-                }
-            }
-#endif
-
-            string cachePath = Path.Combine(CacheDir, fileName);
-            if (File.Exists(cachePath))
-            {
-                return File.ReadAllText(cachePath);
-            }
-
-            // Lưới an toàn cuối: bản đóng gói cùng build. Resources.Load cắt phần đuôi mở rộng,
-            // nên file trên đĩa là "config.lua.txt" mà key tra là "config.lua".
-            var asset = Resources.Load<TextAsset>($"{RESOURCE_FOLDER}/{fileName}");
-            if (asset != null)
-            {
-                return asset.text;
-            }
-
-            DebugEx.LogError($"[LuaScriptStore] Không tìm thấy {fileName} ở bất kỳ nguồn nào.");
-            return string.Empty;
-        }
-
-        public static void WriteCache(string fileName, string content)
-        {
-            Directory.CreateDirectory(CacheDir);
-            File.WriteAllText(Path.Combine(CacheDir, fileName), content);
-        }
-
-        /// <summary>Xoá sạch bản đã tải, quay về bản đóng gói — nút "sửa lỗi" của người chơi.</summary>
-        public static void ClearCache()
-        {
-            if (Directory.Exists(CacheDir))
-            {
-                Directory.Delete(CacheDir, true);
-            }
-
-            LocalVersion = 0;
-            DebugEx.Log("[LuaScriptStore] Đã xoá bản tải về, quay lại bản đóng gói.");
-        }
-    }
-}
+case ConsoleKey.R:
+    itemScriptHost.Reload();
+    break;
 ```
 
-**`Scripts/LuaUpdater.cs`**:
+Vì sao ở đây gọi thẳng được, trong khi phím `H`/`K` của Phase 9 phải qua hàng đợi? Vì `Reload` **tự
+lấy `_gate`**, còn mọi lời gọi script cũng nằm trong `_gate` — nên tự nó đã tuần tự hoá. Còn
+`EnqueueForceAll` phải qua hàng đợi vì nó sửa `MoveState` mà luồng tick đang đọc, không có khoá nào ở
+giữa.
 
-```csharp
-using System;
-using System.Collections;
-using System.Collections.Generic;
-using HungNT;
-using UnityEngine;
-using UnityEngine.Networking;
+Đó cũng là bài học chung: **hoặc khoá, hoặc hàng đợi — nhưng phải chọn một, và phải biết mình đang
+dùng cái nào.**
 
-namespace LuaLab
-{
-    [Serializable]
-    public sealed class ScriptManifest
-    {
-        public int version;
-        public ManifestEntry[] files;
-    }
+**✅ CHECKPOINT 6 — khoảnh khắc chính của cả lab.** Client **đang chạy, đang đăng nhập, không tắt gì**:
 
-    [Serializable]
-    public sealed class ManifestEntry
-    {
-        public string name;
-    }
+1. Bấm `2` trong Unity → thấy kết quả rương.
+2. Mở `WoodenChest.lua`, đổi `{ ty_le = 1, ten = "Ngọc Rồng" }` thành `{ ty_le = 100, ten = "Ngọc Rồng" }`
+   (và giảm các dòng khác về 0). Lưu.
+3. Bấm `R` trên console server → `[lua] Nạp xong 2 vật phẩm`.
+4. Bấm `2` trong Unity → **lần nào cũng ra Ngọc Rồng**.
 
-    /// <summary>
-    /// Tải bộ script mới từ "CDN" về máy. Thư mục RemoteRoot~ đóng vai máy chủ; đổi sang HTTP thật
-    /// chỉ là đổi BaseUrl, phần còn lại giữ nguyên.
-    /// </summary>
-    public sealed class LuaUpdater : MonoBehaviour
-    {
-        /// <summary>Gọi khi cập nhật thành công, để bên ngoài nạp lại máy ảo.</summary>
-        public event Action OnUpdated;
+Server không restart, client không reconnect, không build lại một dòng C#. Đó là giá trị bạn đang tìm
+hiểu, và giờ bạn đã tự tay làm ra nó.
 
-        private string BaseUrl
-        {
-            get
-            {
-                string dir = System.IO.Path.Combine(Application.dataPath, "_Sandbox/LuaLab/RemoteRoot~");
-                // Uri lo cả dấu \ của Windows lẫn dấu cách trong tên thư mục -> file:///D:/...
-                return new Uri(dir + System.IO.Path.DirectorySeparatorChar).AbsoluteUri;
-            }
-        }
+*(Tuỳ chọn, 20 phút: thêm `FileSystemWatcher` trỏ vào `LuaScriptPaths.Dir` với
+`IncludeSubdirectories = true`, sự kiện `Changed` gọi `Reload()`. Hai bẫy: sự kiện bắn 2–3 lần cho một
+lần lưu (trình soạn thảo ghi nội dung rồi ghi metadata) — nên phải chống dội bằng cờ hoặc mốc thời
+gian; và nó bắn trên luồng của watcher — nhưng `_gate` đã lo chuyện đó. Làm xong thì vòng lặp thành:
+`Ctrl+S` → bấm phím trong Unity.)*
 
-        public void CheckForUpdate()
-        {
-            StartCoroutine(CheckRoutine());
-        }
+## Bước 7 — Nghịch, và thêm vật phẩm mới không build (30 phút)
 
-        private IEnumerator CheckRoutine()
-        {
-            this.Log("Đang kiểm tra cập nhật...");
+Mỗi bài chỉ sửa `.lua` + bấm `R`. Làm hết là bạn đã dùng gần hết những gì học ở Bước 2.
 
-            string manifestText = null;
-            yield return Download("manifest.json", text => manifestText = text);
+**7.1 Rương phụ thuộc cấp.** Trong `WoodenChest.lua`, cho số lượng vàng nhân theo cấp:
+`so_luong = 100 * ctx:GetPlayerLevel()`. *(Gợi ý: bảng `REWARDS` khai ở ngoài hàm nên không thấy
+`ctx`; phải chuyển việc nhân vào trong `OnUse`.)*
 
-            if (manifestText == null)
-            {
-                // Không tải được manifest KHÔNG phải lỗi nghiêm trọng: người chơi vẫn chơi được
-                // bằng bộ script đang có. Chỉ báo nhẹ rồi thôi.
-                this.LogWarning("Không kết nối được máy chủ script, dùng bản đang có.");
-                yield break;
-            }
+**7.2 Rương may mắn.** 10% cơ hội mở ra **hai** phần thưởng: gọi `ctx:AddItem` hai lần và `ctx:Say`
+thêm một câu. Cho thấy `ctx` là *phiếu*, ghi bao nhiêu dòng cũng được.
 
-            ScriptManifest manifest = JsonUtility.FromJson<ScriptManifest>(manifestText);
-            if (manifest == null || manifest.files == null)
-            {
-                this.LogError("manifest.json sai định dạng.");
-                yield break;
-            }
+**7.3 Chuỗi may rủi.** Dùng `Game.Random(100)` hai lần rồi nghĩ xem vì sao **không nên** gọi hai lần
+cho cùng một quyết định. *(Đáp: mỗi lần gọi là một con số khác — cần dùng lại thì phải `local roll = Game.Random(100)`.)*
 
-            if (manifest.version <= LuaScriptStore.LocalVersion)
-            {
-                this.Log($"Đã là bản mới nhất (v{LuaScriptStore.LocalVersion}).");
-                yield break;
-            }
+**7.4 Đá Cường Hoá — vật phẩm có tỉ lệ thất bại.** Tạo `Items/UpgradeStone.lua`: 70% thành công
+(`ctx:Say("Cường hoá thành công!")`), 30% thất bại (`ctx:Fail("Cường hoá thất bại, vật phẩm đã mất.")`).
+Thêm `{ id = 1003, name = "Đá Cường Hoá", script = "UpgradeStone" }` vào `config.lua`, bấm `R`, rồi
+bấm phím `3` trong Unity.
 
-            this.Log($"Có bản mới: v{LuaScriptStore.LocalVersion} → v{manifest.version}, " +
-                     $"{manifest.files.Length} file.");
+**Vật phẩm thứ ba vừa xuất hiện trong game mà bạn không biên dịch gì cả** — id `1003` đã có sẵn trong
+`_itemIds` của `ItemDebugProbe` từ Bước 4. Đó là hình dạng thật của công việc vận hành nội dung.
 
-            // Tải hết vào bộ nhớ trước, đủ mới ghi xuống đĩa: cập nhật phải nguyên tử.
-            // Nửa cũ nửa mới còn tệ hơn cũ hoàn toàn.
-            var downloaded = new Dictionary<string, string>();
-            foreach (ManifestEntry entry in manifest.files)
-            {
-                string content = null;
-                yield return Download(entry.name, text => content = text);
+**7.5 Bảng quà chung.** Cả hai rương đều muốn dùng chung một bảng phần thưởng. Với sandbox hiện tại
+thì `require` bị cắt, nên cách làm là: khai bảng đó vào một biến **toàn cục** trong một script được
+nạp trước. Thử đi, rồi đọc mục 8.5 để biết vì sao **đừng** làm thế và cách đúng là gì.
 
-                if (content == null)
-                {
-                    this.LogError($"Tải hụt {entry.name} — huỷ toàn bộ đợt cập nhật, giữ bản cũ.");
-                    yield break;
-                }
+## Bước 8 — Sống chung với script hỏng (30 phút)
 
-                downloaded[entry.name] = content;
-            }
+Năm kiểu hỏng. Bốn cái đầu code đã đỡ sẵn — việc của bạn là **thử cho hỏng** rồi đọc lại xem lớp nào
+đã cứu.
 
-            foreach (KeyValuePair<string, string> file in downloaded)
-            {
-                LuaScriptStore.WriteCache(file.Key, file.Value);
-            }
+**8.1 Sai cú pháp / thiếu class.** `Reload` bắt và **không hoán đổi**. Thử: bỏ một chữ `end` trong
+`WoodenChest.lua`, bấm `R` → báo lỗi, và bấm `2` trong Unity vẫn ra kết quả của bản cũ.
 
-            LuaScriptStore.LocalVersion = manifest.version;
-            this.Log($"Cập nhật xong lên v{manifest.version}. Đang nạp lại...");
-            OnUpdated?.Invoke();
-        }
+**8.2 Nạp được nhưng chạy thì nổ.** `ctx:AddGoldd(100)` gõ thừa chữ. `CallMethod` bọc `try/catch` và
+trả `false`, nên client nhận `Ok = false` với câu "Script của … lỗi — xem log server". **Một vật phẩm
+hỏng, server vẫn chạy, mọi vật phẩm khác vẫn dùng được.** Nguyên tắc: **script không bao giờ được ném
+exception xuyên qua biên giới vào code khung.**
 
-        private IEnumerator Download(string fileName, Action<string> onDone)
-        {
-            using (UnityWebRequest request = UnityWebRequest.Get(BaseUrl + fileName))
-            {
-                yield return request.SendWebRequest();
+**8.3 Số vô nghĩa.** `ctx:AddGold(0/0)` hoặc `ctx:AddGold(-500)`. `LuaUseContext.AddItem` chặn ngay
+cửa. Cùng đúng một lý do mà `MoveHandler` kiểm `float.IsFinite` trên gói tin của client: **script cũng
+là dữ liệu của người khác**.
 
-                if (request.result != UnityWebRequest.Result.Success)
-                {
-                    this.LogWarning($"Tải {fileName} lỗi: {request.error}");
-                    onDone(null);
-                    yield break;
-                }
+**8.4 Sandbox.** Thử `os.execute("calc")` hay `io.open("C:/x.txt", "w")` trong một script → bị chặn.
+Không phải vì nghi ngờ người viết script, mà vì **một file luật chạy được trên máy này phải chạy y hệt
+trên máy khác** — script đọc file ngoài là mất tính tái lập.
 
-                onDone(request.downloadHandler.text);
-            }
-        }
-    }
-}
-```
+**8.5 Vòng lặp vô hạn, và biến toàn cục.** Hai giới hạn thật, sandbox không đỡ được:
 
-Phần thêm vào `LuaLabRunner`:
+- `while true do end` treo luôn luồng gọi nó. MoonSharp không có bộ đếm lệnh sẵn. Ở lab thì treo một
+  session; ở production thì phải chạy script trên **worker có timeout** (vo-lam-genz làm vậy). Thử
+  một lần cho biết giới hạn tồn tại.
+- Biến toàn cục (bài 7.5) **sống xuyên giữa các script trong cùng máy ảo**. Nghe tiện, nhưng nó là
+  cửa hậu: hai script vô tình dùng cùng một tên là ghi đè nhau, và bug hiện ra ở script *khác* với
+  script gây lỗi. Cách đúng để chia sẻ dữ liệu: một script **nạp trước** `return` ra một table, C#
+  giữ table đó rồi **truyền vào** cho các script khác — nghĩa là chia sẻ đi qua bề mặt API, không đi
+  qua không gian toàn cục.
 
-```csharp
-[SerializeField] private LuaUpdater _updater;
-[SerializeField] private bool _preferDevFolder = true;
-
-private void Start()
-{
-    LuaScriptStore.PreferDevFolder = _preferDevFolder;
-    _state = new PlayerState();
-    _luaPlayer = new LuaPlayer(_state);
-
-    if (_updater != null)
-    {
-        _updater.OnUpdated += Reload;
-    }
-
-    Reload();
-}
-
-private void OnDestroy()
-{
-    if (_updater != null)
-    {
-        _updater.OnUpdated -= Reload;
-    }
-}
-
-// trong Update():
-if (Input.GetKeyDown(KeyCode.U))
-{
-    _updater.CheckForUpdate();
-}
-else if (Input.GetKeyDown(KeyCode.C))
-{
-    LuaScriptStore.ClearCache();
-    Reload();
-}
-```
-
-**`RemoteRoot~/manifest.json`** như mục 4.2. **`RemoteRoot~/config.lua`** là bản `version = 2` với
-`dropRate` khác và thêm `GoldPouch`. **`RemoteRoot~/HealPotion.lua`** đổi ngưỡng nguy kịch từ `0.3`
-thành `0.5` và đổi câu thông báo — để nhìn là biết bản mới đã vào.
-
-</details>
-
-**✅ CHECKPOINT 4:** Đây là checkpoint quan trọng nhất của cả lab, làm đúng thứ tự:
-
-1. Trong Inspector **bỏ tick `Prefer Dev Folder`** (không thì bản dev luôn thắng).
-2. Play → bấm `C` xoá cache → Console báo đang chạy bản đóng gói, `config v1`.
-3. Bấm `1` → thấy hành vi cũ (ngưỡng nguy kịch 30%).
-4. Bấm `U` → *"Có bản mới: v0 → v2"* → tải xong → tự `Reload`.
-5. Bấm `1` → **hành vi đã khác**, câu thông báo mới, ngưỡng mới.
-6. **Thoát Play mode, Play lại** → vẫn là bản v2, vì nó nằm trong `persistentDataPath` chứ không
-   phải trong bộ nhớ.
-
-Bạn vừa đổi luật chơi của một "bản đã phát hành" mà không biên dịch lại dòng nào. Đây chính xác là
-điều bạn nghe được về vo-lam-genz, chỉ khác chỗ ngồi: ở đó máy ảo nằm trên GameServer và "người chơi
-tải về" thu lại thành "server nạp lại file".
-
-Thử nốt hai tình huống hỏng, vì phần lớn giá trị của hệ này nằm ở lúc hỏng:
-- Đổi tên `RemoteRoot~/HealPotion.lua` đi rồi bấm `U` → phải thấy *"huỷ toàn bộ đợt cập nhật"* và
-  game vẫn chạy bản cũ nguyên vẹn.
-- Sửa `RemoteRoot~/config.lua` cho sai cú pháp (bỏ một dấu `}`), tăng version, bấm `U` → nghĩ trước
-  xem chuyện gì xảy ra, rồi so với thực tế. Bước 5 nói về đúng chuyện này.
-
----
-
-## Bước 5 — Sống chung với script hỏng (45 phút)
-
-Bước 4 để lộ một lỗ hổng: cập nhật thì nguyên tử, nhưng **script tải về đúng nguyên vẹn mà nội dung
-sai** thì sao? Bấm `U` xong game trắng bảng, mà bản cũ thì đã bị ghi đè. Ở một game thật, đó là sự
-cố toàn server.
-
-Bốn lớp phòng vệ, xếp theo thứ tự đáng làm:
-
-**(1) Nạp thử trước khi tin.** Sau khi tải về, nạp bộ script mới vào **một máy ảo tạm** và kiểm hai
-điều: `config.lua` có `return` ra table không, và mọi `script` mà nó nhắc tới có nạp được không.
-Đạt thì mới ghi cache và đổi version. Không đạt thì vứt, giữ nguyên bản cũ. Đây là phiên bản rẻ tiền
-của "canary deploy", và nó chặn được 90% sự cố.
-
-**(2) Giữ bản trước đó.** Ghi vào `lua/` thì chép bản đang có sang `lua_backup/` trước. Có `backup`
-thì mới có nút "quay lại bản cũ" — mà lúc 11 giờ đêm thì nút đó đáng giá hơn mọi log.
-
-**(3) Mọi lời gọi vào Lua đều phải bọc.** `LuaEnvironment.CallMethod` ở Bước 3 đã `try/catch`
-`ScriptRuntimeException` và trả `Nil` — nghĩa là một script hỏng chỉ làm **một vật phẩm** không dùng
-được, không kéo theo cả hệ. Nguyên tắc: **script không bao giờ được phép ném exception xuyên qua
-biên giới vào code khung.**
-
-**(4) Sandbox, và biết giới hạn của nó.** `Preset_SoftSandbox` chặn `io`, `os.execute`, `require`,
-`load` — tức là script không đọc/ghi file, không chạy lệnh hệ thống, không nạp thêm mã. Nhưng nó
-**không** chặn được `while true do end`: MoonSharp không có bộ đếm lệnh sẵn, một vòng lặp vô hạn
-treo luôn cả tiến trình. Cách xử thực dụng: chạy script trên **luồng/hàng đợi riêng có timeout**
-thay vì gọi thẳng trên luồng logic chính — và đúng là vo-lam-genz làm vậy, `KTLuaScript` đẩy mọi lời
-gọi qua một hàng đợi worker (`Channel` + `ExecuteFunctionAsync`) chứ không gọi trực tiếp.
-
-Và một giới hạn không phải kỹ thuật, quan trọng hơn cả bốn cái trên — **golden rule #2 của dự án**:
-
-> Hot-update **không** làm client đáng tin hơn. Nếu đặt luật tính sát thương vào Lua ở *client*,
-> người chơi sửa file đó dễ hơn sửa DLL rất nhiều. Trong game online, Lua thuộc về **server**; ở
-> client nó chỉ nên lo những thứ mà người chơi có gian lận cũng chẳng được gì: bố cục UI, hiệu ứng,
-> lời thoại, hoạt cảnh.
-
-Việc của bạn: thêm lớp (1) và (2) vào `LuaUpdater`. Lớp (3) đã có từ Bước 3; lớp (4) chỉ cần đọc
-hiểu — nhưng hãy thử `while true do end` trong một script rồi bấm `1` để tự thấy Unity treo thật
-(chuẩn bị sẵn Task Manager).
-
-<details>
-<summary><b>📖 Lời giải — mở sau khi đã tự code</b></summary>
-
-Chèn vào `CheckRoutine`, ngay trước vòng ghi cache:
-
-```csharp
-// (1) Nạp thử vào một máy ảo tạm. Sai thì vứt cả đợt, người chơi không biết gì đã xảy ra.
-if (!IsHealthy(downloaded))
-{
-    this.LogError("Bộ script mới không nạp được — giữ nguyên bản đang chạy.");
-    yield break;
-}
-
-// (2) Sao lưu bản đang có trước khi ghi đè.
-LuaScriptStore.BackupCache();
-```
-
-```csharp
-/// <summary>Nạp thử bộ script mới vào máy ảo dùng một lần để chắc chắn nó sống được.</summary>
-private bool IsHealthy(Dictionary<string, string> files)
-{
-    if (!files.TryGetValue("config.lua", out string configCode))
-    {
-        this.LogError("Bộ mới thiếu config.lua.");
-        return false;
-    }
-
-    var probe = new LuaEnvironment();
-    GameConfig config = GameConfig.FromLua(probe.Load("config.lua", configCode));
-    if (config == null || config.Items.Count == 0)
-    {
-        return false;
-    }
-
-    foreach (ItemDef item in config.Items)
-    {
-        if (string.IsNullOrEmpty(item.ScriptName) || probe.HasClass(item.ScriptName))
-        {
-            continue;
-        }
-
-        string fileName = $"{item.ScriptName}.lua";
-        if (!files.TryGetValue(fileName, out string code))
-        {
-            // config mới nhắc tới một script không có trong đợt tải: đúng kiểu hỏng mà
-            // kiểm tra nguyên tử ở Bước 4 không bắt được, vì mọi file trong manifest đều tải OK.
-            this.LogError($"config mới cần {fileName} nhưng manifest không có.");
-            return false;
-        }
-
-        probe.Load(fileName, code);
-        if (!probe.HasClass(item.ScriptName))
-        {
-            // Nạp mà class không xuất hiện = file sai cú pháp, hoặc quên dòng Item.GetClass.
-            this.LogError($"{fileName} nạp xong nhưng không đăng ký class '{item.ScriptName}'.");
-            return false;
-        }
-    }
-
-    return true;
-}
-```
-
-Thêm vào `LuaScriptStore`:
-
-```csharp
-private static string BackupDir
-{
-    get { return Path.Combine(Application.persistentDataPath, "lua_backup"); }
-}
-
-/// <summary>Chép bản đang dùng sang thư mục sao lưu trước khi ghi đè.</summary>
-public static void BackupCache()
-{
-    if (!Directory.Exists(CacheDir))
-    {
-        return;
-    }
-
-    if (Directory.Exists(BackupDir))
-    {
-        Directory.Delete(BackupDir, true);
-    }
-
-    Directory.CreateDirectory(BackupDir);
-    foreach (string path in Directory.GetFiles(CacheDir))
-    {
-        File.Copy(path, Path.Combine(BackupDir, Path.GetFileName(path)));
-    }
-
-    PlayerPrefs.SetInt("LuaLab.BackupVersion", LocalVersion);
-}
-```
-
-</details>
-
-**✅ CHECKPOINT 5:** Làm hỏng `RemoteRoot~/config.lua` (bỏ một dấu `}`), tăng `version` lên 3, bấm
-`U` → Console báo *"không nạp được — giữ nguyên bản đang chạy"*, và bấm `1` vẫn dùng được vật phẩm
-bằng bản v2. Đó là khác biệt giữa một hệ hot-update và một khẩu súng tự bắn vào chân.
+Và một quy tắc âm thầm nhưng quan trọng: **không lưu `DynValue` ra ngoài `LuaEnvironment`.** Giữ một
+`Table` của máy ảo cũ là giữ cho cả máy ảo cũ sống mãi sau mỗi lần reload. Code ở trên theo đúng quy
+tắc này — để ý `_itemsById` chỉ chứa `int` và `string`, không chứa `Table` nào.
 
 ---
 
@@ -1655,147 +1938,157 @@ bằng bản v2. Đó là khác biệt giữa một hệ hot-update và một kh
 
 Tự trả lời từng câu xong mới mở đáp án của câu đó.
 
-**Câu 1.** Sếp nói: *"đưa hết chỉ số vật phẩm sang Lua để sau này chỉnh không cần build"*. Bảng chỉ
-số đó chỉ có `id, name, damage, price`. Bạn trả lời thế nào?
+**Câu 1.** Bảng vật phẩm chỉ có `id`, `name`, `script`. Nếu chỉ cần *"đổi tên vật phẩm và số vàng"*
+thì có cần Lua không?
 <details>
 <summary><b>📖 Đáp án câu 1</b></summary>
 
-Đó là **mức 1** trong mục A2 — dữ liệu thuần, không có nhánh nào. Thứ cần là **tải cấu hình từ
-server**, không phải nhúng một ngôn ngữ lập trình. Dùng JSON tải về là đạt đúng mục tiêu "chỉnh
-không cần build" với chi phí gần bằng không, lại giữ được kiểm tra kiểu và schema.
+Không. Đó là **dữ liệu thuần** — một file JSON mà server đọc lại được là đủ, và còn tốt hơn: có
+schema, kiểm được kiểu, ít cách viết sai.
 
-Nhúng Lua cho việc này là trả cái giá của mức 2 (mất type check, phải sandbox, phải lo script hỏng,
-phải giữ hợp đồng API) để mua thứ mà mức 1 đã cho không.
+Lua chỉ đáng khi dữ liệu **là một quyết định**: `100 + level * 50` (`GoldPouch`), tỉ lệ rẽ nhánh
+(`WoodenChest`), điều kiện từ chối (`MIN_LEVEL`). Tiêu chí một dòng: *chỉ số và tên → file cấu hình;
+có `if` hoặc có phép tính → Lua.*
 
-Câu trả lời đầy đủ nên kèm cái mốc để biết khi nào đổi ý: *"khi nào bảng bắt đầu cần điều kiện —
-kiểu 'dưới 30% máu thì gấp đôi' — thì lúc đó Lua mới đáng, và hạ tầng tải file của mức 1 dùng lại
-được nguyên vẹn để tải script."*
+Dấu hiệu chọn sai: file JSON của bạn mọc ra những trường tên kiểu `conditionType`, `operator`,
+`thresholdValue`. Đó là lúc bạn đang tự phát minh một ngôn ngữ lập trình bên trong JSON, rồi sẽ phải
+tự viết trình thông dịch cho nó.
 
 </details>
 
-**Câu 2.** `function RandomBox:OnUse(item, player)` — vì sao C# gọi hàm này phải truyền **ba** tham
-số chứ không phải hai, và nếu quên thì lỗi hiện ra như thế nào?
+**Câu 2.** `function WoodenChest:OnUse(ctx)` nhận **một** tham số, nhưng `CallMethod` truyền **hai**
+giá trị vào `Script.Call`. Vì sao? Quên thì lỗi hiện ra thế nào?
 <details>
 <summary><b>📖 Đáp án câu 2</b></summary>
 
-Vì dấu `:` chỉ là đường cú pháp: `function T:M(a, b)` biên dịch thành `function T.M(self, a, b)`.
-Hàm thật sự có ba tham số, tham số đầu tên `self` và Lua chỉ tự điền nó khi *gọi* cũng bằng dấu `:`
-(`obj:M(a, b)`). C# gọi qua `Script.Call` là gọi hàm trần, không có cú pháp `:` nào cả — nên phải tự
-tay đưa table class vào vị trí đầu.
+Vì dấu `:` chỉ là đường cú pháp: `function T:OnUse(ctx)` biên dịch thành
+`function T.OnUse(self, ctx)`. Hàm thật sự có hai tham số; Lua chỉ tự điền `self` khi *gọi* cũng bằng
+dấu `:`. C# gọi qua `Script.Call` là gọi hàm trần, không có cú pháp `:` nào — nên phải tự đưa table
+class vào vị trí đầu.
 
-Quên thì mọi tham số **lệch một nấc**: `self` nhận `item`, `item` nhận `player`, `player` nhận `nil`.
-Lỗi không nổ ở chỗ gọi mà nổ ở dòng nào đó bên trong script — `attempt to index a nil value` khi
-script chạm tới `player:GetHp()`. Nhìn thông báo đó thì tưởng `player` truyền vào bị null, đi sửa
-đúng chỗ không có lỗi. Đây là lỗi tốn thời gian nhất của người mới nhúng Lua.
+Quên thì tham số lệch một nấc: `ctx` nhận **table class**, và dòng đầu tiên chạm tới nó sẽ nổ
+`attempt to call a nil value (method 'GetPlayerLevel')`. Nhìn thông báo đó thì tưởng `ctx` truyền vào
+bị null, rồi đi sửa đúng chỗ không có lỗi.
 
 </details>
 
-**Câu 3.** Vì sao Lua chỉ thấy `LuaPlayer` chứ không thấy thẳng `PlayerState`, dù `LuaPlayer` chẳng
-làm gì ngoài chuyển tiếp?
+**Câu 3.** `ctx:AddGold(350)` không cộng vàng cho ai cả. Vì sao đó là thiết kế đúng chứ không phải
+cắt góc, và ngày có túi đồ thật thì phải sửa ở đâu?
 <details>
 <summary><b>📖 Đáp án câu 3</b></summary>
 
-Vì `UserData.RegisterType<T>()` mở **toàn bộ thành viên public** của `T` cho script — không có cách
-nào chọn lọc từng cái. Đưa `PlayerState` ra là script viết được `player.Hp = 99999` hoặc
-`player.Bag:Clear()`, không qua kiểm tra nào, không có log nào.
+Vì script viết **y hệt** như khi có túi đồ thật: nó gọi `ctx:AddGold(350)` và không quan tâm phía sau
+là ghi DB, in log, hay gửi mail. Ngày có túi đồ thật, bạn sửa **thân hàm `AddGold`** trong
+`LuaUseContext` để cộng vào `PlayerEntity` và lưu qua `DbClient` — **không một file `.lua` nào phải
+sửa**.
 
-`LuaPlayer` biến "mọi thứ public" thành "đúng những gì tôi cho phép", và đặt trường thật sau
-`internal` để cùng assembly C# vẫn dùng được còn Lua thì không thấy. Nó cũng là **chỗ neo của hợp
-đồng**: đổi tên `PlayerState.Hp` thành `CurrentHp` chỉ cần sửa một dòng trong lớp bọc, 50 file script
-đang chạy không hề hấn gì. Không có lớp bọc thì mọi lần đổi tên trong code miền là một lần gãy
-script — và trình biên dịch không cảnh báo được.
+Ngược lại, nếu bây giờ cho script sửa thẳng state (`player.Gold = player.Gold + 350`), thì lúc có túi
+đồ thật bạn phải đi sửa tất cả script, và mỗi script lại tự quyết định có lưu DB hay không, có kiểm
+túi đầy hay không.
 
-Đúng lý do vo-lam-genz có `Lua_Player`/`Lua_Item` thay vì đưa `KPlayer` trần.
+Đó chính là lý do vo-lam-genz có `Lua_Player` mỏng thay vì đưa `KPlayer` trần cho script: **lớp bọc
+là chỗ neo của hợp đồng**, để phần sau nó đổi bao nhiêu lần cũng được.
 
 </details>
 
-**Câu 4.** Bước 4 tải hết vào bộ nhớ rồi mới ghi xuống đĩa. Vì sao không ghi thẳng từng file cho
-đơn giản?
+**Câu 4.** Vì sao `ItemScriptHost` cần `lock`, trong khi `WorldService` của Phase 9 lại dùng hàng đợi
+cho phím `H`/`K`?
 <details>
 <summary><b>📖 Đáp án câu 4</b></summary>
 
-Vì cập nhật phải **nguyên tử**: hoặc bộ mới vào trọn vẹn, hoặc bộ cũ ở nguyên. Ghi thẳng từng file
-thì rớt mạng giữa chừng để lại một trạng thái **không phải bản nào cả** — `config.lua` v2 đã nhắc
-tới `GoldPouch` trong khi `GoldPouch.lua` chưa kịp tải. Người chơi mở app ra thấy hỏng, mà log thì
-báo "cập nhật thành công một phần", và không có bản nào để quay về.
+Vì hai chỗ có hình dạng vấn đề khác nhau.
 
-Nửa cũ nửa mới luôn tệ hơn cũ hoàn toàn: cũ hoàn toàn thì người chơi chỉ *chưa có tính năng mới*;
-nửa vời thì game *hỏng*.
+`ItemHandler` chạy trên **luồng đọc socket của từng session**, nên hai người chơi bấm dùng item cùng
+lúc là hai luồng cùng vào máy ảo Lua — mà MoonSharp không an toàn đa luồng. Ở đây không có "một luồng
+sở hữu" nào để đẩy việc sang, nên `lock` là câu trả lời trực tiếp và đúng. Nó đủ vì dùng item là hành
+động **thưa**.
 
-Cùng một lý do khiến Bước 5 nạp thử vào máy ảo tạm trước khi tin, và khiến hệ cập nhật thật ghi vào
-thư mục tạm rồi mới đổi tên thư mục.
+Phím `H`/`K` thì khác: nó sửa `MoveState` của entity, mà `MoveState` **thuộc về luồng tick** — luồng
+tick đọc nó 20 lần/giây và không có khoá nào. Ghi vào đó từ luồng khác thì người đọc có thể thấy nửa
+cũ nửa mới. Ở đây đã có sẵn một luồng sở hữu, nên cách rẻ nhất và đúng nhất là **xếp việc vào hàng đợi
+cho luồng đó tự làm**, thay vì bắt luồng tick phải lấy khoá 20 lần/giây.
+
+Quy tắc: **có một luồng sở hữu rõ ràng → hàng đợi. Không có → khoá.** Và phải biết mình đang dùng cái
+nào, đừng trộn.
 
 </details>
 
-**Câu 5.** Đề xuất: *"đưa công thức tính sát thương sang Lua ở client để cân bằng game nhanh"*. Vấn
-đề nằm ở đâu?
+**Câu 5.** Vì sao `Reload()` dựng `LuaEnvironment` mới thay vì `DoString` đè lên máy ảo đang chạy?
 <details>
 <summary><b>📖 Đáp án câu 5</b></summary>
 
-Nó phá **golden rule #2 — server là source of truth**. Công thức sát thương là luật chơi; luật chơi
-thuộc về server. Đưa xuống client thì:
+Vì `DoString` **cộng thêm** vào trạng thái cũ chứ không thay thế. Ba kiểu hỏng:
 
-1. **Người chơi sửa được.** File `.lua` trong `persistentDataPath` là văn bản thuần, ai cũng mở
-   được. Sửa `damage * 1.5` thành `damage * 150` dễ hơn sửa DLL rất nhiều — hot-update ở client làm
-   game **dễ hack hơn**, không phải khó hơn.
-2. **Hai nguồn sự thật.** Nếu server vẫn tính riêng thì client hiển thị một đằng, server chốt một
-   nẻo; nếu server tin client thì hết chuyện để nói.
-3. **Không đạt được mục tiêu.** "Cân bằng nhanh" đòi mọi người chơi cùng đổi cùng lúc — mà client
-   thì mỗi người tải về một thời điểm.
+1. Biến toàn cục cũ còn nguyên — script mới "chạy được" nhờ rác của bản cũ, rồi chết trên máy sạch.
+2. Hàm đã xoá khỏi file vẫn tồn tại trong bảng nếu còn ai giữ tham chiếu.
+3. Closure cũ tiếp tục dùng biến cũ, trong khi code mới đọc biến mới cùng tên.
 
-Chỗ đúng: công thức nằm trong Lua **trên server** — đúng như vo-lam-genz. Client hot-update thì chỉ
-nên lo thứ mà gian lận cũng vô hại: bố cục UI, hiệu ứng, lời thoại, sự kiện hiển thị.
+Kết quả là bạn debug một trạng thái không ứng với **bất kỳ** phiên bản file nào — nửa cũ nửa mới.
+Dựng mới rồi hoán đổi thì "cái đang chạy" luôn đúng bằng "cái đang có trên đĩa".
+
+Và vì bản mới được **kiểm trước khi hoán đổi** (config có ra bảng không, mọi script có đăng ký được
+class không), một file `.lua` viết sai không bao giờ tới được tay người chơi.
 
 </details>
 
-**Câu 6.** Sau lab này, muốn đưa Lua vào dự án MMORPG thật thì đặt ở đâu, và mảnh nào của lab dùng
-lại được?
+**Câu 6.** Sau lab này, hệ nào trong MMORPG nên cho Lua vào tiếp, hệ nào tuyệt đối không?
 <details>
 <summary><b>📖 Đáp án câu 6</b></summary>
 
-Đặt ở **`Server/GameServer/`**, thành một thư mục kiểu `LuaSystem/` — vì mọi lý do ở câu 5, và vì
-server .NET 8 chạy MoonSharp không vướng gì IL2CPP.
+Ba tiêu chí phải thoả **cả ba**: **thưa** (không chạy mỗi tick cho mọi entity), **hay đổi** (nội
+dung, không phải cơ chế), và **chỉ server chạy** (client không cần biết luật đó để dự đoán).
 
-Dùng lại được gần như toàn bộ, chỉ đổi chỗ ngồi:
-
-| Mảnh trong lab | Bản trên GameServer |
+| Nên | Không nên |
 |---|---|
-| `LuaEnvironment` | y hệt, chỉ đổi `DebugEx` → `Log` của `ServerCore` |
-| `LuaPlayer` / `PlayerLib` | bọc quanh `PlayerEntity` thật |
-| `LuaScriptStore` | đơn giản hơn: server đọc thẳng thư mục `LuaScripts/`, không cần ba tầng |
-| `LuaUpdater` | **bỏ** — server sửa file tại chỗ; thay bằng lệnh console `reload lua` |
-| Nạp thử trước khi tin (Bước 5) | **giữ nguyên, còn quan trọng hơn** — script hỏng ở server là sự cố toàn server |
+| hiệu ứng vật phẩm | `MovementRules.Step` |
+| hội thoại NPC, nhiệm vụ | `CharacterProfile` (speed, jump, thời lượng đòn) |
+| bảng rơi đồ, phần thưởng đăng nhập | đồng bộ state, AOI, tick loop |
+| sự kiện theo mùa, lệnh GM | bất cứ thứ gì trong `Shared/` |
 
-Cái *không* có trong lab mà bản server bắt buộc phải có: **chạy script qua hàng đợi worker có
-timeout** thay vì gọi thẳng trên luồng tick. Một `while true` trong lab chỉ treo Editor của bạn; ở
-server nó treo cả thế giới.
+Cột phải có một lý do đặc thù của dự án này, và nó quan trọng: **`Server/Shared/` được build thành
+`MMORPG.Shared.dll` cho Unity dùng.** Client gọi `MovementRules.Step` và `CharacterProfiles.Get` mỗi
+frame để **dự đoán** (Phase 8). Sửa nóng `moveSpeed` ở server thì server chạy `12` còn client dự đoán
+bằng `5` → lệch mỗi tick → reconciliation kéo về liên tục → giật, cao su. Không có exception nào, chỉ
+là "game tự nhiên chơi rất tệ".
 
-Và một câu hỏi phải trả lời trước khi viết dòng đầu tiên: **hệ nào của MMORPG xứng đáng có Lua?**
-Câu trả lời gần như chắc chắn không phải "di chuyển" hay "chiến đấu" (những thứ chạy mỗi tick, cần
-nhanh và cần replay được), mà là những thứ **thưa và hay đổi**: hiệu ứng vật phẩm, hội thoại NPC,
-nhiệm vụ, sự kiện theo mùa. Đúng danh sách mà vo-lam-genz đang để trong `LuaScripts/`.
+Thêm nữa, reconciliation **replay** hàng chục tick cũ, mà replay chỉ đúng nếu luật không đổi giữa
+chừng. Một hàm sửa được lúc chạy thì không replay được.
+
+Đúng bằng danh sách vo-lam-genz để trong `LuaScripts/`: `Item/`, `Npc/`, `Monster/AI`, `GM/`.
 
 </details>
 
 ---
 
-## Dọn lab
+## Gỡ lab
 
-Xoá thư mục `Assets/_Sandbox/` (và file `.meta` của nó). Không có gì khác phải hoàn tác: không đụng
-`Packages/manifest.json`, không đụng `Assets/packages.config`, không đụng `Assets/Game/`.
-Nếu đã thêm scene lab vào Build Settings thì bỏ ra. Dữ liệu tải về nằm ở
-`Application.persistentDataPath/lua/` — xoá tay nếu muốn sạch hoàn toàn.
+Nếu đã làm trên nhánh riêng thì `git checkout main` là xong. Nếu lỡ làm trên `main`:
+
+```bash
+git rm -r Server/GameServer/LuaSystem Server/GameServer/LuaScripts \
+          Server/GameServer/Handlers/ItemHandler.cs \
+          Server/Shared/Dto/Inventory \
+          Assets/Game/Scripts/Inventory \
+          Assets/Game/Scripts/Network/Handlers/ItemNetHandler.cs
+git checkout -- Server/GameServer/GameServer.csproj Server/GameServer/Program.cs \
+                Server/Shared/Net/NetCmd.cs \
+                Assets/Game/Scripts/Boot/GameLifetimeScope.cs
+```
+
+Rồi build lại `Shared` để DLL trong Unity trở về bản không có `Dto.Inventory`, và xoá component
+`ItemDebugProbe` khỏi scene `Bootstrap`.
 
 ## Đi tiếp
 
-1. **Đọc code thật**: `../vo-lam-genz-server/GameServer/GameServer/KiemThe/LuaSystem/`. Đọc theo thứ
-   tự `KTLuaEnvironment.cs` → `KTLuaScript.cs` → một file trong `Logic/KTLuaLib_*.cs` → một file
-   `.lua` trong `bin/Debug/LuaScripts/Item/Common/`. Bạn vừa tự dựng lại chính bộ khung đó nên sẽ
-   đọc rất nhanh.
-2. **Thêm hash vào manifest** (MD5 từng file) để chỉ tải file nào thật sự đổi, và để phát hiện file
-   hỏng khi tải. Đây là bước tiếp theo tự nhiên nhất của Bước 4.
-3. **Thử xLua** nếu định làm client mobile: cùng ý tưởng, khác ở chỗ nó sinh code binding trước
-   thay vì reflection lúc chạy, và có `[Hotfix]` để vá cả hàm C# đã ship.
-4. **Sách**: *Programming in Lua* bản 1 đọc miễn phí ở `lua.org/pil`. Chương metatable là chương duy
-   nhất cần đọc hai lần. `moonsharp.org` có mục "Compatibility" liệt kê những chỗ nó khác Lua chuẩn —
-   đọc trước khi mất nửa buổi vì một hàm không tồn tại.
+1. **`FileSystemWatcher`** (cuối Bước 6) — vòng lặp `Ctrl+S` → bấm phím trong Unity là thứ dùng hàng
+   ngày.
+2. **Đọc code thật**: `../vo-lam-genz-server/GameServer/GameServer/KiemThe/LuaSystem/`. Thứ tự:
+   `KTLuaEnvironment.cs` → `KTLuaScript.cs` → một file `Logic/KTLuaLib_*.cs` → `bin/Debug/LuaScripts/Item/Common/RandomBox.lua`.
+   Bạn vừa dựng lại chính bộ khung đó nên sẽ đọc rất nhanh. Chú ý riêng: `KTLuaScript` nạp **lười**
+   theo `ScriptID` thay vì nạp hết lúc khởi động, và nó có worker channel cho mục 8.5.
+3. **Khi có túi đồ thật**: sửa thân `LuaUseContext.AddItem`/`AddGold` để ghi vào entity + lưu DB, thêm
+   kiểm túi đầy. Script không đổi. Đó là lúc bạn thu hoạch cái đã đầu tư ở mục 5.2.
+4. **Khi có chiến đấu thật**: `ctx:Damage(target, amount)` là hàm thư viện tiếp theo, và `OnUse` của
+   một chiêu thức trông y như `OnUse` của một vật phẩm.
+5. **Sách**: *Programming in Lua* bản 1 miễn phí ở `lua.org/pil` — chương metatable đọc hai lần.
+   `moonsharp.org` mục "Compatibility" liệt kê chỗ nó khác Lua chuẩn.
