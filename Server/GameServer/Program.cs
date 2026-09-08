@@ -49,13 +49,13 @@ try
 {
     while (!cts.IsCancellationRequested)
     {
-        // test LUA
-        switch (Console.ReadKey(intercept: true).Key)
-        {
-            case ConsoleKey.L:
-                LuaPlayground.RunFile("02_syntax.lua");
-                break;
-        }
+        // // test LUA
+        // switch (Console.ReadKey(intercept: true).Key)
+        // {
+        //     case ConsoleKey.L:
+        //         LuaPlayground.RunFile("02_syntax.lua");
+        //         break;
+        // }
 
         TcpClient tcpClient = await listener.AcceptTcpClientAsync(cts.Token);
 
