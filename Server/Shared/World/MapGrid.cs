@@ -39,6 +39,12 @@ namespace MMORPG.Shared.World
         public int MapId { get; }
         public string Name { get; }
 
+        /// <summary>
+        /// Khoá tài nguyên của prefab chứa hình map. Chỉ client dùng; server mang nó theo mà không đọc.
+        /// KHÔNG vào Checksum: dấu vân tay ấy canh LUẬT có khớp nhau không, mà hình thì không phải luật.
+        /// </summary>
+        public string PrefabKey { get; }
+
         /// <summary>Ô góc dưới-trái của vùng đã vẽ. Âm là chuyện bình thường.</summary>
         public int OriginX { get; }
 
@@ -58,8 +64,8 @@ namespace MMORPG.Shared.World
         // Checksum. Chỉ số = (cy - OriginY) * Width + (cx - OriginX).
         private readonly CellType[] _cells;
 
-        public MapGrid(int mapId, string name, int originX, int originY, int width, int height,
-            IReadOnlyList<SpawnPoint> spawns, CellType[] cells)
+        public MapGrid(int mapId, string name, string prefabKey, int originX, int originY,
+            int width, int height, IReadOnlyList<SpawnPoint> spawns, CellType[] cells)
         {
             if (width <= 0 || height <= 0)
                 throw new ArgumentException($"Kích thước map không hợp lệ: {width}×{height}.");
@@ -72,6 +78,7 @@ namespace MMORPG.Shared.World
 
             MapId = mapId;
             Name = name;
+            PrefabKey = prefabKey;
             OriginX = originX;
             OriginY = originY;
             Width = width;

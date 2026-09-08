@@ -20,9 +20,9 @@ namespace MMORPG.Shared.World
         /// </summary>
         public const int FORMAT_VERSION = 1;
 
-        public const char CHAR_EMPTY = '.';
-        public const char CHAR_SOLID = '#';
-        public const char CHAR_ONE_WAY = '=';
+        // Write đệm dấu cách để canh cột; Parse thì tách theo khoảng trắng và bỏ ô rỗng, nên số dấu
+        // cách giữa hai id không mang thông tin gì. Tab lọt vào (do ai đó sửa tay) cũng vẫn đọc được.
+        private static readonly char[] SEPARATORS = { ' ', '\t' };
 
         private static readonly JsonSerializerSettings Settings = new JsonSerializerSettings
         {
@@ -36,7 +36,7 @@ namespace MMORPG.Shared.World
 
         public static MapGrid Parse(string json)
         {
-            MapDefinition? definition = JsonConvert.DeserializeObject<MapDefinition>(json, Settings);
+            MapFileData? definition = JsonConvert.DeserializeObject<MapFileData>(json, Settings);
 
             if (definition == null)
                 throw new FormatException("File map rỗng hoặc không phải JSON hợp lệ.");
@@ -65,21 +65,20 @@ namespace MMORPG.Shared.World
             // Kích thước SUY RA từ mảng, không đọc từ một trường riêng: không có trường thì không có
             // cách nào để file tự mâu thuẫn với chính nó.
             int height = rows.Count;
-            int width = rows[0].Length;
+
+            // Tách hàng đầu ngay để lấy width, rồi dùng lại chính kết quả đó trong vòng lặp — tách hai
+            // lần thì không sai, chỉ là thừa.
+            string[] firstRow = SplitRow(rows[0], 0);
+            int width = firstRow.Length;
 
             var cells = new CellType[width * height];
 
             for (int row = 0; row < height; row++)
             {
-                string line = rows[row];
+                string[] tokens = row == 0 ? firstRow : SplitRow(rows[row], row);
 
-                // Chuỗi rỗng bắt luôn cả trường hợp JSON ghi null trong mảng — không có hàng nào hợp
-                // lệ mà rỗng, vì width đã lấy từ hàng đầu và width = 0 thì MapGrid từ chối.
-                if (string.IsNullOrEmpty(line))
-                    throw new FormatException($"Hàng {row} rỗng.");
-
-                if (line.Length != width)
-                    throw new FormatException($"Hàng {row} dài {line.Length} ký tự, hàng đầu dài {width}.");
+                if (tokens.Length != width)
+                    throw new FormatException($"Hàng {row} có {tokens.Length} ô, hàng đầu có {width}.");
 
                 // Hàng ĐẦU trong file là mép TRÊN map — để đọc file như nhìn bản vẽ. Nên khi nạp vào
                 // lưới (gốc ở dưới) phải lật trục Y. Quyết định một lần, ghi ngay tại đây, vì viết sai
@@ -87,17 +86,22 @@ namespace MMORPG.Shared.World
                 int cy = height - 1 - row;
 
                 for (int cx = 0; cx < width; cx++)
-                    cells[cy * width + cx] = ToCell(line[cx], row, cx);
+                    cells[cy * width + cx] = ToCell(tokens[cx], row, cx);
             }
 
-            return new MapGrid(definition.Id, definition.Name, origin.X, origin.Y,
-                width, height, spawns, cells);
+            return new MapGrid(definition.Id, definition.Name, definition.PrefabKey,
+                origin.X, origin.Y, width, height, spawns, cells);
         }
 
         public static string Write(MapGrid map)
         {
             var rows = new List<string>(map.Height);
-            var line = new StringBuilder(map.Width);
+
+            // Bề rộng cột = số chữ số của id LỚN NHẤT đang có mặt trong map. Canh phải theo nó thì mọi
+            // cột thẳng hàng và mắt vẫn nhìn ra hình. Parse bỏ qua hoàn toàn chuyện này — đây thuần
+            // tuý là việc làm đẹp cho người đọc.
+            int columnWidth = MaxIdWidth(map);
+            var line = new StringBuilder(map.Width * (columnWidth + 1));
 
             for (int row = 0; row < map.Height; row++)
             {
@@ -107,18 +111,24 @@ namespace MMORPG.Shared.World
                 int cy = map.OriginY + map.Height - 1 - row;
 
                 for (int cx = map.OriginX; cx < map.OriginX + map.Width; cx++)
-                    line.Append(ToChar(map.At(cx, cy)));
+                {
+                    if (cx > map.OriginX)
+                        line.Append(' ');
+
+                    line.Append(((int)map.At(cx, cy)).ToString().PadLeft(columnWidth));
+                }
 
                 rows.Add(line.ToString());
             }
 
-            var definition = new MapDefinition
+            var definition = new MapFileData
             {
                 Comment = "Sinh bởi Tools/MMORPG/Export Map — KHÔNG sửa tay. " +
                           "Sửa va chạm = vẽ lại lớp Tilemap \"Collision\" trong Unity rồi export lại.",
                 Version = FORMAT_VERSION,
                 Id = map.MapId,
                 Name = map.Name,
+                PrefabKey = map.PrefabKey,
                 Origin = new CellPoint { X = map.OriginX, Y = map.OriginY },
                 Spawns = new List<SpawnPoint>(map.Spawns),
                 Cells = rows,
@@ -127,29 +137,56 @@ namespace MMORPG.Shared.World
             return JsonConvert.SerializeObject(definition, Settings);
         }
 
-        private static CellType ToCell(char symbol, int row, int column)
+        /// <summary>
+        /// Tách một hàng thành các id. Chuỗi rỗng bắt luôn cả trường hợp JSON ghi null trong mảng —
+        /// không có hàng hợp lệ nào rỗng, vì width lấy từ hàng đầu và width = 0 thì MapGrid từ chối.
+        /// </summary>
+        private static string[] SplitRow(string line, int row)
         {
-            switch (symbol)
-            {
-                case CHAR_EMPTY: return CellType.Empty;
-                case CHAR_SOLID: return CellType.Solid;
-                case CHAR_ONE_WAY: return CellType.OneWay;
+            if (string.IsNullOrWhiteSpace(line))
+                throw new FormatException($"Hàng {row} rỗng.");
 
-                // Không có nhánh "coi như rỗng": một ký tự lạ nghĩa là file đã hỏng ở đâu đó, và đoán
-                // bừa chỉ dời thời điểm phát hiện tới lúc có người đi xuyên tường.
-                default:
-                    throw new FormatException($"Ký tự lạ '{symbol}' ở hàng {row}, cột {column}.");
-            }
+            return line.Split(SEPARATORS, StringSplitOptions.RemoveEmptyEntries);
         }
 
-        private static char ToChar(CellType cell)
+        private static CellType ToCell(string token, int row, int column)
         {
-            switch (cell)
+            if (!int.TryParse(token, out int id))
+                throw new FormatException($"Ô ở hàng {row}, cột {column} không phải số: \"{token}\".");
+
+            // Hỏi thẳng enum thay vì viết một switch liệt kê lại ba loại ô: id trong file CHÍNH LÀ giá
+            // trị enum, nên enum là chỗ duy nhất giữ danh sách — thêm loại ô mới không phải nhớ sửa
+            // thêm chỗ nào ở đây. Enum.IsDefined dùng reflection và có boxing, nhưng nó chạy đúng một
+            // lần cho mỗi ô lúc nạp map, không nằm trong vòng chạy 20 lần mỗi giây.
+            //
+            // Phép kẹp byte đứng trước là bắt buộc: CellType là enum byte, ép một số ngoài 0..255 sang
+            // byte thì C# cắt cụt trong im lặng (256 thành 0 = Empty) — một lỗ trên sàn không ai thấy.
+            if (id < byte.MinValue || id > byte.MaxValue || !Enum.IsDefined(typeof(CellType), (byte)id))
+                throw new FormatException($"Id ô lạ {id} ở hàng {row}, cột {column}. " +
+                                          "Nhiều khả năng file map do một bản tool mới hơn code này sinh ra.");
+
+            // Không có nhánh "coi như rỗng": một id lạ nghĩa là file hỏng hoặc code cũ, và đoán bừa chỉ
+            // dời thời điểm phát hiện tới lúc có người đi xuyên tường.
+            return (CellType)id;
+        }
+
+        /// <summary>Số chữ số của id lớn nhất trong lưới — bề rộng cột để canh phải lúc ghi.</summary>
+        private static int MaxIdWidth(MapGrid map)
+        {
+            int max = 0;
+
+            for (int cy = map.OriginY; cy < map.OriginY + map.Height; cy++)
             {
-                case CellType.Solid: return CHAR_SOLID;
-                case CellType.OneWay: return CHAR_ONE_WAY;
-                default: return CHAR_EMPTY;
+                for (int cx = map.OriginX; cx < map.OriginX + map.Width; cx++)
+                {
+                    int id = (int)map.At(cx, cy);
+
+                    if (id > max)
+                        max = id;
+                }
             }
+
+            return max.ToString().Length;
         }
     }
 }

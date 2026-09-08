@@ -25,7 +25,8 @@ namespace MMORPG.Shared.Tests
                 new SpawnPoint { Id = MapGrid.DEFAULT_SPAWN_ID, X = 0.5f, Y = 1f },
             };
 
-            return new MapGrid(7, "Test Map", originX: -3, originY: -2, width: 4, height: 3, spawns, cells);
+            return new MapGrid(7, "Test Map", "Maps/TestMap", originX: -3, originY: -2,
+                width: 4, height: 3, spawns, cells);
         }
 
         [Fact]
@@ -39,6 +40,7 @@ namespace MMORPG.Shared.Tests
             Assert.Equal(original.OriginY, parsed.OriginY);
             Assert.Equal(original.Width, parsed.Width);
             Assert.Equal(original.Height, parsed.Height);
+            Assert.Equal(original.PrefabKey, parsed.PrefabKey);
             Assert.Equal(original.DefaultSpawn.X, parsed.DefaultSpawn.X);
 
             for (int cy = original.OriginY; cy < original.OriginY + original.Height; cy++)
@@ -60,9 +62,22 @@ namespace MMORPG.Shared.Tests
         }
 
         [Fact]
-        public void Parse_rejects_row_with_wrong_length()
+        public void Parse_rejects_row_with_wrong_cell_count()
         {
-            string json = MapFile.Write(BuildSample()).Replace("\"####\"", "\"###\"");
+            // Hàng đáy của lưới mẫu là bốn ô Solid. Cắt đi một ô để hàng lệch số ô so với hàng đầu.
+            string json = MapFile.Write(BuildSample()).Replace("\"1 1 1 1\"", "\"1 1 1\"");
+
+            Assert.Throws<FormatException>(() => MapFile.Parse(json));
+        }
+
+        /// <summary>
+        /// Số nào cũng "đúng hình thức", nên đây là chỗ duy nhất chặn một id không có trong CellType.
+        /// Đúng cái giá phải trả khi đổi từ ký tự sang id — và bài test này là thứ trả giá đó.
+        /// </summary>
+        [Fact]
+        public void Parse_rejects_unknown_cell_id()
+        {
+            string json = MapFile.Write(BuildSample()).Replace("\"0 2 2 0\"", "\"0 9 2 0\"");
 
             Assert.Throws<FormatException>(() => MapFile.Parse(json));
         }

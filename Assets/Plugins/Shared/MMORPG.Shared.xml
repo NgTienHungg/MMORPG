@@ -837,35 +837,6 @@
             thời lượng. Viết 16 nhánh cho 16 ô là cách chắc chắn để sai một ô mà không ai biết.
             </summary>
         </member>
-        <member name="T:MMORPG.Shared.World.MapDefinition">
-             <summary>
-             Bản đối chiếu 1-1 với file map JSON. KHÔNG dùng để chạy game — chỉ để đọc/ghi file; kiểu chạy
-             trong game là <see cref="T:MMORPG.Shared.World.MapGrid"/>.
-            
-             Tách hai kiểu vì hai vai khác nhau: trường nào có trong file là chuyện của ĐỊNH DẠNG, còn tra
-             một ô nhanh cỡ nào là chuyện của MÔ PHỎNG. Gộp lại thì mỗi lần đổi định dạng là đụng vào thứ
-             chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (DB) ≠ PlayerEntity (world) ở Phase 5.
-            
-             Mọi trường khai báo tên tường minh bằng [JsonProperty]: đổi tên property C# là chuyện gõ code,
-             đổi tên trường trong file là ĐỔI ĐỊNH DẠNG — không được để một thao tác Rename trong IDE làm cả
-             hai cùng lúc.
-             </summary>
-        </member>
-        <member name="P:MMORPG.Shared.World.MapDefinition.Comment">
-            <summary>Dành cho người mở file ra đọc. JSON chuẩn không có cú pháp chú thích nên nó là một trường thật.</summary>
-        </member>
-        <member name="P:MMORPG.Shared.World.MapDefinition.Cells">
-            <summary>Lưới ô, mỗi phần tử là MỘT HÀNG. Hàng đầu là mép TRÊN map — đọc file như nhìn bản vẽ.</summary>
-        </member>
-        <member name="T:MMORPG.Shared.World.CellPoint">
-            <summary>Một điểm theo toạ độ Ô (số nguyên). Dùng cho origin.</summary>
-        </member>
-        <member name="T:MMORPG.Shared.World.SpawnPoint">
-            <summary>
-            Một chỗ người chơi có thể xuất hiện, toạ độ WORLD. Có <see cref="P:MMORPG.Shared.World.SpawnPoint.Id"/> vì map cần trỏ tới nhau
-            được bằng tên: một cổng ở map khác phải nói rõ nó dẫn tới điểm nào của map này.
-            </summary>
-        </member>
         <member name="T:MMORPG.Shared.World.MapFile">
             <summary>
             Đọc và ghi file map JSON. Hai chiều nằm cùng một chỗ có chủ đích: tool export gọi Write, hai
@@ -879,6 +850,52 @@
             này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
             đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
             file map đọc sai một nửa còn tệ hơn một file map không đọc được.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapFile.SplitRow(System.String,System.Int32)">
+            <summary>
+            Tách một hàng thành các id. Chuỗi rỗng bắt luôn cả trường hợp JSON ghi null trong mảng —
+            không có hàng hợp lệ nào rỗng, vì width lấy từ hàng đầu và width = 0 thì MapGrid từ chối.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapFile.MaxIdWidth(MMORPG.Shared.World.MapGrid)">
+            <summary>Số chữ số của id lớn nhất trong lưới — bề rộng cột để canh phải lúc ghi.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.MapFileData">
+             <summary>
+             Bản đối chiếu 1-1 với file map JSON. KHÔNG dùng để chạy game — chỉ để đọc/ghi file; kiểu chạy
+             trong game là <see cref="T:MMORPG.Shared.World.MapGrid"/>.
+            
+             Tách hai kiểu vì hai vai khác nhau: trường nào có trong file là chuyện của ĐỊNH DẠNG, còn tra
+             một ô nhanh cỡ nào là chuyện của MÔ PHỎNG. Gộp lại thì mỗi lần đổi định dạng là đụng vào thứ
+             chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (DB) ≠ PlayerEntity (world) ở Phase 5.
+            
+             Mọi trường khai báo tên tường minh bằng [JsonProperty]: đổi tên property C# là chuyện gõ code,
+             đổi tên trường trong file là ĐỔI ĐỊNH DẠNG — không được để một thao tác Rename trong IDE làm cả
+             hai cùng lúc.
+             </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapFileData.Comment">
+            <summary>Dành cho người mở file ra đọc. JSON chuẩn không có cú pháp chú thích nên nó là một trường thật.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapFileData.PrefabKey">
+            <summary>
+            Khoá tài nguyên của prefab chứa HÌNH của map — thứ Resources.Load nhận. Là khoá chứ không
+            phải đường dẫn hệ thống tệp: server đọc cùng file này và nó không biết gì về bố cục thư mục
+            của project Unity. Thiếu trường thì về chuỗi rỗng — map không có hình riêng, và server thì
+            không đọc trường này bao giờ.
+            </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapFileData.Cells">
+            <summary>Lưới ô, mỗi phần tử là MỘT HÀNG. Hàng đầu là mép TRÊN map — đọc file như nhìn bản vẽ.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.CellPoint">
+            <summary>Một điểm theo toạ độ Ô (số nguyên). Dùng cho origin.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.SpawnPoint">
+            <summary>
+            Một chỗ người chơi có thể xuất hiện, toạ độ WORLD. Có <see cref="P:MMORPG.Shared.World.SpawnPoint.Id"/> vì map cần trỏ tới nhau
+            được bằng tên: một cổng ở map khác phải nói rõ nó dẫn tới điểm nào của map này.
             </summary>
         </member>
         <member name="T:MMORPG.Shared.World.CellType">
@@ -907,6 +924,12 @@
         </member>
         <member name="F:MMORPG.Shared.World.MapGrid.DEFAULT_SPAWN_ID">
             <summary>Id của điểm spawn mặc định — chỗ người chơi xuất hiện khi không có nguồn nào khác chỉ định.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.MapGrid.PrefabKey">
+            <summary>
+            Khoá tài nguyên của prefab chứa hình map. Chỉ client dùng; server mang nó theo mà không đọc.
+            KHÔNG vào Checksum: dấu vân tay ấy canh LUẬT có khớp nhau không, mà hình thì không phải luật.
+            </summary>
         </member>
         <member name="P:MMORPG.Shared.World.MapGrid.OriginX">
             <summary>Ô góc dưới-trái của vùng đã vẽ. Âm là chuyện bình thường.</summary>

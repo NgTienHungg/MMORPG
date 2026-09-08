@@ -15,7 +15,7 @@ namespace MMORPG.Shared.World
     /// đổi tên trường trong file là ĐỔI ĐỊNH DẠNG — không được để một thao tác Rename trong IDE làm cả
     /// hai cùng lúc.
     /// </summary>
-    public sealed class MapDefinition
+    public sealed class MapFileData
     {
         /// <summary>Dành cho người mở file ra đọc. JSON chuẩn không có cú pháp chú thích nên nó là một trường thật.</summary>
         [JsonProperty("_comment")]
@@ -29,6 +29,15 @@ namespace MMORPG.Shared.World
 
         [JsonProperty("name")]
         public string Name { get; set; } = string.Empty;
+
+        /// <summary>
+        /// Khoá tài nguyên của prefab chứa HÌNH của map — thứ Resources.Load nhận. Là khoá chứ không
+        /// phải đường dẫn hệ thống tệp: server đọc cùng file này và nó không biết gì về bố cục thư mục
+        /// của project Unity. Thiếu trường thì về chuỗi rỗng — map không có hình riêng, và server thì
+        /// không đọc trường này bao giờ.
+        /// </summary>
+        [JsonProperty("prefab")]
+        public string PrefabKey { get; set; } = string.Empty;
 
         // Cho phép null có chủ đích: file thiếu trường thì Newtonsoft để null, và MapFile.Parse phải
         // nói ra bằng một thông điệp đọc được — thay vì để NullReferenceException nổ ở đâu đó xa hơn.

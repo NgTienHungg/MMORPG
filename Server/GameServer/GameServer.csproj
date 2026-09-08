@@ -18,4 +18,21 @@
       <PackageReference Include="MoonSharp" Version="2.0.0" />
     </ItemGroup>
 
+    <!--
+    File map đi NGƯỢC chiều với MMORPG.Shared.dll: nó sinh ra trong Unity (tool export) và chảy sang
+    server. Để build lo việc copy, đúng như chiều kia — copy tay thì sớm muộn có một lần quên, và
+    triệu chứng của lần quên đó là server nói có tường ở chỗ client thấy trống.
+    -->
+    <ItemGroup>
+        <Content Include="..\..\Assets\Game\Resources\Maps\*.json"
+                 Link="Data\Maps\%(Filename)%(Extension)"
+                 CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
+    <Target Name="CheckMapFolder" BeforeTargets="Build">
+        <!-- Glob không khớp file nào thì MSBuild im lặng. Biến sự im lặng đó thành lỗi build. -->
+        <Error Condition="!Exists('$(MSBuildProjectDirectory)/../../Assets/Game/Resources/Maps')"
+               Text="Không thấy Assets/Game/Resources/Maps. Chạy Tools/MMORPG/Export Map trong Unity trước đã."/>
+    </Target>
+
 </Project>

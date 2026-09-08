@@ -75,6 +75,16 @@ Biến local cũng theo tinh thần đó — và tên phải nói đúng **nội
 | `*Repository` | Truy cập DB | `AccountRepository` |
 | `*Request` / `*Response` | DTO đi qua mạng | `LoginRequest`, `LoginResponse` |
 | `*Entity` | Object sống trong world server | `PlayerEntity`, `MonsterEntity` |
+| `*File` / `*FileData` | Đọc-ghi một file dữ liệu / hình dạng của chính file đó | `MapFile` + `MapFileData` |
+
+**Về cặp `*File` / `*FileData`** (chốt ở Phase 10): `*FileData` là bản đối chiếu 1-1 với JSON — property
+có setter, cho phép null, chỉ `*File` được đụng vào. Thứ **chạy trong game** thì là một kiểu khác, bất
+biến, tên theo vai của nó (`MapGrid`). Cùng mẫu với `CharacterRow` (hàng DB) ≠ `PlayerEntity` (world):
+hình dạng của **chỗ dữ liệu nằm** không bao giờ là hình dạng của **thứ chạy**.
+
+Không đặt `*Definition` (dễ hiểu nhầm là nơi khai báo hằng) và không đặt `*Config` cho file **do máy
+sinh** — `*Config` để dành cho bảng **người gõ tay** ở Phase 12, thứ có luật đọc khác hẳn (trường lạ là
+lỗi, chứ không phải bỏ qua).
 
 ## 3. File & thư mục
 
