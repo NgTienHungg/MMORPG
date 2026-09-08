@@ -24,15 +24,17 @@ namespace MMORPG.Client.Auth
         private AuthApi _authApi;
         private AuthNetHandler _authNetHandler;
         private NetworkSettings _networkSettings;
+        private SavedLoginStore _savedLoginStore;
         private CancellationTokenSource _responseTimeout;
 
         [Inject]
-        public void Construct(NetService netService, AuthApi authApi, AuthNetHandler authNetHandler, NetworkSettings networkSettings)
+        public void Construct(NetService netService, AuthApi authApi, AuthNetHandler authNetHandler, NetworkSettings networkSettings, SavedLoginStore savedLoginStore)
         {
             _netService = netService;
             _authApi = authApi;
             _authNetHandler = authNetHandler;
             _networkSettings = networkSettings;
+            _savedLoginStore = savedLoginStore;
         }
 
         private void Awake()
@@ -43,6 +45,22 @@ namespace MMORPG.Client.Auth
             _authNetHandler.OnLoginResult += OnAuthResult;
             _authNetHandler.OnRegisterResult += OnAuthResult;
             _authNetHandler.OnKicked += OnKicked;
+        }
+
+        /// <summary>
+        /// Điền lại tài khoản đã lưu. Để ở Start chứ không ở Awake vì tới đây thì Awake của
+        /// <see cref="LoginUi"/> chắc chắn đã chạy xong — ô mật khẩu đã ở chế độ che ký tự.
+        /// </summary>
+        private void Start()
+        {
+            if (!_savedLoginStore.HasSavedLogin)
+                return;
+
+            this.Log($"Điền sẵn tài khoản đã ghi nhớ: {_savedLoginStore.Username.Color("cyan")}");
+
+            // Chỉ điền hộ, không tự bấm đăng nhập: người chơi vẫn phải chủ động bấm để còn kịp
+            // đổi sang tài khoản khác.
+            _loginUi.Prefill(_savedLoginStore.Username, _savedLoginStore.Password, remember: true);
         }
 
         private void OnDestroy()
@@ -106,6 +124,13 @@ namespace MMORPG.Client.Auth
                 _loginUi.ShowMessage(AuthErrorText.Of(response.Error), isError: true);
                 return;
             }
+
+            // Chỉ ghi nhớ sau khi server xác nhận, và ghi tên server trả về (đã chuẩn hoá chữ thường)
+            // chứ không phải chuỗi người chơi gõ — lần sau gửi đi đúng thứ server đang lưu.
+            if (_loginUi.RememberMe)
+                _savedLoginStore.Save(response.Username, _loginUi.Password);
+            else
+                _savedLoginStore.Clear();
 
             this.Log($"Đăng nhập thành công: {response.Username.Color("cyan")} — token {response.SessionToken.Length.ToString().Bold()} ký tự");
             _loginUi.ShowMessage($"Xin chào, {response.Username}!", isError: false);

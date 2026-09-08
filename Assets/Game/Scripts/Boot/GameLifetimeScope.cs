@@ -1,4 +1,5 @@
 using HungNT;
+using HungNT.DataSave;
 using MMORPG.Client.Auth;
 using MMORPG.Client.Network;
 using MMORPG.Client.Network.Handlers;
@@ -23,6 +24,10 @@ namespace MMORPG.Client.Boot
             // com.hungnt.core
             builder.InstallCore();
 
+            // com.hungnt.datasave — file setting của riêng máy người chơi (tài khoản ghi nhớ...).
+            // Dựng sau InstallCore vì nó cần IAppLifecycleService để ghi nốt lúc game pause hoặc thoát.
+            builder.InstallDataSave();
+
             // Địa chỉ server chỉ khai báo ở ĐÂY — ai cần thì inject NetworkSettings.
             builder.RegisterInstance(new NetworkSettings(_serverHost, _serverPort));
             builder.Register<ITransport, TcpTransport>(Lifetime.Singleton);
@@ -38,6 +43,7 @@ namespace MMORPG.Client.Boot
 
             // Authenticate, Login, Register
             builder.Register<AuthApi>(Lifetime.Singleton);
+            builder.Register<SavedLoginStore>(Lifetime.Singleton);
             builder.Register<AuthNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
             builder.RegisterComponentInHierarchy<LoginPresenter>();
 

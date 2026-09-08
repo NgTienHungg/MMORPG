@@ -11,6 +11,7 @@ namespace MMORPG.Client.Auth
     {
         [SerializeField] private TMP_InputField _usernameInput;
         [SerializeField] private TMP_InputField _passwordInput;
+        [SerializeField] private Toggle _rememberToggle;
         [SerializeField] private Button _loginButton;
         [SerializeField] private Button _registerButton;
         [SerializeField] private TextMeshProUGUI _messageText;
@@ -18,6 +19,9 @@ namespace MMORPG.Client.Auth
 
         public string Username => _usernameInput.text;
         public string Password => _passwordInput.text;
+
+        /// <summary>Người chơi có muốn lần sau khỏi gõ lại tài khoản không.</summary>
+        public bool RememberMe => _rememberToggle.isOn;
 
         public Button LoginButton => _loginButton;
         public Button RegisterButton => _registerButton;
@@ -30,6 +34,14 @@ namespace MMORPG.Client.Auth
             _passwordInput.ForceLabelUpdate();
         }
 
+        /// <summary>Điền sẵn ô nhập bằng tài khoản đã lưu. Chỉ điền, không tự bấm đăng nhập hộ.</summary>
+        public void Prefill(string username, string password, bool remember)
+        {
+            _usernameInput.text = username;
+            _passwordInput.text = password;
+            _rememberToggle.isOn = remember;
+        }
+
         public void ShowMessage(string text, bool isError)
         {
             _messageText.text = text;
@@ -40,6 +52,7 @@ namespace MMORPG.Client.Auth
         {
             _loginButton.interactable = value;
             _registerButton.interactable = value;
+            _rememberToggle.interactable = value;
         }
 
         public void SetVisible(bool value)
