@@ -14,11 +14,13 @@ namespace MMORPG.GameServer.World
     {
         private readonly DbClient _dbClient;
         private readonly WorldService _worldService;
+        private readonly MapRegistry _maps;
 
-        public CharacterService(DbClient dbClient, WorldService worldService)
+        public CharacterService(DbClient dbClient, WorldService worldService, MapRegistry maps)
         {
             _dbClient = dbClient;
             _worldService = worldService;
+            _maps = maps;
         }
 
         public async Task<EnterWorldResponse> EnterWorldAsync(ClientSession session)
@@ -41,9 +43,11 @@ namespace MMORPG.GameServer.World
                     AccountId = session.AccountId,
                     Name = session.Username,
                     ClassId = WorldService.DEFAULT_CLASS_ID,
-                    MapId = WorldService.DEFAULT_MAP_ID,
-                    X = WorldService.SPAWN_X,
-                    Y = WorldService.SPAWN_Y,
+                    // Ba dòng này CHỈ dùng khi tạo nhân vật mới. Người chơi cũ thì DB trả về map và
+                    // toạ độ của chính họ, và WorldService.Spawn tra map theo đúng row đó.
+                    MapId = MapRegistry.STARTING_MAP_ID,
+                    X = _maps.Starting.DefaultSpawn.X,
+                    Y = _maps.Starting.DefaultSpawn.Y,
                 }
             );
 

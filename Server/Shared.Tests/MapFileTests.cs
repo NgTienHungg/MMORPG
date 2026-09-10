@@ -53,10 +53,16 @@ namespace MMORPG.Shared.Tests
             Assert.Equal(original.Checksum(), parsed.Checksum());
         }
 
+        /// <summary>
+        /// Số version dựng từ chính hằng số chứ không gõ tay: tăng FORMAT_VERSION thì bài test đi
+        /// theo, thay vì âm thầm thành một phép Replace không khớp gì cả.
+        /// </summary>
+        private static string VersionField => $"\"{nameof(MapFileData.Version)}\": {MapFile.FORMAT_VERSION}";
+
         [Fact]
         public void Parse_rejects_unknown_format_version()
         {
-            string json = MapFile.Write(BuildSample()).Replace("\"version\": 1", "\"version\": 99");
+            string json = MapFile.Write(BuildSample()).Replace(VersionField, "\"Version\": 99");
 
             Assert.Throws<FormatException>(() => MapFile.Parse(json));
         }
@@ -91,7 +97,11 @@ namespace MMORPG.Shared.Tests
         public void Parse_ignores_fields_it_does_not_know()
         {
             string json = MapFile.Write(BuildSample())
-                .Replace("\"version\": 1", "\"portals\": [ { \"x\": 3, \"toMapId\": 2 } ],\n  \"version\": 1");
+                .Replace(VersionField, $"\"portals\": [ {{ \"x\": 3, \"toMapId\": 2 }} ],\n  {VersionField}");
+
+            // Chốt rằng phép Replace ĐÃ chèn được: không có dòng này thì một lần đổi tên trường biến
+            // bài test thành "parse một file y hệt bản gốc" và nó xanh mà chẳng kiểm gì.
+            Assert.Contains("portals", json);
 
             MapGrid parsed = MapFile.Parse(json);
 

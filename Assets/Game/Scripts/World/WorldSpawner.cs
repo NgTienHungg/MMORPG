@@ -18,20 +18,23 @@ namespace MMORPG.Client.World
         [SerializeField] private GameObject _remotePrefab;
         [SerializeField] private Transform _entityRoot;
         [SerializeField] private CameraFollow _cameraFollow;
+        [SerializeField] private MapView _mapView;
 
         private WorldApi _worldApi;
         private WorldNetHandler _worldNetHandler;
         private LocalPlayer _localPlayer;
+        private MapService _mapService;
 
         private GameObject _localPlayerObject;
         private readonly Dictionary<int, RemotePlayerView> _remotes = new();
 
         [Inject]
-        public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler, LocalPlayer localPlayer)
+        public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler, LocalPlayer localPlayer, MapService mapService)
         {
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
             _localPlayer = localPlayer;
+            _mapService = mapService;
         }
 
         private void Start()
@@ -59,9 +62,16 @@ namespace MMORPG.Client.World
             _localPlayerObject = Instantiate(_playerPrefab, new Vector3(response.X, response.Y), Quaternion.identity, _entityRoot);
             _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
 
+            // // Nạp map TRƯỚC khi Init motor: motor cần lưới va chạm ngay từ tick dự đoán đầu tiên.
+            // MapGrid map = _mapService.Load(response.MapId);
+
+            // Nạp LUẬT trước, dựng HÌNH sau, rồi mới Init motor.
+            MapGrid map = _mapService.Load(response.MapId);
+            _mapView.Show(map);
+
             // Prefab sinh lúc runtime — VContainer không tự inject. Đưa phụ thuộc vào tay.
             var motor = _localPlayerObject.GetComponent<PlayerMotor>();
-            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y), response.ClassId);
+            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y), response.ClassId, map);
 
             _cameraFollow.SetTarget(_localPlayerObject.transform);
 
@@ -79,6 +89,7 @@ namespace MMORPG.Client.World
 
             // xoá hết tất cả các player khác trong session này
             DespawnAllRemotes();
+            _mapView.Clear();
         }
 
         private void OnEntitySpawn(EntitySpawnNotice notice)

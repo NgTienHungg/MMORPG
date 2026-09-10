@@ -28,12 +28,6 @@ namespace MMORPG.Shared.World
         /// </summary>
         public const float MAX_FALL_SPEED = 20f;
 
-        /// <summary>Cao độ mặt sàn tạm — cả thế giới là một mặt phẳng. Map có hình dạng thật là Phase 10.</summary>
-        public const float GROUND_Y = 0f;
-
-        /// <summary>Nửa cạnh vùng đi lại theo trục ngang. Trục dọc không còn bị kẹp: đã có sàn và trọng lực.</summary>
-        public const float WORLD_HALF_EXTENT = 20f;
-
         /// <summary>
         /// Số tick còn được nhảy sau khi đã rời mép sàn (coyote time). 3 tick = 150ms: đủ để tha thứ
         /// cho phản xạ người, chưa đủ để thành "nhảy giữa không trung".
@@ -49,7 +43,17 @@ namespace MMORPG.Shared.World
         /// </summary>
         public const int EXPIRED = 999;
 
-  /// <summary>
+        /// <summary>Số tick bỏ qua va chạm với bệ một chiều sau khi bấm ngồi + nhảy.</summary>
+        public const int DROP_THROUGH_TICKS = 6;
+
+        /// <summary>
+        /// Lùi vào trong một chút khi quét mép thân. Cần vì đứng trên sàn thì chân nằm ĐÚNG đường
+        /// biên hai ô, mà Floor đưa đường biên về ô PHÍA TRÊN — tức ô trống. Quét đúng ở cao độ
+        /// chân thì tick nào cũng kết luận "không có gì dưới chân" và Grounded nhấp nháy 20 lần/giây.
+        /// </summary>
+        private const float EDGE = 0.01f;
+
+        /// <summary>
         /// Quy giây ra tick. Chạy MỘT LẦN lúc dựng bảng, không nằm trong Step — nhờ vậy vòng mô phỏng
         /// chỉ còn làm việc với số nguyên, và hai đầu dây không có cửa nào để lệch nhau ở chữ số cuối.
         ///
@@ -78,29 +82,39 @@ namespace MMORPG.Shared.World
         /// THỨ TỰ các phép dưới đây là một phần của contract. Đổi thứ tự là đổi kết quả, và vì
         /// hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
         /// </summary>
-        public static MoveState Step(MoveState state, MoveIntent intent, float dt, CharacterProfile profile)
+        public static MoveState Step(MoveState state, MoveIntent intent, float dt,
+            CharacterProfile profile, MapGrid map)
         {
-            // 0. Nhịp của tầng action. PHẢI chạy trước phép 5: chạy sau thì đòn vừa bắt đầu ở tick
-            //    này bị trừ mất một tick ngay khi chưa kịp diễn.
+            // 0. Nhịp của tầng action, thêm bộ đếm rơi xuyên.
             if (state.ActionTicksLeft > 0)
                 state.ActionTicksLeft--;
 
             if (state.TicksSinceAttack < EXPIRED)
                 state.TicksSinceAttack++;
 
-            // Hết thời lượng thì về None — TRỪ Die. Chết rồi thì hết ticks là hết hoạt ảnh, không
-            // phải hết trạng thái; bỏ nhánh loại trừ này là xác chết đứng dậy đi tiếp sau một giây.
+            if (state.DropThroughTicks > 0)
+                state.DropThroughTicks--;
+
             if (state.ActionTicksLeft <= 0 && state.Action != ActionState.Die)
                 state.Action = ActionState.None;
 
-            // Tra bảng SAU phép 0, vì phép 0 vừa có thể đưa Action về None. Tra trước thì cả tick này
-            // thân thể còn bị khoá theo một hành động đã hết hạn — trễ một nhịp, đủ để thấy "đơ".
             bool locked = profile.GetAction(state.Action).LocksMovement;
 
-            // 1. Tư thế. Ngồi chỉ có nghĩa khi chân chạm đất và thân thể còn nghe lời.
-            state.Crouching = intent.Crouch && state.Grounded && !locked;
+            // 1. Tư thế. Muốn ngồi thì ngồi được ngay; muốn ĐỨNG DẬY thì còn phải hỏi thế giới —
+            //    trần thấp thì không đứng lên được, và giữ nguyên tư thế ngồi là câu trả lời đúng.
+            //    Bỏ phép hỏi này thì thân nở ra bên trong trần và tick sau bị đẩy đi đâu không biết.
+            bool wantCrouch = intent.Crouch && state.Grounded && !locked;
 
-            // 2. Vận tốc ngang. Ăn đòn / gục thì mất quyền điều khiển; ngồi thì đứng yên tại chỗ.
+            if (wantCrouch)
+            {
+                state.Crouching = true;
+            }
+            else if (state.Crouching)
+            {
+                state.Crouching = !CanStandUp(map, profile, state);
+            }
+
+            // 2. Vận tốc ngang + hướng mặt (như Phase 9).
             if (locked || state.Crouching)
             {
                 state.VelX = 0f;
@@ -121,7 +135,7 @@ namespace MMORPG.Shared.World
             if (state.VelY < -MAX_FALL_SPEED)
                 state.VelY = -MAX_FALL_SPEED;
 
-            // 4a. Hai bộ đếm tha thứ.
+            // 4a. Hai bộ đếm tha thứ (như Phase 9).
             if (state.TicksSinceGrounded < EXPIRED)
                 state.TicksSinceGrounded++;
 
@@ -130,20 +144,28 @@ namespace MMORPG.Shared.World
             else if (state.TicksSinceJumpRequest < EXPIRED)
                 state.TicksSinceJumpRequest++;
 
-            // 4b/4c. Nhảy — thêm điều kiện thân thể còn nghe lời.
-            if (!locked &&
-                state.TicksSinceJumpRequest <= JUMP_BUFFER_TICKS &&
-                state.TicksSinceGrounded <= COYOTE_TICKS)
+            // 4b. Rơi xuyên bệ — xử lý TRƯỚC cú nhảy và tiêu thụ luôn yêu cầu nhảy, nếu không thì
+            //     người chơi vừa tụt xuống vừa bật lên trong cùng một tick. Đặt cả TicksSinceGrounded
+            //     về EXPIRED để coyote time không cho một cú nhảy giữa không trung ngay tick sau.
+            if (!locked && intent.Crouch && intent.Jump && state.Grounded &&
+                StandingOnOneWay(map, profile, state))
+            {
+                state.DropThroughTicks = DROP_THROUGH_TICKS;
+                state.TicksSinceJumpRequest = EXPIRED;
+                state.TicksSinceGrounded = EXPIRED;
+                state.Grounded = false;
+            }
+            // 4c. Nhảy (như Phase 9).
+            else if (!locked &&
+                     state.TicksSinceJumpRequest <= JUMP_BUFFER_TICKS &&
+                     state.TicksSinceGrounded <= COYOTE_TICKS)
             {
                 state.VelY = profile.JumpSpeed;
                 state.TicksSinceJumpRequest = EXPIRED;
                 state.TicksSinceGrounded = EXPIRED;
             }
 
-            // 5. Xin hành động. HAI điều kiện chặn khác nhau, cố tình không gộp:
-            //    CanEnter  = "trạng thái hiện tại có cho phép không" (đang choáng thì không)
-            //    cooldown  = "nhịp đánh đã tới chưa"
-            //    Gộp vào một số là mất khả năng diễn đạt "hết cooldown rồi nhưng đang choáng nên vẫn cấm".
+            // 5. Xin hành động (như Phase 9).
             ActionDefinition attack = profile.GetAction(ActionState.Attack);
 
             if (intent.Action == ActionRequest.Attack &&
@@ -155,28 +177,211 @@ namespace MMORPG.Shared.World
                 state.TicksSinceAttack = 0;
             }
 
-            // 6. Tích phân.
-            state.X += state.VelX * dt;
-            state.Y += state.VelY * dt;
+            // 6 & 7. Tích phân có va chạm. Thứ tự X trước Y là một phần của contract.
+            state = ResolveHorizontal(map, profile, state, dt);
+            state = ResolveVertical(map, profile, state, dt);
 
-            // 7. Va chạm với sàn phẳng.
-            if (state.Y <= GROUND_Y)
+            // 8. Biên ngang — hai mép map, đọc từ file chứ không phải hằng số trong code.
+            state.X = ClampX(map, profile, state.X);
+
+            return state;
+        }
+
+        private static float BodyHeight(CharacterProfile profile, bool crouching)
+        {
+            return crouching ? profile.BodyHeightCrouch : profile.BodyHeight;
+        }
+
+        private static bool IsSolid(MapGrid map, float x, float y)
+        {
+            return map.AtWorld(x, y) == CellType.Solid;
+        }
+
+        /// <summary>
+        /// Thân (đặt tại x, y, cao height) có đè lên ô đặc nào không. Bệ một chiều KHÔNG tính: nó chỉ
+        /// chặn theo chiều rơi, còn đứng lọt trong nó là chuyện bình thường.
+        ///
+        /// Quét 6 điểm = 2 mép ngang × 3 mức cao. Ba mức vì thân cao 1.6 mà ô cao 1.0: hai điểm ở hai
+        /// đầu thì ô ở giữa lọt qua khe kiểm. LUẬT: khoảng cách giữa hai mức phải NHỎ HƠN cạnh ô —
+        /// với 1.6 thì ba mức cách nhau 0.75, an toàn. Vì chiều cao thân giờ là DỮ LIỆU trong profile,
+        /// luật này thành ràng buộc lên dữ liệu: lớp nhân vật nào cao quá 2.0 là phải thêm mức quét.
+        /// </summary>
+        private static bool OverlapsSolid(MapGrid map, CharacterProfile profile, float x, float y, float height)
+        {
+            float left = x - profile.BodyHalfWidth;
+            float right = x + profile.BodyHalfWidth;
+
+            float footY = y + EDGE;
+            float midY = y + height * 0.5f;
+            float headY = y + height - EDGE;
+
+            return IsSolid(map, left, footY) || IsSolid(map, right, footY) ||
+                   IsSolid(map, left, midY) || IsSolid(map, right, midY) ||
+                   IsSolid(map, left, headY) || IsSolid(map, right, headY);
+        }
+
+        /// <summary>Có đủ chỗ trống để đứng thẳng dậy tại chỗ đang đứng không.</summary>
+        public static bool CanStandUp(MapGrid map, CharacterProfile profile, in MoveState state)
+        {
+            return !OverlapsSolid(map, profile, state.X, state.Y, profile.BodyHeight);
+        }
+
+        /// <summary>Ô ngay dưới chân có phải bệ một chiều không — điều kiện để được chủ động tụt xuống.</summary>
+        private static bool StandingOnOneWay(MapGrid map, CharacterProfile profile, in MoveState state)
+        {
+            float probeY = state.Y - EDGE;
+
+            return map.AtWorld(state.X - profile.BodyHalfWidth, probeY) == CellType.OneWay
+                   || map.AtWorld(state.X + profile.BodyHalfWidth, probeY) == CellType.OneWay;
+        }
+
+        /// <summary>
+        /// Dịch theo trục X rồi dán lại nếu đâm tường. Chỉ kiểm điểm cuối: 5 unit/giây là 0.25 unit
+        /// mỗi tick, không cách nào vượt qua một ô rộng 1.0.
+        /// </summary>
+        private static MoveState ResolveHorizontal(MapGrid map, CharacterProfile profile, MoveState state, float dt)
+        {
+            state.X += state.VelX * dt;
+
+            if (state.VelX == 0f)
+                return state;
+
+            float height = BodyHeight(profile, state.Crouching);
+            float footY = state.Y + EDGE;
+            float midY = state.Y + height * 0.5f;
+            float headY = state.Y + height - EDGE;
+
+            if (state.VelX > 0f)
             {
-                state.Y = GROUND_Y;
-                state.VelY = 0f;
-                state.Grounded = true;
-                state.TicksSinceGrounded = 0;
+                float edgeX = state.X + profile.BodyHalfWidth;
+
+                if (IsSolid(map, edgeX, footY) || IsSolid(map, edgeX, midY) || IsSolid(map, edgeX, headY))
+                {
+                    state.X = MapGrid.ColumnLeft(MapGrid.CellX(edgeX)) - profile.BodyHalfWidth;
+                    state.VelX = 0f;
+                }
             }
             else
             {
-                state.Grounded = false;
+                float edgeX = state.X - profile.BodyHalfWidth;
+
+                if (IsSolid(map, edgeX, footY) || IsSolid(map, edgeX, midY) || IsSolid(map, edgeX, headY))
+                {
+                    state.X = MapGrid.ColumnRight(MapGrid.CellX(edgeX)) + profile.BodyHalfWidth;
+                    state.VelX = 0f;
+                }
             }
 
-            // 8. Biên ngang tạm (hoặc hai hằng WORLD_MIN_X / WORLD_MAX_X nếu bạn chọn cách thứ
-            //    hai ở Bước 0). Cả hai đều biến mất ở Phase 10 khi map có tường thật.
-            state.X = Math.Clamp(state.X, -WORLD_HALF_EXTENT, WORLD_HALF_EXTENT);
+            return state;
+        }
+
+        /// <summary>
+        /// Dịch theo trục Y rồi dán lại nếu chạm trần hoặc chạm sàn.
+        ///
+        /// Chiều xuống là chiều DUY NHẤT phải quét cả quãng đường: rơi kịch trần là 20 unit/giây, tức
+        /// đúng 1.00 unit mỗi tick — vừa đủ để lọt qua một tấm bệ dày 1 ô giữa hai lần kiểm. Chiều lên
+        /// (0.55 unit/tick) và chiều ngang (0.25) thì kiểm điểm cuối là đủ.
+        /// </summary>
+        private static MoveState ResolveVertical(MapGrid map, CharacterProfile profile, MoveState state, float dt)
+        {
+            float prevFeetY = state.Y;
+            state.Y += state.VelY * dt;
+
+            float height = BodyHeight(profile, state.Crouching);
+
+            if (state.VelY > 0f)
+            {
+                float headY = state.Y + height;
+
+                // Bệ một chiều KHÔNG chặn chiều lên — đó là toàn bộ ý nghĩa của nó.
+                if (IsSolid(map, state.X - profile.BodyHalfWidth, headY) ||
+                    IsSolid(map, state.X + profile.BodyHalfWidth, headY))
+                {
+                    state.Y = MapGrid.RowBottom(MapGrid.CellY(headY)) - height;
+                    state.VelY = 0f;
+                }
+
+                state.Grounded = false;
+                return state;
+            }
+
+            // Quét từ hàng ô dưới chân lúc ĐẦU tick xuống tới hàng ô dưới chân lúc CUỐI tick.
+            // Quét ở mức "dưới chân một chút" (xem comment của EDGE), không đúng bằng chân.
+            int fromRow = MapGrid.CellY(prevFeetY - EDGE);
+            int toRow = MapGrid.CellY(state.Y - EDGE);
+
+            for (int row = fromRow; row >= toRow; row--)
+            {
+                if (!BlocksFall(map, profile, state, row, prevFeetY))
+                    continue;
+
+                state.Y = MapGrid.RowTop(row);
+                state.VelY = 0f;
+                state.Grounded = true;
+                state.TicksSinceGrounded = 0;
+
+                return state;
+            }
+
+            state.Grounded = false;
 
             return state;
+        }
+
+        /// <summary>
+        /// Hàng ô <paramref name="row"/> có chặn cú rơi này không.
+        /// Ô đặc thì luôn chặn. Bệ một chiều chỉ chặn khi ĐỦ CẢ HAI: chân đã ở trên mặt bệ từ đầu tick
+        /// (thiếu điều kiện này thì đi ngang vào cạnh bệ là bị bắn lên mặt bệ), và người chơi không
+        /// đang chủ động tụt xuống.
+        /// </summary>
+        private static bool BlocksFall(MapGrid map, CharacterProfile profile, in MoveState state, int row, float prevFeetY)
+        {
+            int leftCell = MapGrid.CellX(state.X - profile.BodyHalfWidth);
+            int rightCell = MapGrid.CellX(state.X + profile.BodyHalfWidth);
+
+            for (int cx = leftCell; cx <= rightCell; cx++)
+            {
+                CellType cell = map.At(cx, row);
+
+                if (cell == CellType.Solid)
+                    return true;
+
+                if (cell == CellType.OneWay &&
+                    state.DropThroughTicks <= 0 &&
+                    prevFeetY >= MapGrid.RowTop(row))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        /// <summary>Kẹp vào biên ngang của map. Biên là DỮ LIỆU đọc từ file, không còn là hằng số.</summary>
+        public static float ClampX(MapGrid map, CharacterProfile profile, float x)
+        {
+            return Math.Clamp(x, map.MinX + profile.BodyHalfWidth, map.MaxX - profile.BodyHalfWidth);
+        }
+
+        /// <summary>
+        /// Đẩy một điểm spawn lên chỗ đứng được gần nhất. Cần vì vị trí người chơi đã LƯU trong DB còn
+        /// hình dạng map thì sửa được bất cứ lúc nào: mỗi lần bạn vẽ thêm một bức tường là một lần có
+        /// ai đó đang offline ở đúng chỗ ấy.
+        /// </summary>
+        public static float ResolveSpawnY(MapGrid map, CharacterProfile profile, float x, float y)
+        {
+            // Trần lặp = chiều cao map: tường dày mấy hàng cũng thoát ra được, mà không có đường nào
+            // để vòng lặp này chạy mãi nếu một ngày nào đó At() đổi cách trả lời.
+            for (int guard = 0; guard < map.Height + 1; guard++)
+            {
+                if (!OverlapsSolid(map, profile, x, y, profile.BodyHeight))
+                    return y;
+
+                // Nhảy lên mặt trên của hàng ô đang kẹt rồi thử lại.
+                y = MapGrid.RowTop(MapGrid.CellY(y));
+            }
+
+            return y;
         }
     }
 }

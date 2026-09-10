@@ -46,14 +46,27 @@ namespace MMORPG.Shared.World
         /// <summary>Vận tốc bật lên tức thời khi nhảy.</summary>
         public float JumpSpeed { get; }
 
+        /// <summary>Nửa bề ngang thân, world unit. Hẹp hơn nửa ô để lọt vừa khe rộng đúng 1 ô.</summary>
+        public float BodyHalfWidth { get; }
+
+        /// <summary>Chiều cao thân khi đứng. Gốc toạ độ ở CHÂN nên thân chiếm [Y, Y + cao].</summary>
+        public float BodyHeight { get; }
+
+        /// <summary>Chiều cao khi ngồi — thấp hơn 1 ô nên chui được vào khe cao đúng một ô.</summary>
+        public float BodyHeightCrouch { get; }
+
         private readonly Dictionary<ActionState, ActionDefinition> _actions;
 
         public CharacterProfile(int classId, float moveSpeed, float jumpSpeed,
+            float bodyHalfWidth, float bodyHeight, float bodyHeightCrouch,
             Dictionary<ActionState, ActionDefinition> actions)
         {
             ClassId = classId;
             MoveSpeed = moveSpeed;
             JumpSpeed = jumpSpeed;
+            BodyHalfWidth = bodyHalfWidth;
+            BodyHeight = bodyHeight;
+            BodyHeightCrouch = bodyHeightCrouch;
             _actions = actions;
         }
 
@@ -93,17 +106,14 @@ namespace MMORPG.Shared.World
             var dragonWarrior = new CharacterProfile(
                 DRAGON_WARRIOR,
                 moveSpeed: 5f,
-                jumpSpeed: 11f,
+                jumpSpeed: 16f,
+                bodyHalfWidth: 0.35f,
+                bodyHeight: 1.6f,
+                bodyHeightCrouch: 0.9f,
                 new Dictionary<ActionState, ActionDefinition>
                 {
-                    // Mọi con số dưới đây viết bằng GIÂY. Đòn đánh 0.25s cho clip 3 frame là 12fps,
-                    // vừa mắt; hồi chiêu 0.4s là nhịp bấm liên tục mà không thành máy khoan.
                     [ActionState.Attack] = new ActionDefinition(0.25f, 0.4f, locksMovement: false),
-
-                    // Choáng thì khoá thân: mất quyền điều khiển là toàn bộ ý nghĩa của trúng đòn.
                     [ActionState.Hurt] = new ActionDefinition(0.2f, 0f, locksMovement: true),
-
-                    // Hết 1 giây là hết HOẠT ẢNH gục; trạng thái Die thì ở lại cho tới khi hồi sinh.
                     [ActionState.Die] = new ActionDefinition(1f, 0f, locksMovement: true),
                 });
 

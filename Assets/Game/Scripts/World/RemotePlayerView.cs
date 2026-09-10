@@ -23,8 +23,8 @@ namespace MMORPG.Client.World
 
         /// <summary>
         /// Ngưỡng coi hai mẫu là "không dịch chuyển". Không so == 0 vì hai mẫu có thể cách nhau
-        /// hơn một tick khi mạng dồn gói; nhưng để rất nhỏ, vì trên sàn phẳng Y được gán thẳng
-        /// bằng GROUND_Y nên hai tick đứng yên cho đúng cùng một số float.
+        /// hơn một tick khi mạng dồn gói; nhưng để rất nhỏ, vì lúc đứng trên sàn Y được gán thẳng
+        /// bằng mép trên của ô nên hai tick đứng yên cho đúng cùng một số float.
         /// </summary>
         private const float EPS = 0.0001f;
 

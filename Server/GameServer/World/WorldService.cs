@@ -14,9 +14,6 @@ namespace MMORPG.GameServer.World
     public sealed class WorldService
     {
         public const int DEFAULT_CLASS_ID = 1;
-        public const int DEFAULT_MAP_ID = 1;
-        public const int SPAWN_X = 0;
-        public const int SPAWN_Y = 0;
 
         // Hai sổ tra cứu: theo entityId (đường chính) và theo accountId (kiểm "tài khoản này đã có
         // entity chưa"). ConcurrentDictionary vì Spawn/Despawn chạy từ handler của nhiều session song song.
@@ -31,13 +28,23 @@ namespace MMORPG.GameServer.World
 
         public int OnlineCount => _entities.Count;
 
+        // Sổ tra map, không phải MỘT map. "Đang đứng ở map nào" là dữ liệu của từng người chơi —
+        // giữ một MapGrid ở đây là ép cả server chỉ có một map, ngay ở tầng kiểu dữ liệu.
+        private readonly MapRegistry _maps;
+
+        public WorldService(MapRegistry maps)
+        {
+            _maps = maps;
+        }
+
         public PlayerEntity Spawn(CharacterRow row, ClientSession owner)
         {
             // Interlocked.Increment: cộng 1 và đọc kết quả trong MỘT thao tác nguyên tử.
             // `_nextEntityId++` trần là ba bước đọc–cộng–ghi: hai handler chạy song song
             // có thể cùng đọc một giá trị và hai entity nhận trùng id.
             int entityId = Interlocked.Increment(ref _nextEntityId);
-            var entity = new PlayerEntity(entityId, row, owner);
+            MapGrid map = _maps.ResolveFor(row);
+            var entity = new PlayerEntity(entityId, row, owner, map);
 
             _entities[entityId] = entity;
             _entityIdByAccount[entity.AccountId] = entity.EntityId;
@@ -50,11 +57,15 @@ namespace MMORPG.GameServer.World
                 if (other.EntityId == entity.EntityId)
                     continue;
 
+                // 2 player khác map thì k cần quan tâm
+                if (other.MapId != entity.MapId)
+                    continue;
+
                 owner.SendData(NetCmd.EntitySpawn, ToSpawnNotice(other));
             }
 
             // Và người cũ cần biết có người mới.
-            Broadcast(NetCmd.EntitySpawn, ToSpawnNotice(entity), exceptEntityId: entity.EntityId);
+            Broadcast(NetCmd.EntitySpawn, ToSpawnNotice(entity),entity.MapId, exceptEntityId: entity.EntityId);
 
             return entity;
         }
@@ -67,6 +78,7 @@ namespace MMORPG.GameServer.World
             Broadcast(
                 NetCmd.EntityDespawn,
                 new EntityDespawnNotice { EntityId = entity.EntityId },
+                entity.MapId,
                 exceptEntityId: entity.EntityId
             );
 
@@ -84,8 +96,13 @@ namespace MMORPG.GameServer.World
             return _entityIdByAccount.TryGetValue(accountId, out int entityId) && _entities.TryGetValue(entityId, out entity);
         }
 
-        /// <summary>Gửi một gói cho mọi entity đang trong world, trừ một người (thường là nguồn tin).</summary>
-        private void Broadcast<T>(NetCmd cmd, T dto, int exceptEntityId) where T : IMemoryPackable<T>
+        /// <summary>
+        /// Gửi một gói cho mọi entity đang đứng CÙNG MỘT MAP, trừ một người (thường là nguồn tin).
+        ///
+        /// mapId là THAM SỐ chứ không đọc từ dto: lúc chuyển map, gói EntityDespawn phải gửi cho
+        /// người ở map CŨ trong khi entity đã mang id map MỚI rồi.
+        /// </summary>
+        private void Broadcast<T>(NetCmd cmd, T dto, int mapId, int exceptEntityId) where T : IMemoryPackable<T>
         {
             // Duyệt ConcurrentDictionary trong lúc có thể có Spawn/Despawn song song là hợp lệ:
             // iterator "weakly consistent" — không ném lỗi, chỉ có thể thiếu/thừa đúng entity
@@ -93,6 +110,11 @@ namespace MMORPG.GameServer.World
             foreach (PlayerEntity entity in _entities.Values)
             {
                 if (entity.EntityId == exceptEntityId)
+                    continue;
+
+                // Người ở map khác mà nhận EntitySpawn thì client dựng ra một bóng ma không bao giờ
+                // có snapshot để cập nhật — đứng im tới lúc người kia thoát.
+                if (entity.MapId != mapId)
                     continue;
 
                 entity.Owner?.SendData(cmd, dto);
@@ -165,6 +187,9 @@ namespace MMORPG.GameServer.World
             foreach (PlayerEntity entity in _entities.Values)
             {
                 if (entity.EntityId == viewer.EntityId)
+                    continue;
+
+                if (entity.MapId != viewer.MapId)
                     continue;
 
                 states.Add(new EntityState

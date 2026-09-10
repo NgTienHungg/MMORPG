@@ -17,8 +17,12 @@ namespace MMORPG.Shared.World
         /// này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
         /// đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
         /// file map đọc sai một nửa còn tệ hơn một file map không đọc được.
+        ///
+        /// Version 2 đổi tên MỌI trường sang đúng tên property (bỏ [JsonProperty]) và bỏ trường
+        /// "_comment". File version 1 mà đọc bằng code này thì "prefab" không khớp "PrefabKey" nữa và
+        /// map mất hình trong im lặng — đúng loại hỏng mà con số này sinh ra để chặn.
         /// </summary>
-        public const int FORMAT_VERSION = 1;
+        public const int FORMAT_VERSION = 2;
 
         // Write đệm dấu cách để canh cột; Parse thì tách theo khoảng trắng và bỏ ô rỗng, nên số dấu
         // cách giữa hai id không mang thông tin gì. Tab lọt vào (do ai đó sửa tay) cũng vẫn đọc được.
@@ -123,8 +127,6 @@ namespace MMORPG.Shared.World
 
             var definition = new MapFileData
             {
-                Comment = "Sinh bởi Tools/MMORPG/Export Map — KHÔNG sửa tay. " +
-                          "Sửa va chạm = vẽ lại lớp Tilemap \"Collision\" trong Unity rồi export lại.",
                 Version = FORMAT_VERSION,
                 Id = map.MapId,
                 Name = map.Name,

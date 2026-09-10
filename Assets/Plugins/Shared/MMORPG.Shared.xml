@@ -414,7 +414,7 @@
         </member>
         <member name="P:MMORPG.Shared.Dto.World.MoveInputRequest.Intent">
             <summary>
-            Đúng cái struct mà <see cref="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.CharacterProfile)"/> nhận, không phải bản sao dàn phẳng của nó.
+            Đúng cái struct mà <see cref="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MapGrid)"/> nhận, không phải bản sao dàn phẳng của nó.
             Client dự đoán bằng struct này rồi gửi chính nó đi; thêm một nút bấm mới sau này là sửa
             một chỗ, không phải bốn.
             </summary>
@@ -784,6 +784,15 @@
         <member name="P:MMORPG.Shared.World.CharacterProfile.JumpSpeed">
             <summary>Vận tốc bật lên tức thời khi nhảy.</summary>
         </member>
+        <member name="P:MMORPG.Shared.World.CharacterProfile.BodyHalfWidth">
+            <summary>Nửa bề ngang thân, world unit. Hẹp hơn nửa ô để lọt vừa khe rộng đúng 1 ô.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.CharacterProfile.BodyHeight">
+            <summary>Chiều cao thân khi đứng. Gốc toạ độ ở CHÂN nên thân chiếm [Y, Y + cao].</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.CharacterProfile.BodyHeightCrouch">
+            <summary>Chiều cao khi ngồi — thấp hơn 1 ô nên chui được vào khe cao đúng một ô.</summary>
+        </member>
         <member name="M:MMORPG.Shared.World.CharacterProfile.GetAction(MMORPG.Shared.World.ActionState)">
             <summary>
             Số liệu của một hành động. Hành động không có trong bảng (kể cả None) trả về bản rỗng:
@@ -845,12 +854,16 @@
             </summary>
         </member>
         <member name="F:MMORPG.Shared.World.MapFile.FORMAT_VERSION">
-            <summary>
-            Version của ĐỊNH DẠNG, không phải của map. Luật: thêm một trường tuỳ chọn thì GIỮ NGUYÊN số
-            này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
-            đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
-            file map đọc sai một nửa còn tệ hơn một file map không đọc được.
-            </summary>
+             <summary>
+             Version của ĐỊNH DẠNG, không phải của map. Luật: thêm một trường tuỳ chọn thì GIỮ NGUYÊN số
+             này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
+             đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
+             file map đọc sai một nửa còn tệ hơn một file map không đọc được.
+            
+             Version 2 đổi tên MỌI trường sang đúng tên property (bỏ [JsonProperty]) và bỏ trường
+             "_comment". File version 1 mà đọc bằng code này thì "prefab" không khớp "PrefabKey" nữa và
+             map mất hình trong im lặng — đúng loại hỏng mà con số này sinh ra để chặn.
+             </summary>
         </member>
         <member name="M:MMORPG.Shared.World.MapFile.SplitRow(System.String,System.Int32)">
             <summary>
@@ -870,13 +883,11 @@
              một ô nhanh cỡ nào là chuyện của MÔ PHỎNG. Gộp lại thì mỗi lần đổi định dạng là đụng vào thứ
              chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (DB) ≠ PlayerEntity (world) ở Phase 5.
             
-             Mọi trường khai báo tên tường minh bằng [JsonProperty]: đổi tên property C# là chuyện gõ code,
-             đổi tên trường trong file là ĐỔI ĐỊNH DẠNG — không được để một thao tác Rename trong IDE làm cả
-             hai cùng lúc.
+             Tên trường trong file LẤY THẲNG tên property, không có [JsonProperty] nào. Đổi lại sự gọn gàng
+             ấy: tên property ở đây LÀ định dạng file, nên đổi tên một property là đổi định dạng — phải tăng
+             <see cref="F:MMORPG.Shared.World.MapFile.FORMAT_VERSION"/> và export lại mọi map, chứ không phải một thao tác Rename
+             bình thường trong IDE.
              </summary>
-        </member>
-        <member name="P:MMORPG.Shared.World.MapFileData.Comment">
-            <summary>Dành cho người mở file ra đọc. JSON chuẩn không có cú pháp chú thích nên nó là một trường thật.</summary>
         </member>
         <member name="P:MMORPG.Shared.World.MapFileData.PrefabKey">
             <summary>
@@ -938,7 +949,7 @@
             <summary>Điểm spawn mặc định, chốt một lần lúc dựng để chỗ gọi không phải tìm lại mỗi lần.</summary>
         </member>
         <member name="P:MMORPG.Shared.World.MapGrid.MinX">
-            <summary>Mép trái/phải của map theo world. Thay cho hằng WORLD_HALF_EXTENT của Phase 6.</summary>
+            <summary>Mép trái/phải của map theo world. Biên ngang là dữ liệu đọc từ file map, không phải hằng số.</summary>
         </member>
         <member name="M:MMORPG.Shared.World.MapGrid.At(System.Int32,System.Int32)">
             <summary>
@@ -989,12 +1000,6 @@
             XUYÊN QUA sàn giữa hai lần kiểm va chạm.
             </summary>
         </member>
-        <member name="F:MMORPG.Shared.World.MovementRules.GROUND_Y">
-            <summary>Cao độ mặt sàn tạm — cả thế giới là một mặt phẳng. Map có hình dạng thật là Phase 10.</summary>
-        </member>
-        <member name="F:MMORPG.Shared.World.MovementRules.WORLD_HALF_EXTENT">
-            <summary>Nửa cạnh vùng đi lại theo trục ngang. Trục dọc không còn bị kẹp: đã có sàn và trọng lực.</summary>
-        </member>
         <member name="F:MMORPG.Shared.World.MovementRules.COYOTE_TICKS">
             <summary>
             Số tick còn được nhảy sau khi đã rời mép sàn (coyote time). 3 tick = 150ms: đủ để tha thứ
@@ -1010,6 +1015,16 @@
             Cũng là trần kẹp để bộ đếm không tăng tới tràn int khi người chơi đứng yên lâu.
             </summary>
         </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.DROP_THROUGH_TICKS">
+            <summary>Số tick bỏ qua va chạm với bệ một chiều sau khi bấm ngồi + nhảy.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MovementRules.EDGE">
+            <summary>
+            Lùi vào trong một chút khi quét mép thân. Cần vì đứng trên sàn thì chân nằm ĐÚNG đường
+            biên hai ô, mà Floor đưa đường biên về ô PHÍA TRÊN — tức ô trống. Quét đúng ở cao độ
+            chân thì tick nào cũng kết luận "không có gì dưới chân" và Grounded nhấp nháy 20 lần/giây.
+            </summary>
+        </member>
         <member name="M:MMORPG.Shared.World.MovementRules.ToTicks(System.Single)">
              <summary>
              Quy giây ra tick. Chạy MỘT LẦN lúc dựng bảng, không nằm trong Step — nhờ vậy vòng mô phỏng
@@ -1020,7 +1035,7 @@
              lượng tử hoá theo 50ms, viết 0.23s hay 0.25s đều ra 5 tick.
              </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.CharacterProfile)">
+        <member name="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MapGrid)">
              <summary>
              Một bước mô phỏng. Hàm THUẦN: không đọc thời gian, không random, không đọc biến ngoài —
              cùng (state, intent, dt, profile) luôn cho cùng kết quả, ở cả hai đầu dây.
@@ -1032,6 +1047,56 @@
              THỨ TỰ các phép dưới đây là một phần của contract. Đổi thứ tự là đổi kết quả, và vì
              hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
              </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.OverlapsSolid(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,System.Single,System.Single,System.Single)">
+             <summary>
+             Thân (đặt tại x, y, cao height) có đè lên ô đặc nào không. Bệ một chiều KHÔNG tính: nó chỉ
+             chặn theo chiều rơi, còn đứng lọt trong nó là chuyện bình thường.
+            
+             Quét 6 điểm = 2 mép ngang × 3 mức cao. Ba mức vì thân cao 1.6 mà ô cao 1.0: hai điểm ở hai
+             đầu thì ô ở giữa lọt qua khe kiểm. LUẬT: khoảng cách giữa hai mức phải NHỎ HƠN cạnh ô —
+             với 1.6 thì ba mức cách nhau 0.75, an toàn. Vì chiều cao thân giờ là DỮ LIỆU trong profile,
+             luật này thành ràng buộc lên dữ liệu: lớp nhân vật nào cao quá 2.0 là phải thêm mức quét.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.CanStandUp(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState@)">
+            <summary>Có đủ chỗ trống để đứng thẳng dậy tại chỗ đang đứng không.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.StandingOnOneWay(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState@)">
+            <summary>Ô ngay dưới chân có phải bệ một chiều không — điều kiện để được chủ động tụt xuống.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.ResolveHorizontal(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState,System.Single)">
+            <summary>
+            Dịch theo trục X rồi dán lại nếu đâm tường. Chỉ kiểm điểm cuối: 5 unit/giây là 0.25 unit
+            mỗi tick, không cách nào vượt qua một ô rộng 1.0.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.ResolveVertical(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState,System.Single)">
+             <summary>
+             Dịch theo trục Y rồi dán lại nếu chạm trần hoặc chạm sàn.
+            
+             Chiều xuống là chiều DUY NHẤT phải quét cả quãng đường: rơi kịch trần là 20 unit/giây, tức
+             đúng 1.00 unit mỗi tick — vừa đủ để lọt qua một tấm bệ dày 1 ô giữa hai lần kiểm. Chiều lên
+             (0.55 unit/tick) và chiều ngang (0.25) thì kiểm điểm cuối là đủ.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.BlocksFall(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState@,System.Int32,System.Single)">
+            <summary>
+            Hàng ô <paramref name="row"/> có chặn cú rơi này không.
+            Ô đặc thì luôn chặn. Bệ một chiều chỉ chặn khi ĐỦ CẢ HAI: chân đã ở trên mặt bệ từ đầu tick
+            (thiếu điều kiện này thì đi ngang vào cạnh bệ là bị bắn lên mặt bệ), và người chơi không
+            đang chủ động tụt xuống.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.ClampX(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,System.Single)">
+            <summary>Kẹp vào biên ngang của map. Biên là DỮ LIỆU đọc từ file, không còn là hằng số.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MovementRules.ResolveSpawnY(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,System.Single,System.Single)">
+            <summary>
+            Đẩy một điểm spawn lên chỗ đứng được gần nhất. Cần vì vị trí người chơi đã LƯU trong DB còn
+            hình dạng map thì sửa được bất cứ lúc nào: mỗi lần bạn vẽ thêm một bức tường là một lần có
+            ai đó đang offline ở đúng chỗ ấy.
+            </summary>
         </member>
         <member name="T:MMORPG.Shared.World.MoveIntent">
              <summary>
@@ -1124,6 +1189,13 @@
         </member>
         <member name="F:MMORPG.Shared.World.MoveState.TicksSinceAttack">
             <summary>Số tick kể từ lần đánh gần nhất — nền của cooldown. Cùng họ với TicksSinceGrounded.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MoveState.DropThroughTicks">
+            <summary>
+            Số tick còn được phép rơi xuyên bệ một chiều. Đặt khi bấm ngồi + nhảy, giảm dần mỗi tick.
+            Phải nằm trong trạng thái chứ không phải một biến riêng ở server, vì client cũng mô phỏng
+            bước này và vòng replay phải tái hiện được nó.
+            </summary>
         </member>
         <member name="M:MMORPG.Shared.World.MoveState.AtRest(System.Single,System.Single)">
             <summary>

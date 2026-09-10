@@ -48,6 +48,7 @@ namespace MMORPG.Client.Boot
             builder.RegisterComponentInHierarchy<LoginPresenter>();
 
             // World, EnterWorld
+            builder.Register<MapService>(Lifetime.Singleton);
             builder.Register<WorldApi>(Lifetime.Singleton);
             builder.Register<LocalPlayer>(Lifetime.Singleton);
             builder.Register<WorldNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();

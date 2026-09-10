@@ -103,6 +103,13 @@ namespace MMORPG.Shared.World
         public int TicksSinceAttack;
 
         /// <summary>
+        /// Số tick còn được phép rơi xuyên bệ một chiều. Đặt khi bấm ngồi + nhảy, giảm dần mỗi tick.
+        /// Phải nằm trong trạng thái chứ không phải một biến riêng ở server, vì client cũng mô phỏng
+        /// bước này và vòng replay phải tái hiện được nó.
+        /// </summary>
+        public int DropThroughTicks;
+
+        /// <summary>
         /// Trạng thái lúc mới vào world. Grounded = false có chủ ý: để tick đầu tiên tự rơi và tự
         /// phát hiện sàn, thay vì tin rằng toạ độ lấy từ DB đang đứng đúng trên mặt đất.
         /// </summary>
@@ -119,6 +126,7 @@ namespace MMORPG.Shared.World
                 Action = ActionState.None,
                 ActionTicksLeft = 0,
                 TicksSinceAttack = MovementRules.EXPIRED, // Hết cooldown sẵn: vừa vào world là đánh được ngay.
+                DropThroughTicks = 0, // Vào world là đứng vững, không đang rơi xuyên bệ nào.
             };
         }
     }

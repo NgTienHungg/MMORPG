@@ -24,8 +24,10 @@ dbClient.Start();
 SystemHandler.DbClient = dbClient;
 AuthHandler.AuthService = new AuthService(dbClient, new LoginRateLimiter());
 
-var worldService = new WorldService();
-CharacterHandler.CharacterService = new CharacterService(dbClient, worldService);
+// Nạp TOÀN BỘ map trước khi nhận kết nối — MapRegistry tự in ra từng map kèm checksum.
+var maps = new MapRegistry();
+var worldService = new WorldService(maps);
+CharacterHandler.CharacterService = new CharacterService(dbClient, worldService, maps);
 
 TcpDispatcher.RegisterAll();
 

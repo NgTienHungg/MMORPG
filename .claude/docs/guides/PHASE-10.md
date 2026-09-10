@@ -163,17 +163,27 @@ việc mỗi bên sai theo kiểu gì.
 ### Và `version` vẫn phải có
 
 JSON tự lo được chuyện *thêm* trường, nhưng không lo được chuyện **đổi ý nghĩa** của trường đã có (ví
-dụ ngày nào đó `origin` chuyển từ ô sang world unit). Nên trong file vẫn có `"version": 1`, và luật là:
+dụ ngày nào đó `Origin` chuyển từ ô sang world unit). Nên trong file vẫn có `"Version"`, và luật là:
 
 - Thêm trường tuỳ chọn → **không** tăng version. File cũ vẫn đọc được, code cũ vẫn đọc được file mới.
-- Đổi ý nghĩa / xoá / đổi tên trường → **tăng** version, và code từ chối đọc version lạ.
+- Đổi ý nghĩa / xoá / **đổi tên** trường → **tăng** version, và code từ chối đọc version lạ.
 
-> **Luật này bảo vệ file, không bảo vệ code.** Chừng nào chưa có `map1.json` nào nằm trên đĩa thì
-> chưa có gì để bảo vệ: bạn đổi định dạng thoải mái mà `FORMAT_VERSION` vẫn ở `1`, vì tăng lên `2`
-> lúc đó là dựng ra một lịch sử không có thật — người đọc file sau này sẽ đi tìm một "định dạng
-> version 1" chưa từng ra khỏi màn hình ai. Nhưng kể từ **file map đầu tiên được export**, mọi thay
-> đổi kiểu "đổi ý nghĩa trường" đều phải tăng số **và** export lại tất cả. Mốc chuyển giữa hai chế độ
-> ấy là CHECKPOINT B, không phải một ngày trên lịch.
+> **Luật này bảo vệ file, không bảo vệ code.** Chừng nào chưa có `map1.json` nào nằm trên đĩa thì chưa
+> có gì để bảo vệ — không có file thì không ai đọc nhầm được. Nhưng kể từ **file map đầu tiên được
+> export** (tức từ CHECKPOINT B trở đi), mọi thay đổi kiểu "đổi tên / đổi ý nghĩa trường" đều phải tăng
+> số **và** export lại tất cả. Mốc chuyển giữa hai chế độ ấy là một checkpoint, không phải một ngày
+> trên lịch.
+
+**`FORMAT_VERSION` hiện tại là `2`,** và con số đó là hệ quả của một lần đổi thật: bản đầu đặt tên
+trường bằng `[JsonProperty("origin")]` và có thêm trường `_comment`; bản này bỏ cả hai, lấy thẳng tên
+property làm tên trường (`Origin`, `PrefabKey`, `Cells`…).
+
+Vì sao lần đó **buộc** phải tăng số, trong khi thêm một trường thì không: Newtonsoft khớp tên **không
+phân biệt hoa thường**, nên một file cũ ghi `"version"` vẫn vào được `Version` — nhưng `"prefab"` thì
+**không** khớp `PrefabKey`, vì đó là hai cái tên khác nhau chứ không phải hai cách viết hoa. Kết quả:
+file đọc "thành công" và map mất khoá hình trong im lặng. Đúng loại hỏng mà `Version` sinh ra để chặn —
+và là minh hoạ sống cho việc **bỏ `[JsonProperty]` thì tên property C# trở thành một phần của định
+dạng file**.
 
 ---
 
@@ -244,10 +254,19 @@ cặp `*File` (đọc-ghi) + `*FileData` (hình dạng của chính file đó) t
 **người gõ tay** ở Phase 12, loại file có luật đọc ngược hẳn (trường lạ là **lỗi**, không phải bỏ qua).
 Xem [`CONVENTIONS.md`](../CONVENTIONS.md) §"Hậu tố theo vai trò".
 
-**Tên trường trên file khai báo tường minh** bằng `[JsonProperty("origin")]`, không để Newtonsoft tự suy
-từ tên property. Cùng lý do với việc `NetCmd` ghi số rõ ràng: đổi tên một property C# là chuyện gõ code,
-còn đổi tên một trường trong file là **đổi định dạng** — hai việc khác nhau thì không được để một thao
-tác `Rename` trong IDE làm cả hai.
+**Tên trường trong file lấy thẳng tên property**, không có `[JsonProperty]` nào — DTO đọc gọn, và mở
+file ra là thấy đúng cái tên có trong code.
+
+Cái giá của sự gọn ấy phải nói rõ, vì nó không hiển nhiên: **tên property C# từ nay LÀ định dạng file.**
+Một thao tác `Rename` trong IDE — thứ mọi ngày vẫn an toàn — sẽ đổi định dạng mà không có lỗi biên dịch
+nào. Nên luật đi kèm là: đổi tên một property trong `MapFileData` thì phải **tăng `FORMAT_VERSION`** và
+export lại mọi map, y như xoá một trường. Viết luật đó vào ngay XML doc của lớp, chứ đừng để nó chỉ nằm
+trong tài liệu này.
+
+> Đây là một đánh đổi có hai đáp án đúng, tuỳ bạn coi trọng cái gì. `[JsonProperty("origin")]` mua sự
+> **tách bạch** (đổi tên code ≠ đổi tên file, giống lý do `NetCmd` ghi số tường minh); bỏ nó đi thì mua
+> sự **gọn** và trả bằng một luật phải nhớ. Chọn cách nào cũng được — chọn rồi mà không biết mình vừa
+> trả bằng gì thì mới là sai.
 
 **Toạ độ ô là toạ độ ô của Unity, không dịch không chia.** `Grid` trong prefab map đã có
 `cellSize = 1` và đặt tại gốc toạ độ, nên ô `(cx, cy)` của Tilemap chiếm đúng vùng world
@@ -283,9 +302,9 @@ file dữ liệu phải biết bố cục thư mục của một project Unity �
 có. Còn khoá thì Phase 18 đổi `Resources` sang Addressables mà **hình dạng khoá giữ nguyên**, chỉ đổi chỗ
 giải khoá.
 
-Trường này **tuỳ chọn**, và nó cũng là dịp thử ngay cái luật version vừa nói ở trên: nó được thêm vào
-sau khi định dạng đã có mà `FORMAT_VERSION` **không tăng** — file thiếu nó thì về chuỗi rỗng (map không
-có hình riêng), code chưa biết nó thì bỏ qua. Đúng thứ đã trả tiền để mua khi chọn JSON.
+Trường này **tuỳ chọn**: file thiếu nó thì về chuỗi rỗng (map không có hình riêng), code chưa biết nó
+thì bỏ qua. Đó chính là thứ đã trả tiền để mua khi chọn JSON — và cũng là lý do thêm một trường như thế
+này **không** phải tăng `FORMAT_VERSION`.
 
 **Ngoài lưới là gì?** Ba phía, ba câu trả lời, mỗi câu một lý do:
 
@@ -304,16 +323,22 @@ thành một mốc `y` gây `Die`.
 
 ```json
 {
-  "_comment": "Sinh bởi Tools/MMORPG/Export Map — KHÔNG sửa tay.",
-  "version": 1,
-  "id": 1,
-  "name": "Rừng Mở Đầu",
-  "prefab": "Maps/Map1",
-  "origin": { "x": -17, "y": -9 },
-  "spawns": [
-    { "id": "default", "x": 0.5, "y": 0.0 }
+  "Version": 2,
+  "Id": 1,
+  "Name": "Forest",
+  "PrefabKey": "Maps/Map1",
+  "Origin": {
+    "X": -17,
+    "Y": -9
+  },
+  "Spawns": [
+    {
+      "Id": "default",
+      "X": 0.5,
+      "Y": 0.0
+    }
   ],
-  "cells": [
+  "Cells": [
     "0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0",
     "0 0 0 0 0 0 2 2 2 2 0 0 0 0 0 0",
     "1 1 1 1 1 1 1 1 0 0 0 1 1 1 1 1"
@@ -324,16 +349,14 @@ thành một mốc `y` gây `Die`.
 (Map thật rộng 64 ô; ở đây cắt còn 16 cho vừa trang. Hàng cuối có một quãng `0` giữa dải `1` — đó là
 cái hố, và bạn nhìn ra nó mà không cần công cụ nào.)
 
-`_comment` là một trường thật trong DTO chứ không phải chú thích của JSON — JSON chuẩn **không có** cú
-pháp chú thích. Gạch dưới ở đầu tên là quy ước quen thuộc cho "trường này dành cho người đọc, code không
-dùng".
+Tên trường viết hoa đầu vì đó **đúng là tên property** trong `MapFileData` — hệ quả trực tiếp của việc
+bỏ `[JsonProperty]`, xem mục ngay trên.
 
 <details>
 <summary><b>📖 Lời giải — <code>Server/Shared/World/MapFileData.cs</code> (DTO của file)</b></summary>
 
 ```csharp
 using System.Collections.Generic;
-using Newtonsoft.Json;
 
 namespace MMORPG.Shared.World
 {
@@ -345,23 +368,17 @@ namespace MMORPG.Shared.World
     /// một ô nhanh cỡ nào là chuyện của MÔ PHỎNG. Gộp lại thì mỗi lần đổi định dạng là đụng vào thứ
     /// chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (DB) ≠ PlayerEntity (world) ở Phase 5.
     ///
-    /// Mọi trường khai báo tên tường minh bằng [JsonProperty]: đổi tên property C# là chuyện gõ code,
-    /// đổi tên trường trong file là ĐỔI ĐỊNH DẠNG — không được để một thao tác Rename trong IDE làm cả
-    /// hai cùng lúc.
+    /// Tên trường trong file LẤY THẲNG tên property, không có [JsonProperty] nào. Đổi lại sự gọn gàng
+    /// ấy: tên property ở đây LÀ định dạng file, nên đổi tên một property là đổi định dạng — phải tăng
+    /// <see cref="MapFile.FORMAT_VERSION"/> và export lại mọi map, chứ không phải một thao tác Rename
+    /// bình thường trong IDE.
     /// </summary>
     public sealed class MapFileData
     {
-        /// <summary>Dành cho người mở file ra đọc. JSON chuẩn không có cú pháp chú thích nên nó là một trường thật.</summary>
-        [JsonProperty("_comment")]
-        public string Comment { get; set; } = string.Empty;
-
-        [JsonProperty("version")]
         public int Version { get; set; }
 
-        [JsonProperty("id")]
         public int Id { get; set; }
 
-        [JsonProperty("name")]
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
@@ -370,29 +387,23 @@ namespace MMORPG.Shared.World
         /// của project Unity. Thiếu trường thì về chuỗi rỗng — map không có hình riêng, và server thì
         /// không đọc trường này bao giờ.
         /// </summary>
-        [JsonProperty("prefab")]
         public string PrefabKey { get; set; } = string.Empty;
 
         // Cho phép null có chủ đích: file thiếu trường thì Newtonsoft để null, và MapFile.Parse phải
         // nói ra bằng một thông điệp đọc được — thay vì để NullReferenceException nổ ở đâu đó xa hơn.
-        [JsonProperty("origin")]
         public CellPoint? Origin { get; set; }
 
-        [JsonProperty("spawns")]
         public List<SpawnPoint>? Spawns { get; set; }
 
         /// <summary>Lưới ô, mỗi phần tử là MỘT HÀNG. Hàng đầu là mép TRÊN map — đọc file như nhìn bản vẽ.</summary>
-        [JsonProperty("cells")]
         public List<string>? Cells { get; set; }
     }
 
     /// <summary>Một điểm theo toạ độ Ô (số nguyên). Dùng cho origin.</summary>
     public sealed class CellPoint
     {
-        [JsonProperty("x")]
         public int X { get; set; }
 
-        [JsonProperty("y")]
         public int Y { get; set; }
     }
 
@@ -402,13 +413,10 @@ namespace MMORPG.Shared.World
     /// </summary>
     public sealed class SpawnPoint
     {
-        [JsonProperty("id")]
         public string Id { get; set; } = string.Empty;
 
-        [JsonProperty("x")]
         public float X { get; set; }
 
-        [JsonProperty("y")]
         public float Y { get; set; }
     }
 }
@@ -658,8 +666,12 @@ namespace MMORPG.Shared.World
         /// này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
         /// đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
         /// file map đọc sai một nửa còn tệ hơn một file map không đọc được.
+        ///
+        /// Version 2 đổi tên MỌI trường sang đúng tên property (bỏ [JsonProperty]) và bỏ trường
+        /// "_comment". File version 1 mà đọc bằng code này thì "prefab" không khớp "PrefabKey" nữa và
+        /// map mất hình trong im lặng — đúng loại hỏng mà con số này sinh ra để chặn.
         /// </summary>
-        public const int FORMAT_VERSION = 1;
+        public const int FORMAT_VERSION = 2;
 
         // Write đệm dấu cách để canh cột; Parse thì tách theo khoảng trắng và bỏ ô rỗng, nên số dấu
         // cách giữa hai id không mang thông tin gì. Tab lọt vào (do ai đó sửa tay) cũng vẫn đọc được.
@@ -764,8 +776,6 @@ namespace MMORPG.Shared.World
 
             var definition = new MapFileData
             {
-                Comment = "Sinh bởi Tools/MMORPG/Export Map — KHÔNG sửa tay. " +
-                          "Sửa va chạm = vẽ lại lớp Tilemap \"Collision\" trong Unity rồi export lại.",
                 Version = FORMAT_VERSION,
                 Id = map.MapId,
                 Name = map.Name,
@@ -916,10 +926,16 @@ namespace MMORPG.Shared.Tests
             Assert.Equal(original.Checksum(), parsed.Checksum());
         }
 
+        /// <summary>
+        /// Số version dựng từ chính hằng số chứ không gõ tay: tăng FORMAT_VERSION thì bài test đi
+        /// theo, thay vì âm thầm thành một phép Replace không khớp gì cả.
+        /// </summary>
+        private static string VersionField => $"\"{nameof(MapFileData.Version)}\": {MapFile.FORMAT_VERSION}";
+
         [Fact]
         public void Parse_rejects_unknown_format_version()
         {
-            string json = MapFile.Write(BuildSample()).Replace("\"version\": 1", "\"version\": 99");
+            string json = MapFile.Write(BuildSample()).Replace(VersionField, "\"Version\": 99");
 
             Assert.Throws<FormatException>(() => MapFile.Parse(json));
         }
@@ -954,7 +970,11 @@ namespace MMORPG.Shared.Tests
         public void Parse_ignores_fields_it_does_not_know()
         {
             string json = MapFile.Write(BuildSample())
-                .Replace("\"version\": 1", "\"portals\": [ { \"x\": 3, \"toMapId\": 2 } ],\n  \"version\": 1");
+                .Replace(VersionField, $"\"portals\": [ {{ \"x\": 3, \"toMapId\": 2 }} ],\n  {VersionField}");
+
+            // Chốt rằng phép Replace ĐÃ chèn được: không có dòng này thì một lần đổi tên trường biến
+            // bài test thành "parse một file y hệt bản gốc" và nó xanh mà chẳng kiểm gì.
+            Assert.Contains("portals", json);
 
             MapGrid parsed = MapFile.Parse(json);
 
@@ -985,10 +1005,19 @@ namespace MMORPG.Shared.Tests
 | `Server/GameServer/World/CharacterService.cs` | điểm spawn lấy từ map | foldout 3 |
 | `Assets/Game/Scripts/World/MapService.cs` | **file mới** — client đọc file | foldout 4 |
 | `Assets/Game/Scripts/GameLifetimeScope.cs` | đăng ký `MapService` | foldout 4 |
-| `Assets/Game/Scripts/World/WorldSpawner.cs` | nạp map trước khi `Init` motor | foldout 4 |
+| `Assets/Game/Scripts/World/WorldSpawner.cs` | nhận `MapService`, gọi `Load` khi vào world (chưa đưa cho motor) | foldout 4 |
 
 ⚠️ `MapExporter.cs` **bắt buộc** nằm trong một thư mục tên `Editor` (`Assets/Game/Editor/`) — Unity chỉ
 cho dùng `UnityEditor` ở đó. Đặt nhầm chỗ thì build player gãy, chứ không phải lỗi ngay lúc gõ.
+
+⚠️ **Bước này KHÔNG đụng vào `PlayerEntity` hay `PlayerMotor`.** Chữ ký của `PlayerEntity(…)` và
+`PlayerMotor.Init(…)` giữ nguyên như Phase 9 cho tới hết CHECKPOINT B. `MapGrid` mới chỉ đi tới
+`WorldService.Map` (server) và `MapService.Current` (client) — vừa đủ để hai bên in checksum ra, mà đó
+là toàn bộ việc phải làm ở đây.
+
+> **Luật của cả tài liệu này: xong mỗi Bước là repo phải BUILD ĐƯỢC.** Không có trạng thái "đỏ tạm cho
+> tới bước sau" — checkpoint mà không chạy được thì nó không còn là checkpoint. Nên khi một bước cần
+> đổi chữ ký hàm, **chỗ định nghĩa và mọi chỗ gọi phải nằm cùng một bước**.
 
 ### Hướng làm
 
@@ -1012,18 +1041,63 @@ Ba thứ phải chỉnh trên lớp này:
 | Thứ | Đặt thế nào | Vì sao |
 |---|---|---|
 | `TilemapRenderer` | tắt lúc chơi, bật lúc vẽ (hoặc để `Sorting Layer` trên cùng, màu alpha ~0.4) | luật là để bạn nhìn, không phải để người chơi nhìn |
-| Vị trí `Grid` và `Collision` | **cả hai đúng `(0,0,0)`**, `cellSize = 1` | ô tilemap phải trùng ô `MapGrid`; lệch một chút là lệch cả map |
+| Transform của **cả chuỗi cha** | xem bảng kiểm ngay dưới | ô tilemap phải trùng ô `MapGrid`; lệch một chút là lệch cả map |
 | Một `Transform` con tên `Spawn_default` | kéo tới chỗ muốn người chơi xuất hiện | điểm spawn là chuyện của map, nên nó đi cùng map |
+
+#### 🎯 Bảng kiểm hệ toạ độ — chỗ sai nhiều nhất cả phase
+
+Điều kiện duy nhất phải giữ: **toạ độ ô của Tilemap = toạ độ world**, tức ô `(3,5)` phải nằm đúng tại
+world `(3,5)`. Điều đó chỉ đúng khi **mọi mắt xích từ gốc scene xuống tới `Collision` đều là đơn vị** —
+`CellToWorld` nhân qua toàn bộ chuỗi `Transform` cha, chứ không chỉ nhìn mỗi cái Tilemap:
+
+```
+Scene root                 position (0,0,0)  rotation (0,0,0)  scale (1,1,1)
+  └─ World                 (0,0,0)           (0,0,0)           (1,1,1)
+      └─ Map               (0,0,0)           (0,0,0)           (1,1,1)   ← prefab instance, hay sai NHẤT
+          └─ Grid          (0,0,0)           (0,0,0)           (1,1,1)   + cellSize (1,1,0), cellGap 0
+              └─ Collision (0,0,0)           (0,0,0)           (1,1,1)
+```
+
+| Kiểm | Giá trị đúng | Sai thì triệu chứng |
+|---|---|---|
+| Position của **từng** object trong chuỗi | `(0, 0, 0)` | ô lệch đúng bằng tổng các offset — lỗi `CellToWorld` |
+| Rotation / Scale của từng object | `(0,0,0)` / `(1,1,1)` | map xoay hoặc phình; lỗi `CellToWorld` |
+| `Grid.Cell Size` | `X 1, Y 1, Z 0` | ô to/nhỏ hơn 1 world unit |
+| `Grid.Cell Gap` | `0, 0, 0` | ô thưa dần, càng xa gốc càng lệch |
+| `Grid.Cell Layout` | `Rectangle` | Isometric/Hexagon thì `CellToWorld` là công thức khác hẳn |
+| `Grid.Cell Swizzle` | `XYZ` | trục bị hoán |
+
+> ⚠️ **Cái bẫy thật sự: prefab đúng nhưng scene sai.** `Map1.prefab` có thể sạch hoàn toàn, trong khi
+> **instance của nó trong scene** bị kéo lệch — chỉ cần lỡ tay kéo object trong Scene view một cái là
+> Unity ghi một *override* `m_LocalPosition` vào file scene, và prefab **không** đổi theo. Tool export
+> chạy trên **instance trong scene**, nên nó thấy chỗ lệch mà bạn mở prefab ra soi mãi không thấy.
+>
+> Cách sửa: chọn object `Map` trong Hierarchy → chuột phải lên chữ **`Transform`** trong Inspector →
+> **`Revert`** (hoặc gõ tay `0 0 0`) → **Save Scene**. Dòng chữ `Transform` in **đậm** trong Inspector
+> chính là dấu hiệu đang có override.
+
+**Đọc con số trong thông điệp lỗi ra chỗ sai.** Tool in ra ô `(3,5)` rơi vào đâu, và hiệu số chính là
+tổng offset của cả chuỗi:
+
+| Tool báo | Offset | Nghĩa là |
+|---|---|---|
+| `(3,5)` | `(0,0)` | ✅ đúng |
+| `(2,4)` | `(−1,−1)` | có object trong chuỗi đang ở `(−1,−1)` |
+| `(3.5, 5.5)` | `(+0.5,+0.5)` | kinh điển: ai đó căn `Grid` vào **tâm ô** thay vì góc ô |
+| `(1.5, 2.5)` | — | không phải offset mà là **scale**: `1.5 = 3 × 0.5` → có object scale `0.5` |
 
 Đừng vẽ `Collision` bằng cách "tô đè lên đúng từng viên cỏ". Vẽ **hình dạng bạn muốn người chơi cảm
 nhận**: mặt đất là một dải liền, bệ gỗ là một hàng `OneWay` ở đúng mặt trên, cây và hàng rào thì thường
 **không** có ô nào cả. Hình và luật giống nhau ~90% là bình thường và đúng; ép chúng giống nhau 100% là
 tự chuốc lấy việc.
 
-**Component mới `MapCollisionSource`** (runtime script, đặt cạnh `Collision`): chỗ khai báo mọi thứ tool
-cần biết — `mapId`, tên map, tilemap nào, tile nào là `Solid`, tile nào là `OneWay`, và **danh sách điểm
-spawn** (mỗi điểm gồm một `id` và một `Transform`). Để trong Inspector chứ không hard-code trong tool:
-người vẽ map không phải mở code ra sửa.
+**Component mới `MapCollisionSource`** (runtime script, gắn lên **object gốc `Map`**, không phải lên
+`Collision`): chỗ khai báo mọi thứ tool cần biết — `mapId`, tên map, tilemap nào, tile nào là `Solid`,
+tile nào là `OneWay`, và **danh sách điểm spawn** (mỗi điểm gồm một `id` và một `Transform`). Để trong
+Inspector chứ không hard-code trong tool: người vẽ map không phải mở code ra sửa.
+
+Gắn lên gốc `Map` vì đó là **instance root của prefab** — thứ `TryResolvePrefabKey` hỏi để lấy khoá
+prefab, và cũng là chỗ tự nhiên để các `Transform` spawn làm con.
 
 Danh sách chứ không phải một điểm — hôm nay bạn chỉ điền đúng một dòng, `id = "default"`. Nhưng cái giá
 để nó là danh sách ngay từ đầu là ba dòng code, còn cái giá để đổi một trường thành mảng sau khi đã có
@@ -1405,12 +1479,9 @@ bạn *gõ lệnh*, không phải chỗ file exe nằm — chạy `dotnet run` t
         }
 ```
 
-`Spawn` đưa map cho entity lúc dựng — Bước 3 sẽ nói vì sao entity cần map ngay tại đó chứ không phải mỗi
-tick:
-
-```csharp
-            var entity = new PlayerEntity(entityId, row, owner, Map);
-```
+⚠️ `Spawn` **giữ nguyên** ở bước này: `new PlayerEntity(entityId, row, owner)`, ba tham số như cũ. Entity
+chỉ cần map khi nó biết va chạm, mà đó là Bước 3 — thêm tham số thứ tư ngay bây giờ thì hàm dựng chưa có
+nó và `GameServer` không build được, tức là bạn không chạy nổi CHECKPOINT B.
 
 **`Server/GameServer/World/CharacterService.cs`** — điểm spawn lấy từ map:
 
@@ -1502,20 +1573,40 @@ chuỗi `Failed to resolve` như `CLAUDE.md` đã dặn.
         public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler,
             LocalPlayer localPlayer, MapService mapService)
         {
-            ...
+            _worldApi = worldApi;
+            _worldNetHandler = worldNetHandler;
+            _localPlayer = localPlayer;
             _mapService = mapService;
         }
 
         public void SpawnLocalPlayer(EnterWorldResponse response)
         {
-            ...
-            // Nạp map TRƯỚC khi Init motor: motor cần lưới va chạm ngay từ tick dự đoán đầu tiên.
-            MapGrid map = _mapService.Load(response.MapId);
+            if (_localPlayerObject != null)
+                DespawnLocalPlayer();
 
+            _localPlayerObject = Instantiate(_playerPrefab, new Vector3(response.X, response.Y),
+                Quaternion.identity, _entityRoot);
+            _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
+
+            // Nạp map ngay khi vào world. Bước này chưa ai dùng tới lưới — gọi ở đây để MapService in
+            // checksum ra, đó là toàn bộ mục tiêu của CHECKPOINT B. Bước 3 mới đưa nó cho motor.
+            _mapService.Load(response.MapId);
+
+            // Prefab sinh lúc runtime — VContainer không tự inject. Đưa phụ thuộc vào tay.
             var motor = _localPlayerObject.GetComponent<PlayerMotor>();
-            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y), response.ClassId, map);
+            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y), response.ClassId);
+
+            _cameraFollow.SetTarget(_localPlayerObject.transform);
+
+            this.Log($"Vào map {response.MapId} tại {response.X:0.##}:{response.Y:0.##} - entity {response.EntityId}");
         }
 ```
+
+Thêm `using MMORPG.Shared.World;` vào đầu file — Bước 3 sẽ cần `MapGrid` ở đây.
+
+⚠️ `motor.Init` ở bước này **vẫn bốn tham số**. Tham số `MapGrid` thứ năm là việc của Bước 3, cùng lúc
+với hàm `Init` nhận nó — thêm sớm thì Unity báo `CS1501: No overload for 'Init' takes 5 arguments` và bạn
+không vào được world để xem checksum.
 
 </details>
 
@@ -1525,9 +1616,17 @@ chuỗi `Failed to resolve` như `CLAUDE.md` đã dặn.
    nhất **một khe cao đúng 1 ô** (trần thấp) để lát nữa thử ngồi-chui. Đặt một `Transform` làm điểm
    spawn và điền vào danh sách với id `default`.
 2. `Tools/MMORPG/Export Map` → Console hiện dòng `Đã ghi Assets/Game/Resources/Maps/map1.json` kèm kích
-   thước, khoá prefab và checksum. Mở file bằng editor: mảng `cells` phải **nhìn ra được hình dạng** —
-   các cột id thẳng hàng, dải `1` liền mạch là mặt đất, hàng đầu là mép trên. Kiểm luôn trường `prefab`:
-   nó phải là khoá dạng `Maps/Map1`, **không** có chuỗi `Assets/` nào trong file.
+   thước, khoá prefab và checksum. Mở file bằng **Rider / VS Code** — đừng nhìn khung preview trong
+   Inspector của Unity, nó dùng font tỉ lệ nên `1` hẹp hơn `0` và mọi thứ trông như lệch cột dù file
+   thẳng tắp. Mảng `Cells` phải **nhìn ra được hình dạng**: các cột id thẳng hàng, dải `1` liền mạch là
+   mặt đất, hàng đầu là mép trên. Kiểm luôn trường `PrefabKey`: nó phải là khoá dạng `Maps/Map1`,
+   **không** có chuỗi `Assets/` nào trong file.
+
+   Muốn chắc bằng máy thay vì bằng mắt — mọi hàng phải ra **cùng một con số**:
+
+   ```bash
+   awk -F'"' '/^    "[0-9 ]+",?$/{print length($2)}' Assets/Game/Resources/Maps/map1.json | sort -u
+   ```
 3. Thử bốn lần cho tool sập đúng chỗ nó phải sập: dời `Grid` đi `0.5` rồi export → phải báo lỗi hệ toạ
    độ. Kéo một viên tile cỏ vào lớp `Collision` → phải báo tile lạ kèm toạ độ ô. Đổi id điểm spawn thành
    `"start"` → phải báo thiếu điểm `default`. Kéo `Map1.prefab` ra khỏi thư mục `Resources` → phải báo
@@ -1553,7 +1652,7 @@ Hai con số ấy bằng nhau là bằng chứng của cả bước này. Không
 | `Server/GameServer/World/PlayerEntity.cs` | nhận `MapGrid` lúc dựng, gỡ spawn khỏi tường | foldout 4 |
 | `Server/GameServer/World/WorldService.cs` | `Spawn` truyền `Map` vào `PlayerEntity` | foldout 4 |
 | `Assets/Game/Scripts/World/PlayerMotor.cs` | giữ map, truyền vào **cả hai** chỗ gọi `Step` | foldout 4 |
-| `Assets/Game/Scripts/World/WorldSpawner.cs` | truyền map vào `motor.Init` | Bước 2, foldout 4 |
+| `Assets/Game/Scripts/World/WorldSpawner.cs` | hứng `MapGrid` từ `Load` rồi truyền vào `motor.Init` | foldout 4 |
 
 Đổi chữ ký `Step` xong thì **mọi chỗ gọi đều đỏ** — đó là chuyện tốt: trình biên dịch đang liệt kê hộ
 bạn danh sách phải sửa. Đừng giữ lại một overload `Step` cũ không có `MapGrid` cho "đỡ phải sửa": nó
@@ -1697,13 +1796,18 @@ bị đẩy nghĩa là bạn vừa export một map hỏng.
             float bodyHalfWidth, float bodyHeight, float bodyHeightCrouch,
             Dictionary<ActionState, ActionDefinition> actions)
         {
-            ...
+            ClassId = classId;
+            MoveSpeed = moveSpeed;
+            JumpSpeed = jumpSpeed;
             BodyHalfWidth = bodyHalfWidth;
             BodyHeight = bodyHeight;
             BodyHeightCrouch = bodyHeightCrouch;
-            ...
+            _actions = actions;
         }
 ```
+
+Ba tham số mới chèn **trước** `actions` để cái `Dictionary` dài dòng vẫn nằm cuối lời gọi — đọc dễ hơn.
+Đổi arity thì mọi chỗ gọi thành lỗi biên dịch, mà ở đây chỉ có đúng một: `CharacterProfiles.Build`.
 
 và trong `CharacterProfiles.Build`:
 
@@ -1733,7 +1837,16 @@ và trong `CharacterProfiles.Build`:
         public int DropThroughTicks;
 ```
 
-`AtRest` thêm `DropThroughTicks = 0`.
+`AtRest` thêm một dòng vào bộ khởi tạo, ngay dưới `TicksSinceAttack`:
+
+```csharp
+                TicksSinceAttack = MovementRules.EXPIRED, // Hết cooldown sẵn: vừa vào world là đánh được ngay.
+                DropThroughTicks = 0,                     // Vào world là đứng vững, không đang rơi xuyên bệ nào.
+```
+
+`0` đúng bằng `default(int)` nên bỏ dòng này vẫn chạy đúng — viết ra vì `AtRest` là **bản liệt kê đầy đủ
+trạng thái ban đầu**: nhìn nó phải thấy hết mọi field của `MoveState`, chứ không phải nhớ field nào được
+liệt kê và field nào đang im lặng ăn giá trị mặc định.
 
 </details>
 
@@ -2069,64 +2182,138 @@ và các hàm va chạm:
 <details>
 <summary><b>📖 Lời giải — ba chỗ gọi <code>Step</code></b></summary>
 
-**Server — `PlayerEntity`:** nhận map lúc dựng (nó cần map ngay để gỡ điểm spawn khỏi tường):
+Năm chỗ, không phải ba: ba chỗ **gọi** `Step`, cộng hai chỗ **truyền map xuống** cho chúng. Đủ cả năm
+thì mới build được.
+
+#### Server — `PlayerEntity.cs`
+
+Thêm **một `using`** ở đầu file (hàm dựng sắp gọi `Log.Warn`, mà file này trước giờ không log gì):
+
+```csharp
+using MMORPG.ServerCore;
+using MMORPG.Shared.Dto.Db;
+using MMORPG.Shared.World;
+```
+
+Thêm một field cạnh `_profile`:
 
 ```csharp
         private readonly CharacterProfile _profile;
-        private readonly MapGrid _map;
 
+        /// <summary>Lưới va chạm của map entity đang đứng. Một map cho tới khi có cửa chuyển map.</summary>
+        private readonly MapGrid _map;
+```
+
+Hàm dựng — **đủ thân hàm**, vì thứ tự các dòng đã đổi (`_profile` phải có TRƯỚC khi gỡ spawn, và `State`
+chuyển xuống cuối):
+
+```csharp
         public PlayerEntity(int entityId, CharacterRow row, ClientSession owner, MapGrid map)
         {
-            ...
+            EntityId = entityId;
+            CharacterId = row.CharacterId;
+            AccountId = row.AccountId;
+            Name = row.Name;
+            ClassId = row.ClassId;
+            Level = row.Level;
+            MapId = row.MapId;
+            Owner = owner;
+
+            // Thiếu dòng này thì Step nhận profile null và ném NRE ở MỌI tick. GameLoop nuốt lỗi để
+            // một tick hỏng không giết nhịp tim server, nên triệu chứng không phải là crash mà là:
+            // không ai được tích phân, không gói MoveState/WorldSnapshot nào được gửi đi.
             _profile = CharacterProfiles.Get(row.ClassId);
             _map = map;
 
+            // Phải nằm SAU _profile: gỡ spawn cần biết thân nhân vật to cỡ nào.
+            //
             // Vị trí trong DB có từ thời thế giới còn là mặt phẳng vô hình, và map thì sửa được bất
             // cứ lúc nào. Gỡ ra trước khi entity tồn tại — chứ không phải để tick đầu tiên tự xoay xở
             // với một cái thân đang nằm trong đá.
             float spawnX = MovementRules.ClampX(map, _profile, row.X);
             float spawnY = MovementRules.ResolveSpawnY(map, _profile, spawnX, row.Y);
 
-            if (spawnY != row.Y || spawnX != row.X)
+            if (spawnX != row.X || spawnY != row.Y)
             {
                 // LA LỚN chứ không im lặng sửa: một người bị đẩy là chuyện thường, ba trăm người bị
                 // đẩy nghĩa là vừa có ai đó export một map hỏng.
-                Log.Warn($"{row.Name} spawn kẹt tại ({row.X:0.##}, {row.Y:0.##}) — đẩy về ({spawnX:0.##}, {spawnY:0.##})");
+                Log.Warn($"{row.Name} spawn kẹt tại ({row.X:0.##}, {row.Y:0.##}) — " +
+                         $"đẩy về ({spawnX:0.##}, {spawnY:0.##})");
             }
 
             State = MoveState.AtRest(spawnX, spawnY);
         }
+```
 
-        public void Integrate(float dt)
-        {
-            ...
+`Integrate` đổi đúng dòng cuối — thêm `_map` vào lời gọi, phần trên giữ nguyên:
+
+```csharp
             State = MovementRules.Step(State, intent, dt, _profile, _map);
+```
+
+#### Server — `WorldService.cs`
+
+**Bây giờ mới** đổi dòng dựng entity trong `Spawn` (Bước 2 cố tình để nguyên nó — hàm dựng lúc đó chưa
+nhận map):
+
+```csharp
+            int entityId = Interlocked.Increment(ref _nextEntityId);
+            var entity = new PlayerEntity(entityId, row, owner, Map);
+```
+
+#### Client — `PlayerMotor.cs`
+
+Thêm một field cạnh `_profile`:
+
+```csharp
+        private CharacterProfile _profile;
+
+        /// <summary>
+        /// Lưới va chạm client dự đoán bằng. PHẢI là đúng lưới server đang chạy — hai bên đọc cùng
+        /// một file nên chuyện đó được bảo đảm bằng cơ chế, không bằng trí nhớ.
+        /// </summary>
+        private MapGrid _map;
+```
+
+`Init` — **đủ thân hàm**, vì đây chính là chỗ bạn báo là tài liệu đưa thiếu:
+
+```csharp
+        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos,
+            int classId, MapGrid map)
+        {
+            _worldApi = worldApi;
+            _worldNetHandler = worldNetHandler;
+            _profile = CharacterProfiles.Get(classId);
+            _map = map;
+
+            _simState = MoveState.AtRest(spawnPos.x, spawnPos.y);
+            _prevSimState = _simState;
+
+            // Animator cần cùng bảng đó, nhưng chỉ để co clip cho vừa thời lượng.
+            _characterAnimator.Init(_profile);
+
+            _worldNetHandler.OnMoveStateResult += OnMoveStateResult;
         }
 ```
 
-`WorldService.Spawn` đổi đúng một dòng: `new PlayerEntity(entityId, row, owner, Map)`.
+(`spawnPos` đã là vị trí **đã được server gỡ khỏi tường** — `EnterWorldResponse.X/Y` đọc từ
+`entity.X/Y`, tức sau `ResolveSpawnY`. Client không phải gỡ lại lần nữa.)
 
-**Client — `PlayerMotor`:** giữ map, truyền vào **cả hai** chỗ gọi:
+Hai chỗ gọi `Step`, mỗi chỗ đổi đúng một dòng:
 
 ```csharp
-        private MapGrid _map;
-
-        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos, int classId, MapGrid map)
-        {
-            ...
-            _map = map;
-        }
-
         private void Step(float dirX, bool crouch)
         {
-            ...
+            // ... phần dựng intent giữ nguyên ...
             _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, _profile, _map);
-            ...
+            // ... phần ghi nợ + gửi giữ nguyên ...
         }
+```
 
+```csharp
         private void OnMoveStateResult(MoveStateResponse response)
         {
-            ...
+            // ... phần trên giữ nguyên ...
             foreach (PendingInput pending in _pending)
             {
                 previous = state;
@@ -2136,8 +2323,22 @@ và các hàm va chạm:
                 // dự đoán chặn, replay cho qua, mỗi gói MoveState là một lần đổi ý.
                 state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT, _profile, _map);
             }
-            ...
+            // ... phần bù hiển thị giữ nguyên ...
         }
+```
+
+#### Client — `WorldSpawner.cs`
+
+**Bây giờ mới** đưa map cho motor. Bước 2 đã có sẵn dòng `_mapService.Load(...)`; giờ hứng kết quả và
+truyền tiếp:
+
+```csharp
+            // Nạp map TRƯỚC khi Init motor: motor cần lưới va chạm ngay từ tick dự đoán đầu tiên.
+            MapGrid map = _mapService.Load(response.MapId);
+
+            var motor = _localPlayerObject.GetComponent<PlayerMotor>();
+            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y),
+                response.ClassId, map);
 ```
 
 </details>
@@ -2204,18 +2405,23 @@ thay vì để bạn tự nhìn hai dòng log.
 | `CS0246: The type or namespace name 'MapDefinition' could not be found` | còn sót tên cũ; kiểu DTO của file map tên là **`MapFileData`** | `MapFile.cs` — cả `Parse` (`DeserializeObject<MapFileData>`) lẫn `Write` (`new MapFileData`); và đảm bảo không còn file `MapDefinition.cs` |
 | `CS0104: 'Object' is an ambiguous reference between 'System.Object' and 'UnityEngine.Object'` | `MapExporter.cs` có cả `using System` lẫn `using UnityEngine` | thêm `using Object = UnityEngine.Object;` — xem foldout `MapExporter.cs` |
 | `CS0103: The name 'TryResolvePrefabKey' does not exist` | gõ thiếu hàm phụ ở cuối `MapExporter.cs` | chép nốt phần cuối foldout `MapExporter.cs` — hàm nằm sau `TryCollectSpawns` |
-| `CS0246: 'JsonProperty' / 'JsonConvert' could not be found` | chưa thêm `Newtonsoft.Json` vào `Shared.csproj` | §"Chuẩn bị: thêm phụ thuộc" ở Bước 1 |
+| `CS0246: 'JsonConvert' / 'JsonSerializerSettings' could not be found` | chưa thêm `Newtonsoft.Json` vào `Shared.csproj` | §"Chuẩn bị: thêm phụ thuộc" ở Bước 1 |
 | `CS0234: 'MapGrid' does not exist in namespace 'MMORPG.Shared.World'` (bên Unity) | `Shared` build lỗi nên DLL chưa được copy sang, Unity vẫn dùng bản cũ | build `Server/Shared` cho **xanh** rồi mới quay lại Unity |
 | `CS1501: No overload for 'Step' takes 4 arguments` | Bước 3 đổi chữ ký `Step`, còn chỗ gọi chưa sửa | ba chỗ trong bảng ở đầu Bước 3 — **đừng** thêm overload cũ để bịt lỗi |
+| `CS1729: 'PlayerEntity' does not contain a constructor that takes 4 arguments` | `WorldService.Spawn` đã truyền `Map` nhưng hàm dựng chưa nhận — **chạy trước một bước** | Bước 3 foldout 4 §`PlayerEntity.cs`. Còn đang ở Bước 2 thì trả `Spawn` về `new PlayerEntity(entityId, row, owner)` |
+| `CS1501: No overload for 'Init' takes 5 arguments` | `WorldSpawner` đã truyền `map` nhưng `PlayerMotor.Init` chưa nhận — cùng loại chạy trước một bước | Bước 3 foldout 4 §`PlayerMotor.cs`. Còn đang ở Bước 2 thì bỏ tham số thứ năm ở chỗ gọi |
+| `CS0103: The name 'Log' does not exist` trong `PlayerEntity.cs` | hàm dựng mới gọi `Log.Warn` mà file chưa có `using MMORPG.ServerCore;` | thêm using — xem đầu Bước 3 foldout 4 |
 
 **Chạy được nhưng sai:**
 
 | Triệu chứng | Nguyên nhân thường gặp | Chỗ sửa |
 |---|---|---|
+| `cells` nhìn lệch cột, hàng dài hàng ngắn | **không phải lỗi file** — bạn đang xem bằng khung preview của Inspector Unity, nó dùng font **tỉ lệ** nên chữ `1` hẹp hơn `0`. Mọi hàng trong file dài đúng bằng nhau | mở file bằng Rider / VS Code (double-click asset trong Project window), hoặc kiểm bằng `awk` — xem CHECKPOINT B |
 | Map lộn ngược | `Parse` hoặc `Write` lật trục Y một bên mà không lật bên kia | `MapFile` — và bài round-trip ở CHECKPOINT A phải đỏ, nếu nó xanh thì lưới mẫu đang đối xứng |
-| Map lệch nửa ô / lệch hẳn một đoạn | `Grid` hoặc `Collision` không ở `(0,0,0)`, hoặc `cellSize ≠ 1` | phép kiểm `CellToWorld` trong `MapExporter` — nếu nó không kêu thì bạn chưa viết nó |
+| Export báo `Hệ toạ độ ô không trùng world` | **hay gặp nhất:** instance `Map` trong scene bị kéo lệch (override `m_LocalPosition`) trong khi prefab vẫn sạch. Ngoài ra: `Grid`/`Collision` không ở `(0,0,0)`, `cellSize ≠ 1`, `cellGap ≠ 0`, hoặc có scale ≠ 1 ở một mắt xích cha | §"Bảng kiểm hệ toạ độ" ở Bước 2 — soi **cả chuỗi cha** trong Hierarchy, không chỉ mỗi Tilemap; đọc hiệu số trong thông điệp lỗi để biết lệch bao nhiêu |
+| Map lệch nửa ô / lệch hẳn một đoạn **mà tool không kêu** | phép kiểm `CellToWorld` chưa được viết | `MapExporter` |
 | Map rộng hơn hình, có hàng chục cột rỗng | quên `CompressBounds()` — `cellBounds` giữ cả vùng từng vẽ rồi xoá | `MapExporter` |
-| `FormatException: Id ô lạ` / `không phải số` lúc khởi động | ai đó sửa tay mảng `cells`, hoặc file map do bản tool mới hơn code sinh ra | export lại bằng đúng bản đang dùng, và đọc trường `_comment` ở đầu file |
+| `FormatException: Id ô lạ` / `không phải số` lúc khởi động | ai đó sửa tay mảng `cells`, hoặc file map do bản tool mới hơn code sinh ra | export lại bằng đúng bản đang dùng — đừng vá tay |
 | `FormatException: Hàng N có X ô, hàng đầu có Y` | sửa tay làm mất/thừa một id trong hàng | export lại; `Parse` bỏ qua khoảng trắng thừa nên lỗi này luôn là **thiếu hoặc thừa hẳn một ô** |
 | Export báo `Prefab map nằm ngoài mọi thư mục Resources` | `Map1.prefab` bị dời ra khỏi `Assets/Game/Resources/` | kéo về lại, hoặc đổi chỗ chứa — nhưng phải nằm dưới một `Resources` nào đó |
 | Export báo `không phải một prefab instance` | map đang được vẽ trực tiếp trong scene, chưa thành prefab; hoặc đang mở Prefab Mode | tạo `Map1.prefab` rồi export từ scene có nó |
@@ -2437,15 +2643,14 @@ người bị đẩy nghĩa là bạn vừa export một map hỏng và cần bi
   Thêm cổng vào file là thêm **một trường**, và **không** tăng `FORMAT_VERSION`:
 
   ```json
-  "portals": [
-    { "x": 46.0, "y": 0.0, "width": 1.0, "height": 2.0, "toMapId": 2, "toSpawnId": "east_gate" }
+  "Portals": [
+    { "X": 46.0, "Y": 0.0, "Width": 1.0, "Height": 2.0, "ToMapId": 2, "ToSpawnId": "east_gate" }
   ]
   ```
 
   ```csharp
-  // MapFileData.cs — thêm đúng một property
-  [JsonProperty("portals")]
-  public List<PortalDefinition>? Portals { get; set; }
+  // MapFileData.cs — thêm đúng một property, tên property LÀ tên trường trong file
+  public List<PortalFileData>? Portals { get; set; }
   ```
 
   File map **cũ** (chưa có cổng) vẫn đọc được: trường thiếu → `null` → coi như không có cổng nào. Code

@@ -95,7 +95,7 @@ namespace MMORPG.Shared.World
             DefaultSpawn = FindDefaultSpawn(_spawns);
         }
 
-        /// <summary>Mép trái/phải của map theo world. Thay cho hằng WORLD_HALF_EXTENT của Phase 6.</summary>
+        /// <summary>Mép trái/phải của map theo world. Biên ngang là dữ liệu đọc từ file map, không phải hằng số.</summary>
         public float MinX => OriginX * CELL_SIZE;
 
         public float MaxX => (OriginX + Width) * CELL_SIZE;

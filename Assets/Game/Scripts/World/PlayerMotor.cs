@@ -20,19 +20,25 @@ namespace MMORPG.Client.World
 
         /// <summary>Lệch hơn mức này thì kéo mượt là dối người chơi — cắt thẳng về vị trí đúng.</summary>
         private const float SNAP_DISTANCE = 2f;
-        
+
         [SerializeField] private CharacterAnimator _characterAnimator;
 
         private InputSystem_Actions _inputActions;
 
         private WorldApi _worldApi;
         private WorldNetHandler _worldNetHandler;
-        
+
         /// <summary>
         /// Bộ số của lớp nhân vật mình đang chơi. Client PHẢI dự đoán bằng đúng bảng server dùng —
         /// lệch một con số là lệch quỹ đạo, và reconciliation sẽ kéo giật liên tục mà không rõ vì sao.
         /// </summary>
         private CharacterProfile _profile;
+
+        /// <summary>
+        /// Lưới va chạm client dự đoán bằng. PHẢI là đúng lưới server đang chạy — hai bên đọc cùng
+        /// một file nên chuyện đó được bảo đảm bằng cơ chế, không bằng trí nhớ.
+        /// </summary>
+        private MapGrid _map;
 
         private readonly List<PendingInput> _pending = new();
         private int _nextSeq;
@@ -56,7 +62,7 @@ namespace MMORPG.Client.World
         /// ra thành một đoạn trượt ngắn thay vì một bước nhảy cóc.
         /// </summary>
         private Vector2 _renderOffset;
-        
+
         /// <summary>
         /// Cú bấm đánh đang chờ tick tới tiêu thụ. Cùng lý do như _jumpLatched: Update chạy 60–300Hz
         /// còn Step chỉ 20Hz, đọc WasPressedThisFrame bên trong vòng tick là bỏ lỡ phần lớn cú bấm.
@@ -69,11 +75,12 @@ namespace MMORPG.Client.World
             _inputActions.Player.Enable();
         }
 
-        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos, int classId)
+        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos, int classId, MapGrid map)
         {
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
             _profile = CharacterProfiles.Get(classId);
+            _map = map;
 
             _simState = MoveState.AtRest(spawnPos.x, spawnPos.y);
             _prevSimState = _simState;
@@ -146,7 +153,7 @@ namespace MMORPG.Client.World
                 new Vector2(_simState.X, _simState.Y),
                 alpha);
         }
-        
+
         /// <summary>Một bước dự đoán: mô phỏng trước, ghi nợ, gửi lên server. Gửi CẢ khi đứng yên — thả phím cũng là input.</summary>
         private void Step(float dirX, bool crouch)
         {
@@ -164,7 +171,7 @@ namespace MMORPG.Client.World
             _jumpLatched = false;
             _attackLatched = false;
 
-            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, _profile);
+            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, _profile, _map);
 
             _pending.Add(new PendingInput(seq, intent));
             _worldApi.Move(seq, intent);
@@ -192,7 +199,11 @@ namespace MMORPG.Client.World
             foreach (PendingInput pending in _pending)
             {
                 previous = state;
-                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT, _profile);
+
+                // Vòng replay PHẢI dùng đúng map của bước dự đoán. Đây là chỗ dễ quên nhất trong cả
+                // phase, và triệu chứng của việc quên không phải "sai vị trí" mà là RUNG ở sát tường:
+                // dự đoán chặn, replay cho qua, mỗi gói MoveState là một lần đổi ý.
+                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT, _profile, _map);
             }
 
             _prevSimState = previous;

@@ -1,3 +1,4 @@
+using MMORPG.ServerCore;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.World;
 
@@ -59,7 +60,10 @@ namespace MMORPG.GameServer.World
         /// </summary>
         private readonly CharacterProfile _profile;
 
-        public PlayerEntity(int entityId, CharacterRow row, ClientSession owner)
+        /// <summary>Lưới va chạm của map entity đang đứng. Một map cho tới khi có cửa chuyển map.</summary>
+        private readonly MapGrid _map;
+
+        public PlayerEntity(int entityId, CharacterRow row, ClientSession owner, MapGrid map)
         {
             EntityId = entityId;
             CharacterId = row.CharacterId;
@@ -68,13 +72,31 @@ namespace MMORPG.GameServer.World
             ClassId = row.ClassId;
             Level = row.Level;
             MapId = row.MapId;
-            State = MoveState.AtRest(row.X, row.Y);
             Owner = owner;
 
             // Thiếu dòng này thì Step nhận profile null và ném NRE ở MỌI tick. GameLoop nuốt lỗi để
             // một tick hỏng không giết nhịp tim server, nên triệu chứng không phải là crash mà là:
             // không ai được tích phân, không gói MoveState/WorldSnapshot nào được gửi đi.
             _profile = CharacterProfiles.Get(row.ClassId);
+            _map = map;
+
+            // Phải nằm SAU _profile: gỡ spawn cần biết thân nhân vật to cỡ nào.
+            //
+            // Vị trí trong DB có từ thời thế giới còn là mặt phẳng vô hình, và map thì sửa được bất
+            // cứ lúc nào. Gỡ ra trước khi entity tồn tại — chứ không phải để tick đầu tiên tự xoay xở
+            // với một cái thân đang nằm trong đá.
+            float spawnX = MovementRules.ClampX(map, _profile, row.X);
+            float spawnY = MovementRules.ResolveSpawnY(map, _profile, spawnX, row.Y);
+
+            if (Math.Abs(spawnX - row.X) > 0.1f || Math.Abs(spawnY - row.Y) > 0.1f)
+            {
+                // LA LỚN chứ không im lặng sửa: một người bị đẩy là chuyện thường, ba trăm người bị
+                // đẩy nghĩa là vừa có ai đó export một map hỏng.
+                Log.Warn($"{row.Name} spawn kẹt tại ({row.X:0.##}, {row.Y:0.##}) — " +
+                         $"đẩy về ({spawnX:0.##}, {spawnY:0.##})");
+            }
+
+            State = MoveState.AtRest(spawnX, spawnY);
         }
 
         /// <summary>Nhận ý định đã được handler làm sạch. Chạy ở luồng IO, không phải luồng tick.</summary>
@@ -162,7 +184,7 @@ namespace MMORPG.GameServer.World
             _pendingJump = false;
             _pendingAction = ActionRequest.None;
 
-            State = MovementRules.Step(State, intent, dt, _profile);
+            State = MovementRules.Step(State, intent, dt, _profile, _map);
         }
     }
 }
