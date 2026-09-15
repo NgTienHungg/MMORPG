@@ -70,7 +70,7 @@
       "depth": 0,
       "source": "git",
       "dependencies": {},
-      "hash": "8e7b8eae07862280ac1eed7f5a63161b1c9f9166"
+      "hash": "4d03ac0b2da5c2eefc435c34ad016450d805e89d"
     },
     "com.hungnt.ui": {
       "version": "file:com.hungnt.ui",
@@ -270,6 +270,15 @@
       "dependencies": {},
       "url": "https://packages.unity.com"
     },
+    "com.unity.multiplayer.playmode": {
+      "version": "1.6.1",
+      "depth": 0,
+      "source": "registry",
+      "dependencies": {
+        "com.unity.nuget.newtonsoft-json": "2.0.2"
+      },
+      "url": "https://packages.unity.com"
+    },
     "com.unity.nuget.mono-cecil": {
       "version": "1.11.5",
       "depth": 2,
@@ -400,13 +409,6 @@
         "com.unity.modules.ui": "1.0.0",
         "com.unity.modules.imgui": "1.0.0"
       }
-    },
-    "com.veriorpies.parrelsync": {
-      "version": "https://github.com/VeriorPies/ParrelSync.git?path=/ParrelSync",
-      "depth": 0,
-      "source": "git",
-      "dependencies": {},
-      "hash": "a122dc90cbe2d4cc2669ddad00b12b3917ef934b"
     },
     "jp.hadashikick.vcontainer": {
       "version": "https://github.com/hadashiA/VContainer.git?path=VContainer/Assets/VContainer",

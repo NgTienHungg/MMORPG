@@ -164,8 +164,9 @@ một `EntityId` nó chưa từng nghe tên. Chọn cách xử ở **client**: i
 
 ### ✅ CHECKPOINT A — nhìn bằng log trước khi có hình
 
-Cần 2 tài khoản (1 tài khoản = 1 nhân vật!). Mở 2 client — cách nhanh nhất: **ParrelSync** (clone project,
-mở 2 Editor), hoặc build một bản `.exe` chạy cạnh Editor.
+Cần 2 tài khoản (1 tài khoản = 1 nhân vật!). Mở 2 client — cách nhanh nhất: **Multiplayer Play Mode**
+(`Window → Multiplayer → Multiplayer Play Mode`, tick **Player 2** → bấm Play ở Editor chính là cả hai
+cùng chạy), hoặc build một bản `.exe` chạy cạnh Editor.
 
 1. A vào world trước, B vào sau → console A hiện `EntitySpawn` của B; console B hiện `EntitySpawn` của A
    (danh sách người có mặt).

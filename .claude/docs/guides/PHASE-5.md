@@ -1279,7 +1279,7 @@ namespace MMORPG.Client.World
 
 ## Bước 6 — Bốn thử nghiệm bắt buộc
 
-**1. Hai client cùng tài khoản.** Chạy bản build song song Editor (hoặc ParrelSync), đăng nhập cùng tài
+**1. Hai client cùng tài khoản.** Chạy bản build song song Editor (hoặc Multiplayer Play Mode), đăng nhập cùng tài
 khoản ở cả hai. Client thứ hai đá client thứ nhất (cơ chế Phase 4) → session cũ đóng → `LeaveWorldAsync`
 trong `finally` chạy → entity cũ biến mất → client mới vào world bình thường.
 - Nếu client mới lãnh `CharacterInUse` mãi → entity của session cũ chưa được dọn: kiểm `LeaveWorldAsync`

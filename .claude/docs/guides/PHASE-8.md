@@ -826,7 +826,7 @@ namespace MMORPG.Client.World
 1. Một client: nhân vật rơi xuống y = 0, chạy trái/phải bằng A/D, bấm Space thì bay lên ~2 unit rồi rơi
    xuống. Giữ Space không nhảy liên tục; thả ra bấm lại mới nhảy tiếp.
 2. Bấm Space giữa không trung → **không có gì xảy ra**. Đây là điều kiện `Grounded` đang chạy ở server.
-3. Hai client (ParrelSync): client A nhảy, client B thấy A bay lên rồi rơi xuống theo **đường cong**,
+3. Hai client (Multiplayer Play Mode): client A nhảy, client B thấy A bay lên rồi rơi xuống theo **đường cong**,
    không phải dịch chuyển tức thời. Bộ nội suy Phase 7 không phải sửa dòng nào — nó nội suy *vị trí*,
    không quan tâm vị trí ấy sinh ra từ luật nào.
 4. Nhảy liên tục 20 lần: **không** có cú nào bị nuốt.

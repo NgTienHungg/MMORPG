@@ -1509,7 +1509,7 @@ _netService.Send(NetCmd.Logout, new EmptyRequest());
 → Console Unity: `NotAuthenticated — Logout cần trạng thái Authenticated, session đang ở Connected`.
 Đây là bằng chứng hàng rào ở dispatcher hoạt động, và là mẫu cho mọi lệnh từ Phase 5 trở đi.
 
-**3. Đăng nhập trùng.** Cần 2 client. Cách nhanh nhất chưa cần ParrelSync: build ra file `.exe`
+**3. Đăng nhập trùng.** Cần 2 client. Cách nhanh nhất chưa cần Multiplayer Play Mode: build ra file `.exe`
 (`File → Build Settings → Build`) rồi chạy bản build **song song** với Editor.
 - Đăng nhập `hung` ở Editor → OK.
 - Đăng nhập `hung` ở bản build → OK, và **Editor** hiện `Tài khoản của bạn vừa đăng nhập ở nơi khác.`

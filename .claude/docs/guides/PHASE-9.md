@@ -2145,7 +2145,7 @@ namespace MMORPG.Client.World
 
 ### ✅ CHECKPOINT E — mục tiêu cuối Phase 9
 
-Hai client bằng ParrelSync:
+Hai client bằng Multiplayer Play Mode:
 
 1. A chạy → B thấy A `walk`, đúng hướng. A dừng → B thấy A `idle`, **giữ hướng cũ**.
 2. A nhảy → B thấy `jump` lúc lên, `fall` lúc xuống, và tiếp đất là về `idle` ngay chứ không kẹt ở `fall`.
