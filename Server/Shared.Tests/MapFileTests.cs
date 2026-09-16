@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using MMORPG.Shared.World;
 
 namespace MMORPG.Shared.Tests
@@ -26,7 +27,7 @@ namespace MMORPG.Shared.Tests
             };
 
             return new MapGrid(7, "Test Map", "Maps/TestMap", originX: -3, originY: -2,
-                width: 4, height: 3, spawns, cells);
+                width: 4, height: 3, spawns, null, cells);
         }
 
         [Fact]

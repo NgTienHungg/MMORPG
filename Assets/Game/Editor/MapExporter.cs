@@ -29,7 +29,7 @@ namespace MMORPG.Client.EditorTools
         [MenuItem("Tools/MMORPG/Export Map")]
         public static void Export()
         {
-            var source = Object.FindFirstObjectByType<MapCollisionSource>(FindObjectsInactive.Include);
+            var source = Object.FindFirstObjectByType<MapCollisionSource>();
 
             if (source == null)
             {
@@ -46,6 +46,9 @@ namespace MMORPG.Client.EditorTools
             }
 
             if (!TryCollectSpawns(source, out List<SpawnPoint> spawns))
+                return;
+
+            if (!TryCollectPortals(source, out List<Portal> portals))
                 return;
 
             // Hỏi khoá prefab TRƯỚC khi quét lưới: hỏng ở đây thì hỏng ngay, khỏi quét mấy trăm ô rồi
@@ -104,10 +107,10 @@ namespace MMORPG.Client.EditorTools
             }
 
             var map = new MapGrid(source.MapId, source.MapName, prefabKey, bounds.xMin, bounds.yMin,
-                width, height, spawns, cells);
+                width, height, spawns, portals, cells);
 
             Directory.CreateDirectory(OUTPUT_FOLDER);
-            string path = $"{OUTPUT_FOLDER}/map{map.MapId}.json";
+            string path = $"{OUTPUT_FOLDER}/{string.Format(MapService.FILE_MAP_FORMAT, map.MapId)}.json";
             File.WriteAllText(path, MapFile.Write(map));
 
             // Không có dòng này thì file mới nằm trên đĩa nhưng Unity chưa biết, và Resources.Load vẫn
@@ -195,6 +198,59 @@ namespace MMORPG.Client.EditorTools
 
             // Cắt phần trước "/Resources/" và đuôi ".prefab" — còn lại đúng chuỗi Resources.Load nhận.
             prefabKey = Path.ChangeExtension(assetPath.Substring(start + RESOURCES_MARKER.Length), null);
+            return true;
+        }
+
+         /// <summary>
+        /// Gom danh sách cổng từ Inspector. KHÔNG kiểm được ToSpawnId có tồn tại ở map đích không —
+        /// map đích có thể chưa được export lần nào. Đó là phép kiểm của lúc CHẠY, và MapGrid.FindSpawn
+        /// đã lùi về điểm mặc định thay vì ném.
+        /// </summary>
+        private static bool TryCollectPortals(MapCollisionSource source, out List<Portal> portals)
+        {
+            portals = new List<Portal>();
+
+            foreach (MapCollisionSource.PortalMarker marker in source.Portals)
+            {
+                if (marker.Point == null)
+                {
+                    Fail("Có một dòng trong danh sách Portals còn thiếu Transform.");
+                    return false;
+                }
+
+                // Cổng rộng hoặc cao 0 thì không ai bước vào được — và không có triệu chứng nào ngoài
+                // "cái cổng đó không hoạt động", loại lỗi mất cả buổi để nghĩ ra chỗ mà nhìn.
+                if (marker.Size.x <= 0f || marker.Size.y <= 0f)
+                {
+                    Fail($"Cổng tại {marker.Point.name} có Size = {marker.Size}. Cả hai chiều phải lớn hơn 0.");
+                    return false;
+                }
+
+                if (marker.ToMapId == source.MapId)
+                {
+                    Fail($"Cổng tại {marker.Point.name} trỏ về chính map {source.MapId}.");
+                    return false;
+                }
+
+                if (string.IsNullOrWhiteSpace(marker.ToSpawnId))
+                {
+                    Fail($"Cổng tại {marker.Point.name} chưa điền ToSpawnId.");
+                    return false;
+                }
+
+                Vector3 position = marker.Point.position;
+
+                portals.Add(new Portal
+                {
+                    X = position.x,
+                    Y = position.y,
+                    Width = marker.Size.x,
+                    Height = marker.Size.y,
+                    ToMapId = marker.ToMapId,
+                    ToSpawnId = marker.ToSpawnId,
+                });
+            }
+
             return true;
         }
 

@@ -102,7 +102,7 @@ namespace MMORPG.Shared.Net
         /// Payload: <see cref="Dto.World.MoveStateResponse"/>
         /// </summary>
         MoveState = 301,
-        
+
         /// <summary>
         /// Một entity xuất hiện trong tầm quan sát. Chỉ server gửi.
         /// Payload: <see cref="Dto.World.EntitySpawnNotice"/>
@@ -120,6 +120,13 @@ namespace MMORPG.Shared.Net
         /// Payload: <see cref="Dto.World.WorldSnapshotNotice"/>
         /// </summary>
         WorldSnapshot = 304,
+
+        /// <summary>
+        /// Người chơi vừa sang map khác. Chỉ gửi cho chính người đi; những người khác biết qua
+        /// EntitySpawn/EntityDespawn của tầm nhìn, như mọi lý do xuất hiện/biến mất khác.
+        /// Payload: <see cref="Dto.World.MapChangedNotice"/>
+        /// </summary>
+        MapChanged = 305,
 
         #endregion
     }

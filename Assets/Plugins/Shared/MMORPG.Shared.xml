@@ -511,6 +511,22 @@
             </code>
             </remarks>
         </member>
+        <member name="T:MMORPG.Shared.Dto.World.MapChangedNotice">
+            <remarks>
+            MemoryPack GenerateType: Object<br/>
+            <code>
+            <b>int</b> MapId<br/>
+            <b>MMORPG.Shared.World.MoveState</b> State<br/>
+            </code>
+            </remarks>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.World.MapChangedNotice.State">
+            <summary>
+            Trạng thái ĐẦY ĐỦ ở map mới, không chỉ toạ độ. Gửi mỗi (x, y) thì vận tốc và hai bộ đếm
+            coyote/jump-buffer của map cũ còn nguyên, và tick đầu ở map mới diễn ra với một cú nhảy
+            đang dở.
+            </summary>
+        </member>
         <member name="T:MMORPG.Shared.HandshakeDto">
             <summary>
             DTO thử để kiểm chứng đường ống Shared → Unity đã thông. Không còn luồng nào dùng — xoá được.
@@ -687,6 +703,13 @@
             <summary>
             Vị trí của các entity KHÁC đang quan sát được, server đẩy mỗi tick.
             Payload: <see cref="T:MMORPG.Shared.Dto.World.WorldSnapshotNotice"/>
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.Net.NetCmd.MapChanged">
+            <summary>
+            Người chơi vừa sang map khác. Chỉ gửi cho chính người đi; những người khác biết qua
+            EntitySpawn/EntityDespawn của tầm nhìn, như mọi lý do xuất hiện/biến mất khác.
+            Payload: <see cref="T:MMORPG.Shared.Dto.World.MapChangedNotice"/>
             </summary>
         </member>
         <member name="T:MMORPG.Shared.Net.NetPayload">
@@ -897,6 +920,12 @@
             không đọc trường này bao giờ.
             </summary>
         </member>
+        <member name="P:MMORPG.Shared.World.MapFileData.Portals">
+            <summary>
+            Cổng sang map khác. Trường TUỲ CHỌN: map chưa nối đi đâu thì file thiếu hẳn trường này, và
+            đó là lý do FORMAT_VERSION không phải tăng khi thêm nó.
+            </summary>
+        </member>
         <member name="P:MMORPG.Shared.World.MapFileData.Cells">
             <summary>Lưới ô, mỗi phần tử là MỘT HÀNG. Hàng đầu là mép TRÊN map — đọc file như nhìn bản vẽ.</summary>
         </member>
@@ -908,6 +937,17 @@
             Một chỗ người chơi có thể xuất hiện, toạ độ WORLD. Có <see cref="P:MMORPG.Shared.World.SpawnPoint.Id"/> vì map cần trỏ tới nhau
             được bằng tên: một cổng ở map khác phải nói rõ nó dẫn tới điểm nào của map này.
             </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.Portal">
+             <summary>
+             Một vùng chữ nhật world mà BƯỚC VÀO là sang map khác. (X, Y) là TÂM của vùng.
+            
+             Điểm đến ghi bằng TÊN chứ không phải toạ độ: file map này không được phép biết toạ độ bên trong
+             map kia — vẽ lại map kia là mọi cổng trỏ tới nó phải sửa theo, mà không có gì nhắc.
+             </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Portal.ToSpawnId">
+            <summary>Id điểm spawn ở map đích. Không có điểm nào mang tên này thì về điểm mặc định.</summary>
         </member>
         <member name="T:MMORPG.Shared.World.CellType">
             <summary>Loại ô. Ba loại, và loại thứ ba là thứ làm nên thể loại platformer.</summary>
@@ -936,17 +976,19 @@
         <member name="F:MMORPG.Shared.World.MapGrid.DEFAULT_SPAWN_ID">
             <summary>Id của điểm spawn mặc định — chỗ người chơi xuất hiện khi không có nguồn nào khác chỉ định.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.MapGrid.PrefabKey">
-            <summary>
-            Khoá tài nguyên của prefab chứa hình map. Chỉ client dùng; server mang nó theo mà không đọc.
-            KHÔNG vào Checksum: dấu vân tay ấy canh LUẬT có khớp nhau không, mà hình thì không phải luật.
-            </summary>
-        </member>
-        <member name="P:MMORPG.Shared.World.MapGrid.OriginX">
-            <summary>Ô góc dưới-trái của vùng đã vẽ. Âm là chuyện bình thường.</summary>
-        </member>
         <member name="P:MMORPG.Shared.World.MapGrid.DefaultSpawn">
             <summary>Điểm spawn mặc định, chốt một lần lúc dựng để chỗ gọi không phải tìm lại mỗi lần.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapGrid.FindSpawn(System.String)">
+             <summary>
+             Điểm spawn mang tên này; không có thì về điểm mặc định.
+            
+             Lùi về mặc định chứ không ném: một cổng trỏ sai tên là lỗi dữ liệu đáng sửa, nhưng ném ở đây
+             thì người chơi kẹt lại giữa hai map và không có đường nào ra.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapGrid.PortalAt(System.Single,System.Single)">
+            <summary>Cổng chứa điểm world này, hoặc null. Số cổng mỗi map đếm trên đầu ngón tay nên quét thẳng.</summary>
         </member>
         <member name="P:MMORPG.Shared.World.MapGrid.MinX">
             <summary>Mép trái/phải của map theo world. Biên ngang là dữ liệu đọc từ file map, không phải hằng số.</summary>

@@ -16,6 +16,8 @@ namespace MMORPG.Client.World
     {
         private const string RESOURCE_FOLDER = "Maps";
 
+        public const string FILE_MAP_FORMAT = "map_{0}";
+
         /// <summary>Map đang đứng. Null cho tới lần Load đầu tiên.</summary>
         public MapGrid Current { get; private set; }
 
@@ -27,7 +29,7 @@ namespace MMORPG.Client.World
                 return Current;
 
             // Không có đuôi .json trong đường dẫn: Resources.Load luôn bỏ phần đuôi file.
-            var asset = Resources.Load<TextAsset>($"{RESOURCE_FOLDER}/map{mapId}");
+            var asset = Resources.Load<TextAsset>($"{RESOURCE_FOLDER}/{string.Format(FILE_MAP_FORMAT, mapId)}");
 
             if (asset == null)
                 throw new FileNotFoundException($"Không thấy Resources/{RESOURCE_FOLDER}/map{mapId}.json. Chạy Tools/MMORPG/Export Map.");

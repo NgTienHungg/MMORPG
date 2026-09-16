@@ -61,4 +61,17 @@ namespace MMORPG.Shared.Dto.World
     {
         public EntityState[] States { get; set; } = Array.Empty<EntityState>();
     }
+
+    [MemoryPackable]
+    public partial class MapChangedNotice
+    {
+        public int MapId { get; set; }
+
+        /// <summary>
+        /// Trạng thái ĐẦY ĐỦ ở map mới, không chỉ toạ độ. Gửi mỗi (x, y) thì vận tốc và hai bộ đếm
+        /// coyote/jump-buffer của map cũ còn nguyên, và tick đầu ở map mới diễn ra với một cú nhảy
+        /// đang dở.
+        /// </summary>
+        public MoveState State { get; set; }
+    }
 }

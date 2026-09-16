@@ -15,6 +15,26 @@ namespace MMORPG.GameServer.World
     {
         public const int DEFAULT_CLASS_ID = 1;
 
+        /// <summary>
+        /// Bề ngang một cột tầm nhìn. Tầm nhìn = 3 cột → bán kính bảo đảm 12 unit mỗi bên, rộng hơn
+        /// nửa màn hình (~9 unit) một chút.
+        ///
+        /// Chỉ chia theo trục X: map cao ~11 unit mà một màn hình đã cao 10, nên chia trục Y là tốn
+        /// thêm một chiều trong khoá để nhận về một phép lọc gần như không lọc gì.
+        /// </summary>
+        private const float AOI_COLUMN_WIDTH = 12f;
+
+        // Ba bộ đệm của vòng tick, giữ làm field và Clear() mỗi lần dùng. Cấp phát mới mỗi tick là
+        // rác GC đều đặn 20 lần/giây suốt đời server — thứ chạy mỗi tick thì hình dạng bộ nhớ của nó
+        // là một phần thiết kế. Chỉ luồng tick chạm vào, nên không cần đồng bộ gì.
+        private readonly Dictionary<(int MapId, int Column), List<PlayerEntity>> _columns = new();
+        private readonly List<PlayerEntity> _visibleNow = new();
+
+        // Cùng nội dung với _visibleNow nhưng chỉ id, để phép "ai vừa rời tầm nhìn" hỏi trong O(1).
+        // Không có nó thì vòng RemoveWhere phải quét cả _visibleNow cho MỖI id cũ — O(n·m) mỗi người
+        // mỗi tick, tức O(n²·m) cho cả server, và đó đúng là con số AOI sinh ra để giết.
+        private readonly HashSet<int> _visibleIds = new();
+
         // Hai sổ tra cứu: theo entityId (đường chính) và theo accountId (kiểm "tài khoản này đã có
         // entity chưa"). ConcurrentDictionary vì Spawn/Despawn chạy từ handler của nhiều session song song.
         private readonly ConcurrentDictionary<int, PlayerEntity> _entities = new();
@@ -49,24 +69,11 @@ namespace MMORPG.GameServer.World
             _entities[entityId] = entity;
             _entityIdByAccount[entity.AccountId] = entity.EntityId;
 
-            Log.Info($"Spawn {entity.Name.Cyan()} entity {entityId.ToString().Green()} " + $"tại map {entity.MapId} ({entity.X:0.##}, {entity.Y:0.##}) — " + $"{OnlineCount} người trong world");
+            Log.Info($"Spawn {entity.Name.Cyan()} entity {entityId.ToString().Green()} " +
+                     $"tại map {entity.MapId} ({entity.X:0.##}, {entity.Y:0.##}) — {OnlineCount} người trong world");
 
-            // Người mới cần biết ai đang có mặt — gửi một loạt EntitySpawn về từng người cũ.
-            foreach (PlayerEntity other in _entities.Values)
-            {
-                if (other.EntityId == entity.EntityId)
-                    continue;
-
-                // 2 player khác map thì k cần quan tâm
-                if (other.MapId != entity.MapId)
-                    continue;
-
-                owner.SendData(NetCmd.EntitySpawn, ToSpawnNotice(other));
-            }
-
-            // Và người cũ cần biết có người mới.
-            Broadcast(NetCmd.EntitySpawn, ToSpawnNotice(entity),entity.MapId, exceptEntityId: entity.EntityId);
-
+            // Không thông báo gì ở đây nữa. Ai thấy được người này thì tick kế tiếp sẽ tự phát hiện —
+            // "vừa vào world" chỉ là MỘT cách để lọt vào tầm nhìn ai đó, không phải cách duy nhất.
             return entity;
         }
 
@@ -74,13 +81,6 @@ namespace MMORPG.GameServer.World
         {
             _entities.TryRemove(entity.EntityId, out _);
             _entityIdByAccount.TryRemove(entity.AccountId, out _);
-
-            Broadcast(
-                NetCmd.EntityDespawn,
-                new EntityDespawnNotice { EntityId = entity.EntityId },
-                entity.MapId,
-                exceptEntityId: entity.EntityId
-            );
 
             Log.Info($"Despawn {entity.Name.Cyan()} entity {entity.EntityId} — còn {OnlineCount} người");
         }
@@ -159,52 +159,171 @@ namespace MMORPG.GameServer.World
             foreach (PlayerEntity entity in _entities.Values)
                 entity.Integrate(dt);
 
-            // Vòng 2: gửi. MoveState cho chính chủ (đường reconciliation),
-            // WorldSnapshot về những người còn lại (đường interpolation).
+            // Vòng 1b: cổng. SAU tích phân vì vị trí phải chốt xong mới biết có bước vào cổng không;
+            // TRƯỚC dựng chỉ mục vì chính tick này chỉ mục phải thấy họ đã ở map mới — nhờ vậy phép
+            // diff ở vòng 3 báo tin ngay, không trễ thêm một nhịp.
+            foreach (PlayerEntity entity in _entities.Values)
+                TryTakePortal(entity);
+
+            // Vòng 2: dựng lại chỉ mục cột từ đầu. O(n), và không có trạng thái nào sống qua tick nên
+            // không tồn tại lớp bug "chỉ mục lệch thực tế" (quên gỡ cột cũ, entity chết còn nằm lại...).
+            _columns.Clear();
+
             foreach (PlayerEntity entity in _entities.Values)
             {
-                if (entity.Owner == null)
+                (int, int) key = ColumnOf(entity);
+
+                if (!_columns.TryGetValue(key, out List<PlayerEntity> column))
+                {
+                    column = new List<PlayerEntity>();
+                    _columns[key] = column;
+                }
+
+                column.Add(entity);
+            }
+
+            // Vòng 3: với từng người — tầm nhìn mới, so với tầm nhìn cũ, phát spawn/despawn, gửi trạng thái.
+            foreach (PlayerEntity viewer in _entities.Values)
+            {
+                if (viewer.Owner == null)
                     continue;
 
-                // Gửi nguyên State: thêm trường vào MoveState sau này là tự động lên dây,
-                // không phải nhớ quay lại đây chép thêm một dòng.
-                entity.Owner.SendData(NetCmd.MoveState, new MoveStateResponse
+                CollectVisible(viewer);
+
+                // (1) Ai mới lọt vào tầm nhìn → giới thiệu họ với viewer.
+                foreach (PlayerEntity seen in _visibleNow)
+                {
+                    if (!viewer.Visible.Contains(seen.EntityId))
+                        viewer.Owner.SendData(NetCmd.EntitySpawn, ToSpawnNotice(seen));
+                }
+
+                // (2) Ai vừa rời tầm nhìn → báo biến mất. PHẢI làm trước khi ghi đè tập Visible;
+                //     đảo thứ tự thì tập cũ mất trước khi kịp so, và không ai despawn bao giờ.
+                viewer.Visible.RemoveWhere(id =>
+                {
+                    if (_visibleIds.Contains(id))
+                        return false;
+
+                    viewer.Owner.SendData(NetCmd.EntityDespawn, new EntityDespawnNotice { EntityId = id });
+
+                    return true;
+                });
+
+                // (3) Chốt tập mới.
+                foreach (PlayerEntity seen in _visibleNow)
+                    viewer.Visible.Add(seen.EntityId);
+
+                // Vị trí của chính mình vẫn đi đường riêng — đường reconciliation, không dính AOI:
+                // bạn luôn nhìn thấy chính mình.
+                viewer.Owner.SendData(NetCmd.MoveState, new MoveStateResponse
                     {
-                        LastInputSeq = entity.LastInputSeq,
-                        State = entity.State,
+                        LastInputSeq = viewer.LastInputSeq,
+                        State = viewer.State,
                     }
                 );
 
-                entity.Owner.SendData(NetCmd.WorldSnapshot, BuildSnapshotFor(entity));
+                viewer.Owner.SendData(NetCmd.WorldSnapshot, BuildSnapshot());
             }
         }
 
-        /// <summary>Mọi entity trừ chính người nhận. O(n²) mỗi tick — chấp nhận cho tới khi có AOI.</summary>
-        private WorldSnapshotNotice BuildSnapshotFor(PlayerEntity viewer)
+
+
+        private static (int MapId, int Column) ColumnOf(PlayerEntity entity)
         {
-            var states = new List<EntityState>(_entities.Count - 1);
+            // Floor chứ không phải cast: toạ độ X âm (nửa trái của map) phải rơi về cột bên trái,
+            // không gom hết về cột 0 — cast cắt về phía 0 nên -5 và +5 sẽ cùng ra cột 0.
+            return (entity.MapId, (int)MathF.Floor(entity.State.X / AOI_COLUMN_WIDTH));
+        }
 
-            foreach (PlayerEntity entity in _entities.Values)
+        /// <summary>
+        /// Đổ vào <see cref="_visibleNow"/> mọi entity trong 3 cột quanh viewer, cùng map, trừ chính
+        /// viewer.
+        ///
+        /// Lọc MapId là ranh giới CỨNG: hai người ở hai map khác nhau không bao giờ thấy nhau dù toạ
+        /// độ X của họ bằng nhau. Hiện chỉ có một map nên nó chưa lọc gì — nhưng viết bây giờ rẻ hơn
+        /// nhiều so với đi tìm lý do người ở hang động nhìn thấy người ở đồng cỏ.
+        /// </summary>
+        private void CollectVisible(PlayerEntity viewer)
+        {
+            _visibleNow.Clear();
+            _visibleIds.Clear();
+
+            (int mapId, int column) = ColumnOf(viewer);
+
+            for (int offset = -1; offset <= 1; offset++)
             {
-                if (entity.EntityId == viewer.EntityId)
+                if (!_columns.TryGetValue((mapId, column + offset), out List<PlayerEntity> cell))
                     continue;
 
-                if (entity.MapId != viewer.MapId)
-                    continue;
+                foreach (PlayerEntity entity in cell)
+                {
+                    if (entity.EntityId == viewer.EntityId)
+                        continue;
 
-                states.Add(new EntityState
-                    {
-                        EntityId = entity.EntityId,
-                        X = entity.X,
-                        Y = entity.Y,
-                        FacingLeft = entity.State.FacingLeft,
-                        Crouching = entity.State.Crouching,
-                        Action = entity.State.Action,
-                    }
-                );
+                    _visibleNow.Add(entity);
+                    _visibleIds.Add(entity.EntityId);
+                }
+            }
+        }
+
+        /// <summary>Snapshot dựng từ tập vừa gom — không còn duyệt toàn bộ world như Phase 7.</summary>
+        private WorldSnapshotNotice BuildSnapshot()
+        {
+            var states = new EntityState[_visibleNow.Count];
+
+            for (int i = 0; i < _visibleNow.Count; i++)
+            {
+                PlayerEntity entity = _visibleNow[i];
+
+                states[i] = new EntityState
+                {
+                    EntityId = entity.EntityId,
+                    X = entity.X,
+                    Y = entity.Y,
+                    FacingLeft = entity.State.FacingLeft,
+                    Crouching = entity.State.Crouching,
+                    Action = entity.State.Action,
+                };
             }
 
-            return new WorldSnapshotNotice { States = states.ToArray() };
+            return new WorldSnapshotNotice { States = states };
+        }
+
+         /// <summary>
+        /// Đưa entity qua cổng nếu nó vừa bước vào một cái. CHỈ GỌI TỪ LUỒNG TICK.
+        ///
+        /// Chú ý cái KHÔNG có ở đây: không gửi EntityDespawn cho ai, không gửi EntitySpawn cho ai,
+        /// không dọn danh sách nào cả. Đổi MapId là đổi khoá chỉ mục, và phép diff tầm nhìn ở vòng 3 tự
+        /// sinh ra đủ bốn chiều thông báo. Đó là toàn bộ lý do bước này nằm SAU Bước 1.
+        /// </summary>
+        private void TryTakePortal(PlayerEntity entity)
+        {
+            Portal portal = entity.TakePortal();
+
+            if (portal == null)
+                return;
+
+            if (!_maps.TryGet(portal.ToMapId, out MapGrid target))
+            {
+                // Dữ liệu hỏng chứ không phải người chơi làm sai — đứng yên còn hơn ném họ đi đâu đó.
+                Log.Warn($"Cổng ở map {entity.MapId} trỏ tới map {portal.ToMapId} không có trong registry.");
+                return;
+            }
+
+            SpawnPoint spawn = target.FindSpawn(portal.ToSpawnId);
+            int fromMapId = entity.MapId;
+
+            entity.MoveToMap(target, spawn.X, spawn.Y);
+
+            // Gói DUY NHẤT phải gửi tay ở đây — và nó không nói với ai ngoài chính người đi.
+            entity.Owner?.SendData(NetCmd.MapChanged, new MapChangedNotice
+            {
+                MapId = entity.MapId,
+                State = entity.State,
+            });
+
+            Log.Info($"{entity.Name.Cyan()} map {fromMapId} → {entity.MapId.ToString().Green()} " +
+                     $"tại \"{portal.ToSpawnId}\" ({entity.X:0.##}, {entity.Y:0.##})");
         }
 
         /// <summary>

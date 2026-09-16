@@ -94,7 +94,7 @@ namespace MMORPG.Shared.World
             }
 
             return new MapGrid(definition.Id, definition.Name, definition.PrefabKey,
-                origin.X, origin.Y, width, height, spawns, cells);
+                origin.X, origin.Y, width, height, spawns, definition.Portals, cells);
         }
 
         public static string Write(MapGrid map)
@@ -133,6 +133,12 @@ namespace MMORPG.Shared.World
                 PrefabKey = map.PrefabKey,
                 Origin = new CellPoint { X = map.OriginX, Y = map.OriginY },
                 Spawns = new List<SpawnPoint>(map.Spawns),
+
+                // Map không có cổng thì file KHÔNG có trường Portals, chứ không phải có mà rỗng:
+                // NullValueHandling.Ignore ở Settings lo phần đó. Một mảng rỗng nằm trong file là một
+                // câu hỏi thừa cho người mở file ra đọc.
+                Portals = map.Portals.Count > 0 ? new List<Portal>(map.Portals) : null,
+
                 Cells = rows,
             };
 

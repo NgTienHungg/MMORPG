@@ -37,6 +37,12 @@ namespace MMORPG.Shared.World
 
         public List<SpawnPoint>? Spawns { get; set; }
 
+        /// <summary>
+        /// Cổng sang map khác. Trường TUỲ CHỌN: map chưa nối đi đâu thì file thiếu hẳn trường này, và
+        /// đó là lý do FORMAT_VERSION không phải tăng khi thêm nó.
+        /// </summary>
+        public List<Portal>? Portals { get; set; }
+
         /// <summary>Lưới ô, mỗi phần tử là MỘT HÀNG. Hàng đầu là mép TRÊN map — đọc file như nhìn bản vẽ.</summary>
         public List<string>? Cells { get; set; }
     }
@@ -60,5 +66,24 @@ namespace MMORPG.Shared.World
         public float X { get; set; }
 
         public float Y { get; set; }
+    }
+
+    /// <summary>
+    /// Một vùng chữ nhật world mà BƯỚC VÀO là sang map khác. (X, Y) là TÂM của vùng.
+    ///
+    /// Điểm đến ghi bằng TÊN chứ không phải toạ độ: file map này không được phép biết toạ độ bên trong
+    /// map kia — vẽ lại map kia là mọi cổng trỏ tới nó phải sửa theo, mà không có gì nhắc.
+    /// </summary>
+    public sealed class Portal
+    {
+        public float X { get; set; }
+        public float Y { get; set; }
+        public float Width { get; set; }
+        public float Height { get; set; }
+
+        public int ToMapId { get; set; }
+
+        /// <summary>Id điểm spawn ở map đích. Không có điểm nào mang tên này thì về điểm mặc định.</summary>
+        public string ToSpawnId { get; set; } = string.Empty;
     }
 }

@@ -69,6 +69,12 @@ namespace MMORPG.Client.World
         /// </summary>
         private bool _attackLatched;
 
+        /// <summary>
+        /// Mốc seq của lần đổi map gần nhất. Gói MoveState ack một input CŨ HƠN mốc này là ack của map
+        /// trước — nuốt nó vào là bị kéo ngược về toạ độ map cũ, một nhịp sau khi đã sang map mới.
+        /// </summary>
+        private int _mapEpochSeq;
+
         private void Awake()
         {
             _inputActions = new InputSystem_Actions();
@@ -183,6 +189,10 @@ namespace MMORPG.Client.World
         /// </summary>
         private void OnMoveStateResult(MoveStateResponse response)
         {
+            // Ack của map trước — xem _mapEpochSeq.
+            if (response.LastInputSeq < _mapEpochSeq)
+                return;
+
             // Chỗ ĐANG vẽ, ghi lại trước khi trạng thái bị thay: mọi phép bù bên dưới đo từ đây.
             Vector2 renderedBefore = InterpolatedPosition() + _renderOffset;
 
@@ -218,6 +228,25 @@ namespace MMORPG.Client.World
                 offset = Vector2.zero;
 
             _renderOffset = offset;
+        }
+
+        /// <summary>Đặt lại mô phỏng sang map mới. Gọi khi nhận MapChanged.</summary>
+        public void SetMap(MapGrid map, MoveState state)
+        {
+            _map = map;
+            _simState = state;
+            _prevSimState = state;
+
+            // BẮT BUỘC. Input xếp hàng cho map cũ mà đem replay trên lưới map mới thì ra quỹ đạo vô
+            // nghĩa — đây là thứ dễ quên nhất của cả tính năng.
+            _pending.Clear();
+
+            // Dịch chuyển thì không có gì để làm mượt: _renderOffset sinh ra để giấu cú sửa vài
+            // centimet, không phải để trượt qua nửa bản đồ.
+            _renderOffset = Vector2.zero;
+            _mapEpochSeq = _nextSeq;
+
+            transform.position = new Vector2(state.X, state.Y);
         }
 
         /// <summary>Một bước dự đoán chưa được server xác nhận — nguyên liệu để replay.</summary>

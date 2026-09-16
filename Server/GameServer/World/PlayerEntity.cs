@@ -61,7 +61,26 @@ namespace MMORPG.GameServer.World
         private readonly CharacterProfile _profile;
 
         /// <summary>Lưới va chạm của map entity đang đứng. Một map cho tới khi có cửa chuyển map.</summary>
-        private readonly MapGrid _map;
+        private MapGrid _map;
+
+        /// <summary>
+        /// Đã ra khỏi mọi cổng chưa — điều kiện để lần bước vào tới được tính.
+        ///
+        /// CẠNH chứ không phải MỨC. Không có cờ này thì điểm đến nằm trong cổng chiều ngược lại là hai
+        /// map ném người chơi qua lại 20 lần mỗi giây. Cùng phân biệt với nút nhảy ở Phase 8.
+        ///
+        /// KHÔNG nằm trong MoveState, khác DropThroughTicks: client không mô phỏng lại việc chuyển map,
+        /// nên đây không phải một phần của contract.
+        /// </summary>
+        private bool _portalArmed = true;
+
+        /// <summary>
+        /// Tập entityId đang trong tầm nhìn của người này — bộ nhớ để tick sau so ra ai vừa xuất hiện,
+        /// ai vừa rời đi.
+        ///
+        /// CHỈ LUỒNG TICK đọc/ghi, vì vậy không cần lock và không được đụng tới từ handler.
+        /// </summary>
+        public HashSet<int> Visible { get; } = new();
 
         public PlayerEntity(int entityId, CharacterRow row, ClientSession owner, MapGrid map)
         {
@@ -79,24 +98,62 @@ namespace MMORPG.GameServer.World
             // không ai được tích phân, không gói MoveState/WorldSnapshot nào được gửi đi.
             _profile = CharacterProfiles.Get(row.ClassId);
             _map = map;
+            State = ResolveSpawn(map, row.X, row.Y, warnIfStuck: true);
+        }
 
-            // Phải nằm SAU _profile: gỡ spawn cần biết thân nhân vật to cỡ nào.
-            //
-            // Vị trí trong DB có từ thời thế giới còn là mặt phẳng vô hình, và map thì sửa được bất
-            // cứ lúc nào. Gỡ ra trước khi entity tồn tại — chứ không phải để tick đầu tiên tự xoay xở
-            // với một cái thân đang nằm trong đá.
-            float spawnX = MovementRules.ClampX(map, _profile, row.X);
-            float spawnY = MovementRules.ResolveSpawnY(map, _profile, spawnX, row.Y);
+        /// <summary>
+        /// Dời entity sang map khác. CHỈ GỌI TỪ LUỒNG TICK.
+        ///
+        /// Ba thứ đổi CÙNG MỘT LÚC: lưới va chạm, id map, vị trí. Đổi lẻ một thứ là có đúng một tick mô
+        /// phỏng thân người ở map mới bằng lưới của map cũ — triệu chứng là rơi xuyên sàn đúng một lần
+        /// ngay lúc sang map, thứ khó tái hiện nhất trên đời.
+        /// </summary>
+        public void MoveToMap(MapGrid map, float x, float y)
+        {
+            _map = map;
+            MapId = map.MapId;
+            State = ResolveSpawn(map, x, y, warnIfStuck: false);
+        }
 
-            if (Math.Abs(spawnX - row.X) > 0.1f || Math.Abs(spawnY - row.Y) > 0.1f)
+        /// <summary>
+        /// Cổng mà entity vừa BƯỚC VÀO ở tick này, hoặc null. CHỈ GỌI TỪ LUỒNG TICK.
+        /// Gọi đúng MỘT lần mỗi tick cho mỗi entity: nó có tác dụng phụ (lên/xuống cờ).
+        /// </summary>
+        public Portal TakePortal()
+        {
+            Portal portal = _map.PortalAt(State.X, State.Y);
+
+            if (portal == null)
             {
-                // LA LỚN chứ không im lặng sửa: một người bị đẩy là chuyện thường, ba trăm người bị
-                // đẩy nghĩa là vừa có ai đó export một map hỏng.
-                Log.Warn($"{row.Name} spawn kẹt tại ({row.X:0.##}, {row.Y:0.##}) — " +
-                         $"đẩy về ({spawnX:0.##}, {spawnY:0.##})");
+                _portalArmed = true;
+                return null;
             }
 
-            State = MoveState.AtRest(spawnX, spawnY);
+            if (!_portalArmed)
+                return null;
+
+            _portalArmed = false;
+
+            return portal;
+        }
+
+        /// <summary>
+        /// Gỡ một điểm spawn ra khỏi tường. Dùng chung cho lần vào world đầu và cho mỗi lần sang map:
+        /// hai đường mà tính khác nhau thì sớm muộn một đường quên gỡ.
+        /// </summary>
+        private MoveState ResolveSpawn(MapGrid map, float x, float y, bool warnIfStuck)
+        {
+            float spawnX = MovementRules.ClampX(map, _profile, x);
+            float spawnY = MovementRules.ResolveSpawnY(map, _profile, spawnX, y);
+
+            if (warnIfStuck && (Math.Abs(spawnX - x) > 0.1f || Math.Abs(spawnY - y) > 0.1f))
+            {
+                // LA LỚN chứ không im lặng sửa: một người bị đẩy là chuyện thường, ba trăm người bị đẩy
+                // nghĩa là vừa có ai đó export một map hỏng.
+                Log.Warn($"{Name} spawn kẹt tại ({x:0.##}, {y:0.##}) — đẩy về ({spawnX:0.##}, {spawnY:0.##})");
+            }
+
+            return MoveState.AtRest(spawnX, spawnY);
         }
 
         /// <summary>Nhận ý định đã được handler làm sạch. Chạy ở luồng IO, không phải luồng tick.</summary>

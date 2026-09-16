@@ -42,6 +42,7 @@ namespace MMORPG.Client.World
             _worldNetHandler.OnEntitySpawn += OnEntitySpawn;
             _worldNetHandler.OnEntityDespawn += OnEntityDespawn;
             _worldNetHandler.OnSnapshot += OnSnapshot;
+            _worldNetHandler.OnMapChanged += OnMapChanged;
         }
 
         private void OnDestroy()
@@ -52,6 +53,7 @@ namespace MMORPG.Client.World
             _worldNetHandler.OnEntitySpawn -= OnEntitySpawn;
             _worldNetHandler.OnEntityDespawn -= OnEntityDespawn;
             _worldNetHandler.OnSnapshot -= OnSnapshot;
+            _worldNetHandler.OnMapChanged -= OnMapChanged;
         }
 
         public void SpawnLocalPlayer(EnterWorldResponse response)
@@ -143,6 +145,23 @@ namespace MMORPG.Client.World
                 Destroy(view.gameObject);
 
             _remotes.Clear();
+        }
+
+        private void OnMapChanged(MapChangedNotice notice)
+        {
+            if (_localPlayerObject == null)
+                return;
+
+            // Cùng ba dòng như lúc vào world — nạp LUẬT, dựng HÌNH, rồi mới đặt lại motor.
+            MapGrid map = _mapService.Load(notice.MapId);
+            _mapView.Show(map);
+
+            _localPlayerObject.GetComponent<PlayerMotor>().SetMap(map, notice.State);
+
+            // KHÔNG gọi DespawnAllRemotes(). Server đã gửi EntityDespawn cho từng người ở map cũ ngay
+            // tick sau — dọn tay ở đây là đường thứ hai làm cùng một việc, và hai đường thì sớm muộn
+            // lệch nhau. Chịu một tick ma đứng im, đổi lại một đường duy nhất cho mọi lý do biến mất.
+            this.Log($"Sang map {notice.MapId} tại {notice.State.X:0.##}:{notice.State.Y:0.##}");
         }
     }
 }

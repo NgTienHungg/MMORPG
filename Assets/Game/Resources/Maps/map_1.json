@@ -2,7 +2,7 @@
   "Version": 2,
   "Id": 1,
   "Name": "Forest",
-  "PrefabKey": "Maps/Map1",
+  "PrefabKey": "Maps/Map_1",
   "Origin": {
     "X": -17,
     "Y": -9
@@ -10,8 +10,23 @@
   "Spawns": [
     {
       "Id": "default",
-      "X": -4.98,
-      "Y": -0.91
+      "X": -5.0,
+      "Y": -3.0
+    },
+    {
+      "Id": "from_map_2",
+      "X": 43.0,
+      "Y": -2.0
+    }
+  ],
+  "Portals": [
+    {
+      "X": 46.0,
+      "Y": -2.0,
+      "Width": 2.0,
+      "Height": 2.0,
+      "ToMapId": 2,
+      "ToSpawnId": "from_map_1"
     }
   ],
   "Cells": [

@@ -39,13 +39,8 @@ namespace MMORPG.Shared.World
         public int MapId { get; }
         public string Name { get; }
 
-        /// <summary>
-        /// Khoá tài nguyên của prefab chứa hình map. Chỉ client dùng; server mang nó theo mà không đọc.
-        /// KHÔNG vào Checksum: dấu vân tay ấy canh LUẬT có khớp nhau không, mà hình thì không phải luật.
-        /// </summary>
         public string PrefabKey { get; }
 
-        /// <summary>Ô góc dưới-trái của vùng đã vẽ. Âm là chuyện bình thường.</summary>
         public int OriginX { get; }
 
         public int OriginY { get; }
@@ -55,17 +50,19 @@ namespace MMORPG.Shared.World
 
         public IReadOnlyList<SpawnPoint> Spawns => _spawns;
 
+        public IReadOnlyList<Portal> Portals => _portals;
+
         /// <summary>Điểm spawn mặc định, chốt một lần lúc dựng để chỗ gọi không phải tìm lại mỗi lần.</summary>
         public SpawnPoint DefaultSpawn { get; }
 
         private readonly SpawnPoint[] _spawns;
 
-        // Mảng một chiều chứ không phải [,]: cùng số ô, ít một tầng gián tiếp, và tiện cho vòng băm ở
-        // Checksum. Chỉ số = (cy - OriginY) * Width + (cx - OriginX).
+        private readonly Portal[] _portals;
+
         private readonly CellType[] _cells;
 
         public MapGrid(int mapId, string name, string prefabKey, int originX, int originY,
-            int width, int height, IReadOnlyList<SpawnPoint> spawns, CellType[] cells)
+            int width, int height, IReadOnlyList<SpawnPoint> spawns, IReadOnlyList<Portal>? portals, CellType[] cells)
         {
             if (width <= 0 || height <= 0)
                 throw new ArgumentException($"Kích thước map không hợp lệ: {width}×{height}.");
@@ -92,7 +89,51 @@ namespace MMORPG.Shared.World
             for (int i = 0; i < spawns.Count; i++)
                 _spawns[i] = spawns[i];
 
+            // null nghĩa là "map không có cổng nào" — hợp lệ và là trường hợp thường gặp, khác hẳn
+            // spawns rỗng (đã bị chặn ở trên) vì map không có chỗ đứng thì không chơi được.
+            _portals = new Portal[portals?.Count ?? 0];
+
+            for (int i = 0; i < _portals.Length; i++)
+                _portals[i] = portals[i];
+
             DefaultSpawn = FindDefaultSpawn(_spawns);
+        }
+
+        /// <summary>
+        /// Điểm spawn mang tên này; không có thì về điểm mặc định.
+        ///
+        /// Lùi về mặc định chứ không ném: một cổng trỏ sai tên là lỗi dữ liệu đáng sửa, nhưng ném ở đây
+        /// thì người chơi kẹt lại giữa hai map và không có đường nào ra.
+        /// </summary>
+        public SpawnPoint FindSpawn(string id)
+        {
+            for (int i = 0; i < _spawns.Length; i++)
+            {
+                if (_spawns[i].Id == id)
+                    return _spawns[i];
+            }
+
+            return DefaultSpawn;
+        }
+
+        /// <summary>Cổng chứa điểm world này, hoặc null. Số cổng mỗi map đếm trên đầu ngón tay nên quét thẳng.</summary>
+        public Portal PortalAt(float x, float y)
+        {
+            for (int i = 0; i < _portals.Length; i++)
+            {
+                Portal portal = _portals[i];
+
+                float halfWidth = portal.Width * 0.5f;
+                float halfHeight = portal.Height * 0.5f;
+
+                if (x >= portal.X - halfWidth && x <= portal.X + halfWidth &&
+                    y >= portal.Y - halfHeight && y <= portal.Y + halfHeight)
+                {
+                    return portal;
+                }
+            }
+
+            return null;
         }
 
         /// <summary>Mép trái/phải của map theo world. Biên ngang là dữ liệu đọc từ file map, không phải hằng số.</summary>

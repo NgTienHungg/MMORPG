@@ -12,6 +12,7 @@ namespace MMORPG.Client.Network.Handlers
         public event Action<EntitySpawnNotice> OnEntitySpawn;
         public event Action<EntityDespawnNotice> OnEntityDespawn;
         public event Action<WorldSnapshotNotice> OnSnapshot;
+        public event Action<MapChangedNotice> OnMapChanged;
 
         [NetHandler(NetCmd.EnterWorld)]
         private void HandleEnterWorld(NetPacket packet)
@@ -41,6 +42,12 @@ namespace MMORPG.Client.Network.Handlers
         private void HandleSnapshot(NetPacket packet)
         {
             OnSnapshot?.Invoke(packet.GetData<WorldSnapshotNotice>());
+        }
+
+        [NetHandler(NetCmd.MapChanged)]
+        private void HandleMapChanged(NetPacket packet)
+        {
+            OnMapChanged?.Invoke(packet.GetData<MapChangedNotice>());
         }
     }
 }
