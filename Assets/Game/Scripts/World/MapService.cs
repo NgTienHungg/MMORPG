@@ -16,6 +16,11 @@ namespace MMORPG.Client.World
     {
         private const string RESOURCE_FOLDER = "Maps";
 
+        /// <summary>
+        /// Khuôn tên file map, {0} là id. Ở đây chứ không ở tool export: tool GHI theo khuôn này còn
+        /// client ĐỌC theo nó, nên hai bên phải nhìn vào cùng một chuỗi — hằng số nằm bên nào cũng
+        /// được, miễn là chỉ có một.
+        /// </summary>
         public const string FILE_MAP_FORMAT = "map_{0}";
 
         /// <summary>Map đang đứng. Null cho tới lần Load đầu tiên.</summary>
@@ -28,11 +33,13 @@ namespace MMORPG.Client.World
             if (Current != null && Current.MapId == mapId)
                 return Current;
 
+            string fileName = string.Format(FILE_MAP_FORMAT, mapId);
+
             // Không có đuôi .json trong đường dẫn: Resources.Load luôn bỏ phần đuôi file.
-            var asset = Resources.Load<TextAsset>($"{RESOURCE_FOLDER}/{string.Format(FILE_MAP_FORMAT, mapId)}");
+            var asset = Resources.Load<TextAsset>($"{RESOURCE_FOLDER}/{fileName}");
 
             if (asset == null)
-                throw new FileNotFoundException($"Không thấy Resources/{RESOURCE_FOLDER}/map{mapId}.json. Chạy Tools/MMORPG/Export Map.");
+                throw new FileNotFoundException($"Không thấy Resources/{RESOURCE_FOLDER}/{fileName}.json. Chạy Tools/MMORPG/Export Map.");
 
             Current = MapFile.Parse(asset.text);
 

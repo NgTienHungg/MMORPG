@@ -36,6 +36,11 @@ namespace MMORPG.Shared.World
             // dùng Error): file này do TOOL sinh nên không có lỗi chính tả để bắt, còn cái ta cần là
             // code hôm nay đọc được file mà phiên bản mai này thêm trường vào.
             MissingMemberHandling = MissingMemberHandling.Ignore,
+
+            // Trường null thì KHÔNG ghi ra. Nhờ dòng này mà map chưa nối đi đâu cho ra file không có
+            // trường "Portals" thay vì một dòng `"Portals": null` — người mở file ra đọc không phải
+            // đoán xem null ở đây nghĩa là "chưa có cổng" hay "tool ghi hỏng".
+            NullValueHandling = NullValueHandling.Ignore,
         };
 
         public static MapGrid Parse(string json)

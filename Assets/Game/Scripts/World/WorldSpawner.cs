@@ -64,10 +64,8 @@ namespace MMORPG.Client.World
             _localPlayerObject = Instantiate(_playerPrefab, new Vector3(response.X, response.Y), Quaternion.identity, _entityRoot);
             _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
 
-            // // Nạp map TRƯỚC khi Init motor: motor cần lưới va chạm ngay từ tick dự đoán đầu tiên.
-            // MapGrid map = _mapService.Load(response.MapId);
-
-            // Nạp LUẬT trước, dựng HÌNH sau, rồi mới Init motor.
+            // Nạp LUẬT trước, dựng HÌNH sau, rồi mới Init motor: motor cần lưới va chạm ngay từ tick
+            // dự đoán đầu tiên.
             MapGrid map = _mapService.Load(response.MapId);
             _mapView.Show(map);
 
@@ -76,6 +74,10 @@ namespace MMORPG.Client.World
             motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y), response.ClassId, map);
 
             _cameraFollow.SetTarget(_localPlayerObject.transform);
+
+            // Bám mượt là để đuổi theo người đang chạy; ở đây chưa có gì để đuổi, nên nhảy thẳng tới
+            // nơi — không có dòng này thì frame đầu của world là cảnh camera bay từ gốc toạ độ tới.
+            _cameraFollow.SnapToTarget();
 
             this.Log($"Vào map {response.MapId} tại {response.X:0.##}:{response.Y:0.##} - entity {response.EntityId}");
         }
@@ -157,6 +159,10 @@ namespace MMORPG.Client.World
             _mapView.Show(map);
 
             _localPlayerObject.GetComponent<PlayerMotor>().SetMap(map, notice.State);
+
+            // Cùng lý do như lúc vào world: sang map là một cú DỊCH CHUYỂN. Để camera bám mượt thì nó
+            // lướt qua cả bản đồ mới trong nửa giây trước khi dừng đúng chỗ.
+            _cameraFollow.SnapToTarget();
 
             // KHÔNG gọi DespawnAllRemotes(). Server đã gửi EntityDespawn cho từng người ở map cũ ngay
             // tick sau — dọn tay ở đây là đường thứ hai làm cùng một việc, và hai đường thì sớm muộn

@@ -38,7 +38,7 @@ hai lưới khác nhau, và đó là chuyện bình thường:
 
 | | Lưới va chạm (Phase 10) | Lưới tầm nhìn (phase này) |
 |---|---|---|
-| Ô rộng | 1 unit | **12 unit** |
+| Ô rộng | 1 unit | **24 unit** (= bán kính tầm nhìn) |
 | Vì sao | tường mỏng, phải mịn | màn hình rộng, thô là đủ |
 | Chia mấy trục | X và Y | **chỉ X** |
 | Sống ở đâu | `Shared` — cả hai bên đọc | **chỉ server** — client không cần biết nó tồn tại |
@@ -58,21 +58,47 @@ side-scroller thì đó là **trả tiền cho một chiều không dùng**:
 
 | | Bề ngang map | Bề cao map | Màn hình thấy |
 |---|---|---|---|
-| Kích thước | ~64 unit (và sẽ còn dài ra) | ~11 unit | ~17.8 × 10 unit |
+| Kích thước | ~64 unit (và sẽ còn dài ra) | ~11 unit | **32 × 18 unit** (ortho size 9, 16:9) |
 
-Map cao 11 unit mà một màn hình đã cao 10 — chia trục Y thành ô 12 unit thì **gần như mọi người luôn ở
+Map cao 11 unit mà một màn hình đã cao 18 — chia trục Y thành ô 12 unit thì **gần như mọi người luôn ở
 cùng một hàng**, và ta trả thêm một chiều trong khoá `Dictionary` để nhận về một phép lọc gần như không
 lọc gì.
 
 > Chỉ chia ô ở **trục mà thế giới thật sự lớn**. Với side-scroller, đó là trục X — và chỉ trục X.
 
-Nên: **cột** rộng `AOI_COLUMN_WIDTH = 12f`, tầm nhìn = 3 cột quanh mình (`cx-1`, `cx`, `cx+1`). Bán kính
-bảo đảm ở trường hợp xấu nhất (đứng sát mép cột) là đúng **12 unit** mỗi bên, so với nửa màn hình ~9 —
-dư một chút, đúng như cần.
+#### Con số duy nhất phải tính đúng: bán kính
 
-Cùng lập luận đánh đổi của mọi spatial grid: tầm nhìn không phải hình tròn bán kính r mà là một dải chữ
-nhật lệch tuỳ chỗ đứng trong cột. Không sao, vì tầm nhìn chỉ cần **một** tính chất: bán kính bảo đảm ≥
-những gì màn hình thấy. Dư ra thì không ai nhận biết.
+`Camera.orthographicSize` là **nửa bề CAO**, không phải nửa bề rộng. Nửa bề RỘNG bằng
+`orthographicSize × tỉ lệ khung hình`:
+
+| Ortho size | Tỉ lệ | Nửa bề rộng = bán kính tối thiểu |
+|---|---|---|
+| 9 | 16:9 | **16 unit** |
+| 9 | 21:9 | **21 unit** |
+
+Lấy nhầm con số 9 ở đây thì bán kính tầm nhìn nhỏ hơn cái màn hình đang thấy, và triệu chứng là người
+chơi **biến mất khi vẫn còn nằm giữa khung hình** — đúng loại lỗi không ai nghi ngờ vào AOI, vì "đi ra
+xa thì mất" nghe rất hợp lý cho tới lúc bạn đo bằng thước.
+
+Nên `AOI_RADIUS_X = 24f`: phủ tới 21:9 và còn dư một quãng đệm, nhờ đó người khác được dựng lên **trước
+khi** trôi vào mép màn hình.
+
+#### Hai tầng lọc, và vì sao tầng nào cũng cần
+
+Bản thân lưới cột cho một tầm nhìn **lệch**: viewer ở cột `cx` thấy hết `[cx-1, cx+1]`, tức là nếu đang
+đứng sát mép TRÁI của cột mình thì thấy xa 24 unit về bên trái nhưng tới 48 unit về bên phải. Một cái
+hộp co giãn theo chỗ đứng.
+
+Cho nên cột là **lọc thô** (khỏi duyệt cả world), còn phép so `|Δx| ≤ AOI_RADIUS_X` mới là **lọc thật**
+(cắt ra một hình chữ nhật cân). Chọn `AOI_COLUMN_WIDTH = AOI_RADIUS_X` để 3 cột chắc chắn phủ hết bán
+kính, rồi để phép so khoảng cách làm phần còn lại. Bỏ tầng lọc thật đi thì lỗi nhìn như thế này:
+
+> Hai người đứng cạnh nhau. B đi sang **phải** rất xa — A vẫn thấy B. B quay lại đi sang **trái** một
+> đoạn ngắn — A mất B ngay giữa màn hình. Cùng một khoảng cách, hai kết quả, chỉ vì A tình cờ đứng gần
+> mép nào của cột.
+
+Đây là đánh đổi kinh điển của mọi spatial grid, và cách giải cũng kinh điển: **broad phase bằng lưới,
+narrow phase bằng khoảng cách**. Cùng một khuôn với va chạm vật lý.
 
 Tổng quát hoá để mang đi: cấu trúc chia không gian phải khớp **hình dạng của thế giới**. Game top-down
 map vuông thì lưới 2D là đúng; game bay trong không gian thì phải là octree; side-scroller thì là cột.
@@ -180,13 +206,30 @@ Thêm hằng, ba bộ đệm dùng lại, và `Tick` mới:
 
 ```csharp
         /// <summary>
-        /// Bề ngang một cột tầm nhìn. Tầm nhìn = 3 cột → bán kính bảo đảm 12 unit mỗi bên, rộng hơn
-        /// nửa màn hình (~9 unit) một chút.
+        /// Bán kính tầm nhìn theo trục X, world unit. Phải lớn hơn nửa bề RỘNG màn hình: camera
+        /// orthographic size 9 cho nửa bề CAO là 9, còn nửa bề RỘNG = 9 × tỉ lệ khung hình — 16 unit
+        /// ở 16:9, 21 unit ở 21:9. Lấy nhầm con số 9 thì người chơi biến mất trong khi vẫn còn nằm
+        /// giữa khung hình.
         ///
-        /// Chỉ chia theo trục X: map cao ~11 unit mà một màn hình đã cao 10, nên chia trục Y là tốn
-        /// thêm một chiều trong khoá để nhận về một phép lọc gần như không lọc gì.
+        /// 24 phủ tới tận 21:9 và còn dư một quãng đệm, nhờ đó người khác được dựng lên TRƯỚC khi
+        /// trôi vào mép màn hình — hiện ra là đã ở đúng chỗ, không đột ngột nhảy vào giữa hình.
+        ///
+        /// Chỉ chặn theo trục X: map cao ~11 unit mà một màn hình đã cao 18, nên chặn cả trục Y là
+        /// tốn thêm một phép so để nhận về một phép lọc gần như không lọc gì.
         /// </summary>
-        private const float AOI_COLUMN_WIDTH = 12f;
+        private const float AOI_RADIUS_X = 24f;
+
+        /// <summary>
+        /// Bề ngang một cột chỉ mục, CỐ Ý bằng đúng bán kính tầm nhìn: khi đó 3 cột (cx-1, cx, cx+1)
+        /// chắc chắn chứa mọi người trong bán kính, dù viewer đứng chỗ nào trong cột của mình.
+        ///
+        /// Cột chỉ là phép lọc THÔ để khỏi duyệt cả world; phép lọc THẬT là khoảng cách trong
+        /// <see cref="CollectVisible"/>. Tự thân lưới cột cho một hình chữ nhật LỆCH — đứng sát mép
+        /// trái một cột thì thấy xa 24 unit về bên trái nhưng tới 48 unit về bên phải — nên bỏ phép
+        /// so khoảng cách là tầm nhìn đổi theo chỗ đứng, với triệu chứng "đi sang phải mãi không ai
+        /// biến mất, đi sang trái một đoạn ngắn đã mất".
+        /// </summary>
+        private const float AOI_COLUMN_WIDTH = AOI_RADIUS_X;
 
         // Ba bộ đệm của vòng tick, giữ làm field và Clear() mỗi lần dùng. Cấp phát mới mỗi tick là
         // rác GC đều đặn 20 lần/giây suốt đời server — thứ chạy mỗi tick thì hình dạng bộ nhớ của nó
@@ -287,12 +330,15 @@ Thêm hằng, ba bộ đệm dùng lại, và `Tick` mới:
         }
 
         /// <summary>
-        /// Đổ vào <see cref="_visibleNow"/> mọi entity trong 3 cột quanh viewer, cùng map, trừ chính
-        /// viewer.
+        /// Đổ vào <see cref="_visibleNow"/> mọi entity cùng map, cách viewer không quá
+        /// <see cref="AOI_RADIUS_X"/> theo trục X, trừ chính viewer.
+        ///
+        /// Hai tầng lọc, và tầng nào cũng cần: 3 cột quanh viewer thu phạm vi phải duyệt từ "cả
+        /// world" xuống "vài người quanh đây", rồi phép so khoảng cách cắt ra đúng một hình chữ nhật
+        /// CÂN — không có nó thì tầm nhìn rộng hẹp tuỳ chỗ viewer đứng trong cột.
         ///
         /// Lọc MapId là ranh giới CỨNG: hai người ở hai map khác nhau không bao giờ thấy nhau dù toạ
-        /// độ X của họ bằng nhau. Hiện chỉ có một map nên nó chưa lọc gì — nhưng viết bây giờ rẻ hơn
-        /// nhiều so với đi tìm lý do người ở hang động nhìn thấy người ở đồng cỏ.
+        /// độ X của họ bằng nhau — và nó miễn phí vì MapId đã là một nửa khoá của chỉ mục.
         /// </summary>
         private void CollectVisible(PlayerEntity viewer)
         {
@@ -300,6 +346,7 @@ Thêm hằng, ba bộ đệm dùng lại, và `Tick` mới:
             _visibleIds.Clear();
 
             (int mapId, int column) = ColumnOf(viewer);
+            float viewerX = viewer.State.X;
 
             for (int offset = -1; offset <= 1; offset++)
             {
@@ -309,6 +356,12 @@ Thêm hằng, ba bộ đệm dùng lại, và `Tick` mới:
                 foreach (PlayerEntity entity in cell)
                 {
                     if (entity.EntityId == viewer.EntityId)
+                        continue;
+
+                    // Phép lọc thật. Cùng một ngưỡng cho cả chiều vào lẫn chiều ra, nên người đứng
+                    // đúng mốc 24 unit sẽ nhấp nháy hiện/biến — xem ghi chú hysteresis ở cuối tài
+                    // liệu Phase 11. Chấp nhận được vì mốc ấy nằm ngoài khung hình.
+                    if (MathF.Abs(entity.State.X - viewerX) > AOI_RADIUS_X)
                         continue;
 
                     _visibleNow.Add(entity);
@@ -351,7 +404,10 @@ chứ không phải đứng thẳng nhìn sang phải rồi một nhịp sau m�
 
 1. Hai client vào world cạnh nhau → thấy nhau (như Phase 9, nhưng giờ qua đường tầm nhìn — trễ tối đa
    một tick so với trước, không nhận ra được bằng mắt).
-2. Một người chạy xa: tới khoảng 12–24 unit thì người kia **biến mất** khỏi màn hình.
+2. Một người chạy xa: tới đúng **24 unit** thì người kia biến mất — và vì con số đó lớn hơn nửa bề rộng
+   màn hình (16 unit ở 16:9) nên lúc biến mất họ đã **ra khỏi khung hình từ trước**. Thử cả hai chiều
+   trái và phải: khoảng cách biến mất phải **như nhau**. Lệch hai bên là dấu hiệu phép so khoảng cách
+   bị bỏ, và tầm nhìn đang là hình chữ nhật méo của lưới cột.
 3. Chạy ngược lại → hiện ra lại đúng vị trí, **đúng hướng mặt**, đi tiếp mượt (buffer nội suy được mồi
    lại từ `EntitySpawn`).
 4. Đứng gần nhau, một người thoát hẳn (logout hoặc tắt client) → người kia vẫn thấy despawn. Đường cũ
@@ -423,11 +479,14 @@ map mới → tắt. Không cần hằng cooldown nào, và người chơi xuấ
 xong mới biết có bước vào cổng không; trước dựng chỉ mục vì chính tick này chỉ mục phải thấy họ **đã ở
 map mới** — nhờ vậy phép diff làm việc ngay, không trễ thêm một nhịp.
 
-**Ba việc bên client, và không việc nào là logic:**
+**Bốn việc bên client, và không việc nào là logic:**
 
 1. `MapService.Load(mapId)` — đã viết ở Phase 10, đã có cache theo id.
 2. `MapView.Show(map)` — đã viết ở Phase 10, đã tự huỷ map cũ.
 3. `PlayerMotor.SetMap(...)` — mới, và là chỗ duy nhất có gì đó để nghĩ.
+4. `CameraFollow.SnapToTarget()` — mới, một dòng, và quên thì rất dễ nhận ra: `SmoothDamp` coi cú nhảy
+   sang map như một cú chạy, nên camera **lướt qua cả bản đồ** mất nửa giây trước khi dừng đúng chỗ.
+   Cùng một hàm đó cũng nên gọi lúc vào world, vì lý do y hệt.
 
 **Đừng gọi `DespawnAllRemotes()` khi sang map.** Cám dỗ rất lớn, và nó **sai về thiết kế**: server đã gửi
 `EntityDespawn` cho từng người ở map cũ ngay tick sau. Dọn tay ở client là đường thứ hai làm cùng một
@@ -983,7 +1042,7 @@ và một dòng đầu `OnMoveStateResult`:
 
 1. Export cả hai map. Console server lúc khởi động in **hai** dòng map kèm checksum, rồi
    `Đã nạp 2 map, khởi đầu ở #1`.
-2. Mở `map1.json`: có mảng `Portals`. Mở `map2.json` (nếu map 2 chưa có cổng về): **không có** trường
+2. Mở `map_1.json`: có mảng `Portals`. Mở `map_2.json` (nếu map 2 chưa có cổng về): **không có** trường
    `Portals` — trường vắng mặt, chứ không phải một mảng rỗng.
 3. `dotnet test Server/Shared.Tests` — sáu bài xanh, gồm bài round-trip cổng mới thêm.
 4. Chạy vào cổng ở map 1 → sang map 2: **hình đổi**, nhân vật đứng đúng điểm `from_map1`, đi lại bình
@@ -1002,12 +1061,16 @@ và một dòng đầu `OnMoveStateResult`:
 ## Bốn thử nghiệm bắt buộc
 
 **1. Nhảy múa ở ranh giới AOI.**
-Hai người đứng hai bên một ranh giới cột (`x = 12`, `x = 24`…), một người bước qua-lại quanh ranh giới →
-người kia thấy bạn mình **nhấp nháy** hiện/biến, mỗi lần là một cặp gói spawn/despawn và một lần
-dựng/huỷ GameObject.
+Hai người cách nhau đúng **24 unit** (`AOI_RADIUS_X`), một người bước qua-lại quanh mốc đó → người kia
+liên tục nhận một cặp gói spawn/despawn, và client liên tục dựng/huỷ một GameObject.
+
+Mốc 24 nằm **ngoài khung hình** nên lần này bạn không thấy bằng mắt — nhìn cửa sổ **Hierarchy** thay
+vào đó: object `Remote_…` xuất hiện rồi biến mất theo nhịp bước chân. (Đó cũng là một bài học: bán kính
+tầm nhìn phải lớn hơn màn hình thì mới không có triệu chứng nhìn thấy được, nhưng chi phí thì vẫn còn
+nguyên.)
 
 Đây là flicker kinh điển của AOI không có hysteresis (vào và ra dùng **cùng một ngưỡng**). Không sửa ở
-phase này — nhưng phải **thấy nó bằng mắt** và trả lời được câu 4 bên dưới.
+phase này — nhưng phải **thấy nó** và trả lời được câu 4 bên dưới.
 
 **2. Đo cái AOI mua được.**
 Log tạm tổng số `EntityState` server gửi mỗi giây. Hai client đứng cạnh nhau: ~40/giây (20 tick × 2
@@ -1051,6 +1114,8 @@ of truth" biến thành "hai thế giới song song". Trả code về như cũ.
 | Không ai despawn bao giờ | tập `Visible` bị ghi đè trước khi so | `Tick` vòng 3, thao tác (3) đang nằm trên (2) |
 | Vào world xong thấy chính mình nhân đôi | `CollectVisible` quên loại `viewer.EntityId` | `CollectVisible` |
 | Người ở nửa trái map (X âm) nhìn thấy người ở nửa phải | dùng cast `(int)` thay cho `MathF.Floor` khi tính cột | `ColumnOf` |
+| Đi sang phải mãi không ai biến mất, đi sang trái một đoạn ngắn đã mất | thiếu phép so `\|Δx\| ≤ AOI_RADIUS_X` — tầm nhìn đang là hình chữ nhật méo của lưới cột | `CollectVisible` |
+| Người kia biến mất trong khi **vẫn còn trong khung hình** | bán kính nhỏ hơn nửa bề RỘNG màn hình (nhầm với `orthographicSize`, vốn là nửa bề CAO) | `AOI_RADIUS_X` |
 | Người ở map khác vẫn nhìn thấy nhau | khoá chỉ mục quên `MapId` | `ColumnOf` |
 | Nhấp nháy hiện/biến ở một khoảng cách nhất định | flicker ranh giới AOI — hành vi đã biết, chưa sửa ở phase này | thử nghiệm 1; sửa thật thì cần hysteresis (câu 4) |
 | Người hiện ra quay sai hướng rồi một nhịp sau mới quay lại | `ToSpawnNotice` thiếu `FacingLeft`/`Crouching`/`Action` | `WorldService.ToSpawnNotice` |
@@ -1069,8 +1134,11 @@ of truth" biến thành "hai thế giới song song". Trả code về như cũ.
 | Bước vào cổng nhưng không có gì xảy ra | `Size` của cổng bằng 0, hoặc cổng vẽ lơ lửng trên cao trong khi phép kiểm dùng toạ độ **bàn chân** | `MapCollisionSource` Inspector · xem gizmo |
 | `Cổng ở map N trỏ tới map M không có trong registry` | map đích chưa export, hoặc `MapId` trong `MapCollisionSource` của nó điền sai | export map đích, kiểm `MapId` |
 | Sang map đúng nhưng đứng nhầm chỗ (rơi vào điểm mặc định) | `ToSpawnId` không khớp id nào ở map đích — `FindSpawn` đã lùi về mặc định | danh sách Spawns của map đích |
-| File map có `"Portals": []` | thiếu `NullValueHandling.Ignore`, hoặc `Write` đang tạo list rỗng thay vì `null` | `MapFile.Settings` · `MapFile.Write` |
+| File map có `"Portals": null` hoặc `[]` | thiếu `NullValueHandling.Ignore`, hoặc `Write` đang tạo list rỗng thay vì `null` | `MapFile.Settings` · `MapFile.Write` |
 | `MapFileTests` đỏ sau khi thêm cổng | `BuildSample` gọi hàm dựng `MapGrid` cũ | truyền `portals: null` |
+| Sang map xong camera bay ngang qua cả bản đồ rồi mới dừng | `SmoothDamp` đang làm mượt một cú dịch chuyển | `WorldSpawner.OnMapChanged` thiếu `CameraFollow.SnapToTarget()` |
+| `Hai map cùng id 1: "…" và "…"` lúc server khởi động | đổi tên file map (`map1.json` → `map_1.json`) nhưng file CŨ còn nằm trong `bin/.../Data/Maps` — `CopyToOutputDirectory` chỉ thêm, không bao giờ xoá | `dotnet clean Server/GameServer`, hoặc xoá tay thư mục `Data/Maps` trong output |
+| Export Map ghi đè nhầm file map khác | hai `MapCollisionSource` cùng **bật** trong scene, tool lấy cái nào là do thứ tự hierarchy | tắt bớt; `MapExporter.TryFindSource` đã chặn và báo tên cả hai |
 
 ---
 
@@ -1080,7 +1148,7 @@ of truth" biến thành "hai thế giới song song". Trả code về như cũ.
 <details>
 <summary><b>📖 Đáp án câu 1</b></summary>
 
-Vì chỉ nên chia ô ở trục mà thế giới **thật sự lớn**. Map cao ~11 unit trong khi một màn hình đã cao 10
+Vì chỉ nên chia ô ở trục mà thế giới **thật sự lớn**. Map cao ~11 unit trong khi một màn hình đã cao 18
 — chia trục Y thành ô 12 unit thì gần như mọi người luôn nằm cùng một hàng, và ta trả thêm một chiều
 trong khoá `Dictionary` để nhận về một phép lọc gần như không lọc gì.
 
@@ -1131,13 +1199,15 @@ nào? Cái giá phải trả là gì?
 <details>
 <summary><b>📖 Đáp án câu 4</b></summary>
 
-Vào và ra tầm nhìn dùng **cùng một ngưỡng** (ranh giới cột), nên người đứng ngay ranh giới chỉ cần dao
+Vào và ra tầm nhìn dùng **cùng một ngưỡng** (`AOI_RADIUS_X`), nên người đứng ngay mốc đó chỉ cần dao
 động vài centimet là đổi trạng thái — mỗi lần đổi là một cặp gói spawn/despawn và một lần dựng/huỷ
 GameObject.
 
-Hysteresis tách hai ngưỡng: **vào** tầm nhìn ở phạm vi hẹp (3 cột), chỉ **ra** khi vượt phạm vi rộng hơn
-(5 cột). Người ở giữa hai ngưỡng **giữ nguyên trạng thái hiện có**, nên dao động nhỏ quanh một điểm
-không đổi được trạng thái nữa.
+Hysteresis tách hai ngưỡng: **vào** tầm nhìn ở bán kính hẹp (24), chỉ **ra** khi vượt bán kính rộng hơn
+(28). Người ở giữa hai ngưỡng **giữ nguyên trạng thái hiện có**, nên dao động nhỏ quanh một điểm không
+đổi được trạng thái nữa. Trong code là một dòng ở `CollectVisible`:
+`float limit = viewer.Visible.Contains(entity.EntityId) ? AOI_EXIT_RADIUS : AOI_RADIUS_X;` — và nhớ nới
+`AOI_COLUMN_WIDTH` lên bằng ngưỡng RA, nếu không 3 cột không còn phủ hết bán kính ra.
 
 Giá phải trả: tầm "ra" rộng hơn tầm "vào" một vành đai, tức là giữ đồng bộ thêm vài người mà lẽ ra đã bỏ
 được — đổi băng thông lấy sự ổn định. Và code phức tạp hơn: `CollectVisible` phải trả lời hai câu hỏi

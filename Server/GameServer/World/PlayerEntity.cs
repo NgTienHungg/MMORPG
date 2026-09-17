@@ -19,7 +19,7 @@ namespace MMORPG.GameServer.World
         public string Name { get; private set; }
         public int ClassId { get; private set; }
         public int Level { get; private set; }
-        public int MapId { get; set; }
+        public int MapId { get; private set; }
 
         /// <summary>
         /// Trạng thái vật lý authoritative — nơi duy nhất trong toàn hệ thống mà vị trí một người

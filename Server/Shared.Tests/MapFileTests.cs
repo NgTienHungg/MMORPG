@@ -1,4 +1,3 @@
-using System.Diagnostics.CodeAnalysis;
 using MMORPG.Shared.World;
 
 namespace MMORPG.Shared.Tests
@@ -8,8 +7,11 @@ namespace MMORPG.Shared.Tests
         /// <summary>
         /// Lưới 4×3 có đủ ba loại ô và KHÔNG đối xứng theo trục Y — cố ý, để phép lật trục sai thì bài
         /// test đỏ. Origin âm cũng là cố ý: map thật có origin âm.
+        ///
+        /// <paramref name="portals"/> để null nghĩa là "map chưa nối đi đâu" — trường hợp phải ghi ra
+        /// file KHÔNG có trường Portals, khác hẳn một mảng rỗng.
         /// </summary>
-        private static MapGrid BuildSample()
+        private static MapGrid BuildSample(IReadOnlyList<Portal>? portals = null)
         {
             var cells = new[]
             {
@@ -27,7 +29,7 @@ namespace MMORPG.Shared.Tests
             };
 
             return new MapGrid(7, "Test Map", "Maps/TestMap", originX: -3, originY: -2,
-                width: 4, height: 3, spawns, null, cells);
+                width: 4, height: 3, spawns, portals, cells);
         }
 
         [Fact]
@@ -93,20 +95,52 @@ namespace MMORPG.Shared.Tests
         /// Bài này kiểm QUYẾT ĐỊNH THIẾT KẾ, không kiểm code: file map do tool sinh, nên code hôm nay
         /// phải đọc được file mà bản mai này thêm trường vào. Đó là toàn bộ lý do chọn JSON — và đây là
         /// thứ duy nhất canh giữ nó.
+        ///
+        /// Trường chèn vào phải là trường KHÔNG có thật. Newtonsoft khớp tên không phân biệt hoa
+        /// thường, nên "portals" viết thường vẫn rơi đúng vào property Portals — dùng nó ở đây là bài
+        /// test đọc một trường đã biết mà vẫn xanh, tức không canh giữ gì cả.
         /// </summary>
         [Fact]
         public void Parse_ignores_fields_it_does_not_know()
         {
             string json = MapFile.Write(BuildSample())
-                .Replace(VersionField, $"\"portals\": [ {{ \"x\": 3, \"toMapId\": 2 }} ],\n  {VersionField}");
+                .Replace(VersionField, $"\"weather\": \"rain\",\n  {VersionField}");
 
             // Chốt rằng phép Replace ĐÃ chèn được: không có dòng này thì một lần đổi tên trường biến
             // bài test thành "parse một file y hệt bản gốc" và nó xanh mà chẳng kiểm gì.
-            Assert.Contains("portals", json);
+            Assert.Contains("weather", json);
 
             MapGrid parsed = MapFile.Parse(json);
 
             Assert.Equal(BuildSample().Checksum(), parsed.Checksum());
+        }
+
+        /// <summary>
+        /// Cổng đi qua file được nguyên vẹn cả sáu số. Và phép kiểm đắt nhất nằm ở cuối: map KHÔNG có
+        /// cổng thì file không được có trường "Portals" — vắng mặt hẳn, chứ không phải một mảng rỗng.
+        /// Đó là quy ước đã chọn lúc thêm trường, và nếu nó vỡ thì không có triệu chứng nào ngoài một
+        /// dòng thừa trong file mà không ai để ý.
+        /// </summary>
+        [Fact]
+        public void Write_then_parse_keeps_portals()
+        {
+            var portal = new Portal
+            {
+                X = 4.5f, Y = -1.5f, Width = 2f, Height = 3f, ToMapId = 9, ToSpawnId = "from_map_7",
+            };
+
+            MapGrid parsed = MapFile.Parse(MapFile.Write(BuildSample(new[] { portal })));
+
+            Portal round = Assert.Single(parsed.Portals);
+
+            Assert.Equal(portal.X, round.X);
+            Assert.Equal(portal.Y, round.Y);
+            Assert.Equal(portal.Width, round.Width);
+            Assert.Equal(portal.Height, round.Height);
+            Assert.Equal(portal.ToMapId, round.ToMapId);
+            Assert.Equal(portal.ToSpawnId, round.ToSpawnId);
+
+            Assert.DoesNotContain(nameof(MapFileData.Portals), MapFile.Write(BuildSample()));
         }
     }
 }

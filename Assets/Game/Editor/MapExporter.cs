@@ -10,7 +10,7 @@ using UnityEngine.Tilemaps;
 
 // Có cả "using System" (cần cho StringComparison) lẫn "using UnityEngine" thì cái tên trần Object nhập
 // nhằng giữa System.Object và UnityEngine.Object — CS0104, và file không biên dịch. Một dòng alias là
-// cách rẻ nhất; đừng gỡ nó ra cùng lúc với việc gõ Object.FindFirstObjectByType bên dưới.
+// cách rẻ nhất; đừng gỡ nó ra cùng lúc với việc gõ Object.FindObjectsByType bên dưới.
 using Object = UnityEngine.Object;
 
 namespace MMORPG.Client.EditorTools
@@ -29,13 +29,8 @@ namespace MMORPG.Client.EditorTools
         [MenuItem("Tools/MMORPG/Export Map")]
         public static void Export()
         {
-            var source = Object.FindFirstObjectByType<MapCollisionSource>();
-
-            if (source == null)
-            {
-                Fail("Không thấy MapCollisionSource nào trong scene đang mở.");
+            if (!TryFindSource(out MapCollisionSource source))
                 return;
-            }
 
             Tilemap tilemap = source.CollisionTilemap;
 
@@ -117,9 +112,46 @@ namespace MMORPG.Client.EditorTools
             // trả về nội dung cũ cho tới lần focus lại cửa sổ Editor.
             AssetDatabase.ImportAsset(path);
 
-            DebugEx.Log($"[MapExporter] Đã ghi {path} — {width}×{height} ô, origin ({bounds.xMin}, {bounds.yMin}), " +
-                        $"{spawns.Count} điểm spawn, prefab \"{prefabKey}\", checksum {map.Checksum():X8}");
+            DebugEx.Log($"[MapExporter] Đã ghi {path} — map {map.MapId} \"{map.Name}\", {width}×{height} ô, " +
+                        $"origin ({bounds.xMin}, {bounds.yMin}), {spawns.Count} điểm spawn, {portals.Count} cổng, " +
+                        $"prefab \"{prefabKey}\", checksum {map.Checksum():X8}");
             DebugEx.Log("[MapExporter] Nhớ build lại GameServer để file map sang được thư mục output của server.");
+        }
+
+        /// <summary>
+        /// Map sẽ export: MapCollisionSource duy nhất đang BẬT trong scene.
+        ///
+        /// Chỉ đếm object đang bật, vì cách làm việc với nhiều map là kéo cả mấy prefab vào scene rồi
+        /// bật đúng cái đang vẽ. Nhưng bật hai cái cùng lúc thì FindFirstObjectByType trả về cái nào
+        /// là chuyện của thứ tự duyệt hierarchy — tức là không xác định — và bạn sẽ ghi đè file của
+        /// map này bằng lưới của map kia mà không có dấu hiệu gì. Đếm rồi từ chối là một vòng lặp,
+        /// đổi lại cả một lớp lỗi không bao giờ xảy ra.
+        /// </summary>
+        private static bool TryFindSource(out MapCollisionSource source)
+        {
+            MapCollisionSource[] sources = Object.FindObjectsByType<MapCollisionSource>(FindObjectsSortMode.None);
+            source = sources.Length > 0 ? sources[0] : null;
+
+            if (sources.Length == 0)
+            {
+                Fail("Không thấy MapCollisionSource nào đang bật trong scene. Kéo prefab map vào scene, " +
+                     "hoặc bật lại object map đang tắt.");
+                return false;
+            }
+
+            if (sources.Length > 1)
+            {
+                var names = new List<string>(sources.Length);
+
+                foreach (MapCollisionSource other in sources)
+                    names.Add($"{other.name} (map {other.MapId})");
+
+                Fail($"Có {sources.Length} map đang bật cùng lúc: {string.Join(", ", names)}. " +
+                     "Chỉ để bật đúng map muốn export rồi làm lại.");
+                return false;
+            }
+
+            return true;
         }
 
         /// <summary>
@@ -201,7 +233,7 @@ namespace MMORPG.Client.EditorTools
             return true;
         }
 
-         /// <summary>
+        /// <summary>
         /// Gom danh sách cổng từ Inspector. KHÔNG kiểm được ToSpawnId có tồn tại ở map đích không —
         /// map đích có thể chưa được export lần nào. Đó là phép kiểm của lúc CHẠY, và MapGrid.FindSpawn
         /// đã lùi về điểm mặc định thay vì ném.

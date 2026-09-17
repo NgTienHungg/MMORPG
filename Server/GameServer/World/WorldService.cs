@@ -1,5 +1,4 @@
 using System.Collections.Concurrent;
-using MemoryPack;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.Dto.World;
@@ -16,13 +15,30 @@ namespace MMORPG.GameServer.World
         public const int DEFAULT_CLASS_ID = 1;
 
         /// <summary>
-        /// Bề ngang một cột tầm nhìn. Tầm nhìn = 3 cột → bán kính bảo đảm 12 unit mỗi bên, rộng hơn
-        /// nửa màn hình (~9 unit) một chút.
+        /// Bán kính tầm nhìn theo trục X, world unit. Phải lớn hơn nửa bề RỘNG màn hình: camera
+        /// orthographic size 9 cho nửa bề CAO là 9, còn nửa bề RỘNG = 9 × tỉ lệ khung hình — 16 unit
+        /// ở 16:9, 21 unit ở 21:9. Lấy nhầm con số 9 thì người chơi biến mất trong khi vẫn còn nằm
+        /// giữa khung hình.
         ///
-        /// Chỉ chia theo trục X: map cao ~11 unit mà một màn hình đã cao 10, nên chia trục Y là tốn
-        /// thêm một chiều trong khoá để nhận về một phép lọc gần như không lọc gì.
+        /// 24 phủ tới tận 21:9 và còn dư một quãng đệm, nhờ đó người khác được dựng lên TRƯỚC khi
+        /// trôi vào mép màn hình — hiện ra là đã ở đúng chỗ, không đột ngột nhảy vào giữa hình.
+        ///
+        /// Chỉ chặn theo trục X: map cao ~11 unit mà một màn hình đã cao 18, nên chặn cả trục Y là
+        /// tốn thêm một phép so để nhận về một phép lọc gần như không lọc gì.
         /// </summary>
-        private const float AOI_COLUMN_WIDTH = 12f;
+        private const float AOI_RADIUS_X = 24f;
+
+        /// <summary>
+        /// Bề ngang một cột chỉ mục, CỐ Ý bằng đúng bán kính tầm nhìn: khi đó 3 cột (cx-1, cx, cx+1)
+        /// chắc chắn chứa mọi người trong bán kính, dù viewer đứng chỗ nào trong cột của mình.
+        ///
+        /// Cột chỉ là phép lọc THÔ để khỏi duyệt cả world; phép lọc THẬT là khoảng cách trong
+        /// <see cref="CollectVisible"/>. Tự thân lưới cột cho một hình chữ nhật LỆCH — đứng sát mép
+        /// trái một cột thì thấy xa 24 unit về bên trái nhưng tới 48 unit về bên phải — nên bỏ phép
+        /// so khoảng cách là tầm nhìn đổi theo chỗ đứng, với triệu chứng "đi sang phải mãi không ai
+        /// biến mất, đi sang trái một đoạn ngắn đã mất".
+        /// </summary>
+        private const float AOI_COLUMN_WIDTH = AOI_RADIUS_X;
 
         // Ba bộ đệm của vòng tick, giữ làm field và Clear() mỗi lần dùng. Cấp phát mới mỗi tick là
         // rác GC đều đặn 20 lần/giây suốt đời server — thứ chạy mỗi tick thì hình dạng bộ nhớ của nó
@@ -94,31 +110,6 @@ namespace MMORPG.GameServer.World
             entity = null;
 
             return _entityIdByAccount.TryGetValue(accountId, out int entityId) && _entities.TryGetValue(entityId, out entity);
-        }
-
-        /// <summary>
-        /// Gửi một gói cho mọi entity đang đứng CÙNG MỘT MAP, trừ một người (thường là nguồn tin).
-        ///
-        /// mapId là THAM SỐ chứ không đọc từ dto: lúc chuyển map, gói EntityDespawn phải gửi cho
-        /// người ở map CŨ trong khi entity đã mang id map MỚI rồi.
-        /// </summary>
-        private void Broadcast<T>(NetCmd cmd, T dto, int mapId, int exceptEntityId) where T : IMemoryPackable<T>
-        {
-            // Duyệt ConcurrentDictionary trong lúc có thể có Spawn/Despawn song song là hợp lệ:
-            // iterator "weakly consistent" — không ném lỗi, chỉ có thể thiếu/thừa đúng entity
-            // đang vào/ra tại khoảnh khắc đó. Với gói thông báo thì sai một tick là vô hại.
-            foreach (PlayerEntity entity in _entities.Values)
-            {
-                if (entity.EntityId == exceptEntityId)
-                    continue;
-
-                // Người ở map khác mà nhận EntitySpawn thì client dựng ra một bóng ma không bao giờ
-                // có snapshot để cập nhật — đứng im tới lúc người kia thoát.
-                if (entity.MapId != mapId)
-                    continue;
-
-                entity.Owner?.SendData(cmd, dto);
-            }
         }
 
         private static EntitySpawnNotice ToSpawnNotice(PlayerEntity entity)
@@ -226,8 +217,6 @@ namespace MMORPG.GameServer.World
             }
         }
 
-
-
         private static (int MapId, int Column) ColumnOf(PlayerEntity entity)
         {
             // Floor chứ không phải cast: toạ độ X âm (nửa trái của map) phải rơi về cột bên trái,
@@ -236,12 +225,15 @@ namespace MMORPG.GameServer.World
         }
 
         /// <summary>
-        /// Đổ vào <see cref="_visibleNow"/> mọi entity trong 3 cột quanh viewer, cùng map, trừ chính
-        /// viewer.
+        /// Đổ vào <see cref="_visibleNow"/> mọi entity cùng map, cách viewer không quá
+        /// <see cref="AOI_RADIUS_X"/> theo trục X, trừ chính viewer.
+        ///
+        /// Hai tầng lọc, và tầng nào cũng cần: 3 cột quanh viewer thu phạm vi phải duyệt từ "cả
+        /// world" xuống "vài người quanh đây", rồi phép so khoảng cách cắt ra đúng một hình chữ nhật
+        /// CÂN — không có nó thì tầm nhìn rộng hẹp tuỳ chỗ viewer đứng trong cột.
         ///
         /// Lọc MapId là ranh giới CỨNG: hai người ở hai map khác nhau không bao giờ thấy nhau dù toạ
-        /// độ X của họ bằng nhau. Hiện chỉ có một map nên nó chưa lọc gì — nhưng viết bây giờ rẻ hơn
-        /// nhiều so với đi tìm lý do người ở hang động nhìn thấy người ở đồng cỏ.
+        /// độ X của họ bằng nhau — và nó miễn phí vì MapId đã là một nửa khoá của chỉ mục.
         /// </summary>
         private void CollectVisible(PlayerEntity viewer)
         {
@@ -249,6 +241,7 @@ namespace MMORPG.GameServer.World
             _visibleIds.Clear();
 
             (int mapId, int column) = ColumnOf(viewer);
+            float viewerX = viewer.State.X;
 
             for (int offset = -1; offset <= 1; offset++)
             {
@@ -258,6 +251,12 @@ namespace MMORPG.GameServer.World
                 foreach (PlayerEntity entity in cell)
                 {
                     if (entity.EntityId == viewer.EntityId)
+                        continue;
+
+                    // Phép lọc thật. Cùng một ngưỡng cho cả chiều vào lẫn chiều ra, nên người đứng
+                    // đúng mốc 24 unit sẽ nhấp nháy hiện/biến — xem ghi chú hysteresis ở cuối tài
+                    // liệu Phase 11. Chấp nhận được vì mốc ấy nằm ngoài khung hình.
+                    if (MathF.Abs(entity.State.X - viewerX) > AOI_RADIUS_X)
                         continue;
 
                     _visibleNow.Add(entity);
@@ -289,7 +288,7 @@ namespace MMORPG.GameServer.World
             return new WorldSnapshotNotice { States = states };
         }
 
-         /// <summary>
+        /// <summary>
         /// Đưa entity qua cổng nếu nó vừa bước vào một cái. CHỈ GỌI TỪ LUỒNG TICK.
         ///
         /// Chú ý cái KHÔNG có ở đây: không gửi EntityDespawn cho ai, không gửi EntitySpawn cho ai,

@@ -91,10 +91,17 @@ namespace MMORPG.Shared.World
 
             // null nghĩa là "map không có cổng nào" — hợp lệ và là trường hợp thường gặp, khác hẳn
             // spawns rỗng (đã bị chặn ở trên) vì map không có chỗ đứng thì không chơi được.
-            _portals = new Portal[portals?.Count ?? 0];
+            if (portals == null)
+            {
+                _portals = Array.Empty<Portal>();
+            }
+            else
+            {
+                _portals = new Portal[portals.Count];
 
-            for (int i = 0; i < _portals.Length; i++)
-                _portals[i] = portals[i];
+                for (int i = 0; i < portals.Count; i++)
+                    _portals[i] = portals[i];
+            }
 
             DefaultSpawn = FindDefaultSpawn(_spawns);
         }
@@ -117,7 +124,7 @@ namespace MMORPG.Shared.World
         }
 
         /// <summary>Cổng chứa điểm world này, hoặc null. Số cổng mỗi map đếm trên đầu ngón tay nên quét thẳng.</summary>
-        public Portal PortalAt(float x, float y)
+        public Portal? PortalAt(float x, float y)
         {
             for (int i = 0; i < _portals.Length; i++)
             {
