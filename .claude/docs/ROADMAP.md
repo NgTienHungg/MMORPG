@@ -194,10 +194,10 @@ mở lời giải/đáp án sau để đối chiếu.
 | 8 — Motor platformer 🆕 | ✅ xong | [`guides/PHASE-8.md`](guides/PHASE-8.md) ✅ |
 | 9 — State machine trạng thái 🆕 | ✅ xong | [`guides/PHASE-9.md`](guides/PHASE-9.md) ✅ (đã soát lại 2026-08-24 cho khớp code đã làm xong) |
 | 10 — Map: hình dạng thật 🆕 | ✅ xong | [`guides/PHASE-10.md`](guides/PHASE-10.md) ✅ (đã soát lại 2026-09-10 cho khớp code đã làm xong: `MapRegistry` tra map theo id thay cho một `MapGrid` cắm cứng trong `WorldService`, client dựng map lúc chạy bằng `MapView` thay vì để sẵn trong scene) |
-| 11 — AOI + chuyển map 🆕 | ⬜ chưa | [`guides/PHASE-11.md`](guides/PHASE-11.md) ✅ (tách ra từ Phase 10 cũ, 2026-08-24 · soát lại + thêm Bước 2 "chuyển map" 2026-09-10) |
-| 12 — Data & Config | ⬜ chưa | [`guides/PHASE-12.md`](guides/PHASE-12.md) ⚠️ cần soát: bảng số đã có ở Phase 9 và map đã ra file ở Phase 10, phase này chỉ đổi nguồn + kiểm version |
-| 13 — Túi đồ & item | ⬜ chưa | ⬜ chưa viết |
-| 14 — Chỉ số nhân vật 🆕 | ⬜ chưa | ⬜ chưa viết |
+| 11 — AOI + chuyển map 🆕 | ✅ xong | [`guides/PHASE-11.md`](guides/PHASE-11.md) ✅ (tách ra từ Phase 10 cũ, 2026-08-24 · soát lại + thêm Bước 2 "chuyển map" 2026-09-10 · sửa bán kính AOI + thêm phép so khoảng cách 2026-09-16) |
+| 12 — Data & Config | ⬜ chưa | [`guides/PHASE-12.md`](guides/PHASE-12.md) ✅ (viết lại toàn bộ 2026-09-17 cho khớp code sau Phase 9–11: chỉ còn 5 hằng toàn cục, bảng `CharacterProfile` thành loại B thứ hai, map chỉ còn phép so checksum) |
+| 13 — Túi đồ & item | ⬜ chưa | [`guides/PHASE-13.md`](guides/PHASE-13.md) ✅ (viết 2026-09-17) |
+| 14 — Chỉ số nhân vật 🆕 | ⬜ chưa | [`guides/PHASE-14.md`](guides/PHASE-14.md) ✅ (viết 2026-09-17) |
 | 15 — Quái, PvP & EXP | ⬜ chưa | ⬜ chưa viết |
 | 16 — Chat | ⬜ chưa | ⬜ chưa viết |
 | 17 — Package network | ⬜ chưa | ⬜ chưa viết |
