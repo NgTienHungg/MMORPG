@@ -51,6 +51,12 @@ namespace MMORPG.Shared.Net
         /// </summary>
         Kicked = 5,
 
+        /// <summary>
+        /// Đối chiếu vân tay contract ngay sau khi nối. Client chủ động gửi trước mọi lệnh khác.
+        /// Request/Response: <see cref="Dto.VersionCheckRequest"/> / <see cref="Dto.VersionCheckResponse"/>
+        /// </summary>
+        VersionCheck = 6,
+
         #endregion
 
         #region Auth (100–199)

@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace MMORPG.Shared.World
@@ -84,43 +85,54 @@ namespace MMORPG.Shared.World
     }
 
     /// <summary>
-    /// Bảng tra profile theo lớp nhân vật. Hiện dựng bằng C# ngay trong Shared; khi bảng chuyển sang
-    /// đọc từ file thì chỉ hàm Build đổi, mọi chỗ gọi Get giữ nguyên.
+    /// Bảng tra profile theo lớp nhân vật. Bảng TĨNH nhưng NẠP ĐƯỢC: server nạp từ file lúc boot,
+    /// client nạp từ gói EnterWorld. Một bảng, hai đường vào, một hàm dựng — nên hai bên không có cửa
+    /// nào cầm hai bộ số khác nhau.
+    ///
+    /// Chỉ được thay bảng GIỮA HAI PHIÊN chơi. Entity đang sống giữ reference tới CharacterProfile cũ
+    /// (PlayerEntity._profile), nên thay bảng giữa chừng không kéo được người đang online sang bộ mới —
+    /// và đó là hành vi đúng, không phải thiếu sót.
     /// </summary>
     public static class CharacterProfiles
     {
         public const int DRAGON_WARRIOR = 1;
 
-        private static readonly Dictionary<int, CharacterProfile> _byClassId = Build();
+        private static Dictionary<int, CharacterProfile> _byClassId = new();
+
+        /// <summary>Checksum của bảng đang nạp — để in log và để so hai đầu dây.</summary>
+        public static uint Checksum { get; private set; }
 
         public static CharacterProfile Get(int classId)
         {
-            if (!_byClassId.TryGetValue(classId, out CharacterProfile profile))
-                return _byClassId[DRAGON_WARRIOR];
+            if (_byClassId.TryGetValue(classId, out CharacterProfile profile))
+                return profile;
 
-            return profile;
+            // Bảng rỗng (chưa nạp) thì đây là chỗ duy nhất phát hiện ra, và nó phải ném chứ không trả
+            // null: null đi tiếp vài tầng rồi mới nổ ở MovementRules.Step, xa chỗ gây ra nó.
+            if (_byClassId.Count == 0)
+                throw new InvalidOperationException("CharacterProfiles chưa được Load. Server nạp lúc boot, client nạp khi vào world.");
+
+            return _byClassId[DRAGON_WARRIOR];
         }
 
-        private static Dictionary<int, CharacterProfile> Build()
+        /// <summary>Thay cả bảng bằng dữ liệu vừa đọc/vừa nhận. Dựng NGUYÊN bảng mới rồi mới gán.</summary>
+        public static void Load(CharacterTableData table)
         {
-            var dragonWarrior = new CharacterProfile(
-                DRAGON_WARRIOR,
-                moveSpeed: 5f,
-                jumpSpeed: 16f,
-                bodyHalfWidth: 0.35f,
-                bodyHeight: 1.6f,
-                bodyHeightCrouch: 0.9f,
-                new Dictionary<ActionState, ActionDefinition>
-                {
-                    [ActionState.Attack] = new ActionDefinition(0.25f, 0.4f, locksMovement: false),
-                    [ActionState.Hurt] = new ActionDefinition(0.2f, 0f, locksMovement: true),
-                    [ActionState.Die] = new ActionDefinition(1f, 0f, locksMovement: true),
-                });
+            var built = new Dictionary<int, CharacterProfile>();
 
-            return new Dictionary<int, CharacterProfile>
+            foreach (CharacterProfileData data in table.Classes)
             {
-                [dragonWarrior.ClassId] = dragonWarrior,
-            };
+                var actions = new Dictionary<ActionState, ActionDefinition>();
+
+                foreach (ActionData action in data.Actions)
+                    actions[action.Action] = new ActionDefinition(action.DurationSeconds, action.CooldownSeconds, action.LocksMovement);
+
+                built[data.ClassId] = new CharacterProfile(data.ClassId, data.MoveSpeed, data.JumpSpeed,
+                    data.BodyHalfWidth, data.BodyHeight, data.BodyHeightCrouch, actions);
+            }
+
+            _byClassId = built;
+            Checksum = table.Checksum();
         }
     }
 }

@@ -14,37 +14,14 @@ namespace MMORPG.Shared.World
     public static class MovementRules
     {
         public const int TICK_RATE = 20;
+
         public const float TICK_DT = 1f / TICK_RATE;
-
-        /// <summary>
-        /// Gia tốc rơi, unit/giây². Lớn hơn 9.81 của đời thật rất nhiều — trọng lực "đúng vật lý"
-        /// cho cảm giác lơ lửng như trên mặt trăng, không game platformer nào dùng.
-        /// </summary>
-        public const float GRAVITY = 30f;
-
-        /// <summary>
-        /// Trần tốc độ rơi. Không có nó, rơi từ trên cao đủ lâu sẽ đi hơn một ô mỗi tick và
-        /// XUYÊN QUA sàn giữa hai lần kiểm va chạm.
-        /// </summary>
-        public const float MAX_FALL_SPEED = 20f;
-
-        /// <summary>
-        /// Số tick còn được nhảy sau khi đã rời mép sàn (coyote time). 3 tick = 150ms: đủ để tha thứ
-        /// cho phản xạ người, chưa đủ để thành "nhảy giữa không trung".
-        /// </summary>
-        public const int COYOTE_TICKS = 3;
-
-        /// <summary>Số tick một cú bấm nhảy còn được giữ lại chờ tiếp đất (jump buffer).</summary>
-        public const int JUMP_BUFFER_TICKS = 3;
 
         /// <summary>
         /// Giá trị "hết hạn" cho hai bộ đếm trên — lớn hơn mọi ngưỡng nên điều kiện nhảy luôn sai.
         /// Cũng là trần kẹp để bộ đếm không tăng tới tràn int khi người chơi đứng yên lâu.
         /// </summary>
         public const int EXPIRED = 999;
-
-        /// <summary>Số tick bỏ qua va chạm với bệ một chiều sau khi bấm ngồi + nhảy.</summary>
-        public const int DROP_THROUGH_TICKS = 6;
 
         /// <summary>
         /// Lùi vào trong một chút khi quét mép thân. Cần vì đứng trên sàn thì chân nằm ĐÚNG đường
@@ -83,7 +60,7 @@ namespace MMORPG.Shared.World
         /// hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
         /// </summary>
         public static MoveState Step(MoveState state, MoveIntent intent, float dt,
-            CharacterProfile profile, MapGrid map)
+            WorldRules world, CharacterProfile profile, MapGrid map)
         {
             // 0. Nhịp của tầng action, thêm bộ đếm rơi xuyên.
             if (state.ActionTicksLeft > 0)
@@ -131,9 +108,9 @@ namespace MMORPG.Shared.World
                 state.FacingLeft = state.VelX < 0f;
 
             // 3. Trọng lực — luật của thế giới, không theo nhân vật.
-            state.VelY -= GRAVITY * dt;
-            if (state.VelY < -MAX_FALL_SPEED)
-                state.VelY = -MAX_FALL_SPEED;
+            state.VelY -= world.Gravity * dt;
+            if (state.VelY < -world.MaxFallSpeed)
+                state.VelY = -world.MaxFallSpeed;
 
             // 4a. Hai bộ đếm tha thứ (như Phase 9).
             if (state.TicksSinceGrounded < EXPIRED)
@@ -150,15 +127,15 @@ namespace MMORPG.Shared.World
             if (!locked && intent.Crouch && intent.Jump && state.Grounded &&
                 StandingOnOneWay(map, profile, state))
             {
-                state.DropThroughTicks = DROP_THROUGH_TICKS;
+                state.DropThroughTicks = world.DropThroughTicks;
                 state.TicksSinceJumpRequest = EXPIRED;
                 state.TicksSinceGrounded = EXPIRED;
                 state.Grounded = false;
             }
             // 4c. Nhảy (như Phase 9).
             else if (!locked &&
-                     state.TicksSinceJumpRequest <= JUMP_BUFFER_TICKS &&
-                     state.TicksSinceGrounded <= COYOTE_TICKS)
+                     state.TicksSinceJumpRequest <= world.JumpBufferTicks &&
+                     state.TicksSinceGrounded <= world.CoyoteTicks)
             {
                 state.VelY = profile.JumpSpeed;
                 state.TicksSinceJumpRequest = EXPIRED;

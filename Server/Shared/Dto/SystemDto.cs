@@ -56,4 +56,22 @@ namespace MMORPG.Shared.Dto
         public string ServerName { get; set; } = string.Empty;
         public int OnlineCount { get; set; }
     }
+
+    [MemoryPackable]
+    public partial class VersionCheckRequest
+    {
+        public uint ContractHash { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class VersionCheckResponse
+    {
+        public bool Ok { get; set; }
+
+        /// <summary>
+        /// Gửi cả số của server dù client không cần để quyết định gì: nó là thứ người ta dán vào
+        /// báo lỗi. "Phiên bản không khớp" không giúp ai; "client A1B2C3D4, server E5F6A7B8" thì có.
+        /// </summary>
+        public uint ServerHash { get; set; }
+    }
 }

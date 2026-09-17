@@ -82,6 +82,15 @@ namespace MMORPG.GameServer.World
         /// </summary>
         public HashSet<int> Visible { get; } = new();
 
+        /// <summary>
+        /// Luật thế giới của PHIÊN này, chốt lúc dựng entity. Cố tình KHÔNG đọc ConfigService.Current
+        /// mỗi tick: client bên kia đang dự đoán bằng đúng bộ số nó nhận lúc vào world, nên đổi số
+        /// giữa chừng là rubber-band hàng loạt cho những người không làm gì sai cả.
+        ///
+        /// Hot reload áp dụng cho người vào SAU.
+        /// </summary>
+        private readonly WorldRules _world;
+
         public PlayerEntity(int entityId, CharacterRow row, ClientSession owner, MapGrid map)
         {
             EntityId = entityId;
@@ -241,7 +250,7 @@ namespace MMORPG.GameServer.World
             _pendingJump = false;
             _pendingAction = ActionRequest.None;
 
-            State = MovementRules.Step(State, intent, dt, _profile, _map);
+            State = MovementRules.Step(State, intent, dt, _world, _profile, _map);
         }
     }
 }

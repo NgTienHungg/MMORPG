@@ -24,10 +24,13 @@ dbClient.Start();
 SystemHandler.DbClient = dbClient;
 AuthHandler.AuthService = new AuthService(dbClient, new LoginRateLimiter());
 
+// Config đọc TRƯỚC mọi thứ khác: MapRegistry và WorldService đều cần số từ nó.
+var config = new ConfigService();
+
 // Nạp TOÀN BỘ map trước khi nhận kết nối — MapRegistry tự in ra từng map kèm checksum.
-var maps = new MapRegistry();
-var worldService = new WorldService(maps);
-CharacterHandler.CharacterService = new CharacterService(dbClient, worldService, maps);
+var maps = new MapRegistry(config);
+var worldService = new WorldService(maps, config);
+CharacterHandler.CharacterService = new CharacterService(dbClient, worldService, maps, config);
 
 TcpDispatcher.RegisterAll();
 
@@ -75,3 +78,40 @@ finally
     listener.Stop();
     Log.Info("Đã dừng.");
 }
+
+// Vòng đọc phím nằm ở LUỒNG RIÊNG, không trộn vào vòng accept. Console.ReadKey chặn cả luồng, nên
+// đặt chung là không ai vào được game cho tới khi bạn gõ một phím — đó là lý do đoạn code cũ ở đây
+// từng bị comment lại.
+//
+// Thread chứ không Task.Run: đây là blocking I/O, không phải việc CPU. Nhét nó vào thread pool là
+// chiếm một worker suốt đời process. IsBackground = true để nó không giữ process sống lúc thoát.
+var console = new Thread(() =>
+{
+    while (!cts.IsCancellationRequested)
+    {
+        switch (Console.ReadKey(intercept: true).Key)
+        {
+            case ConsoleKey.R:
+                config.Load();
+                break;
+
+            // Ba phím thử của Phase 9, sống lại cùng vòng lặp này.
+            case ConsoleKey.H:
+                worldService.EnqueueForceAll(ActionState.Hurt);
+                break;
+
+            case ConsoleKey.K:
+                worldService.EnqueueForceAll(ActionState.Die);
+                break;
+
+            case ConsoleKey.J:
+                worldService.EnqueueReviveAll();
+                break;
+        }
+    }
+})
+{
+    IsBackground = true,
+};
+
+console.Start();

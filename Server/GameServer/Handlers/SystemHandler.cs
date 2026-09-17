@@ -51,5 +51,28 @@ namespace MMORPG.GameServer.Handlers
                 OnlineCount = SessionRegistry.Count,
             });
         }
+
+        [TcpHandler(NetCmd.VersionCheck)]
+        public static Task<NetResult> OnVersionCheck(NetRequest req)
+        {
+            var request = req.GetData<VersionCheckRequest>();
+            bool ok = request.ContractHash == Contract.Hash;
+
+            if (ok)
+            {
+                req.Session.MarkVerified();
+            }
+            else
+            {
+                Log.Warn($"{req.Session.Tag} Contract lệch: client {request.ContractHash:X8} " +
+                         $"≠ server {Contract.Hash.ToString("X8").Red()}");
+            }
+
+            return Task.FromResult(NetResult.Ok(new VersionCheckResponse
+            {
+                Ok = ok,
+                ServerHash = Contract.Hash,
+            }));
+        }
     }
 }

@@ -29,6 +29,12 @@
                  CopyToOutputDirectory="PreserveNewest"/>
     </ItemGroup>
 
+    <ItemGroup>
+        <Content Include="..\..\Config\*.json"
+                 Link="Data\Config\%(Filename)%(Extension)"
+                 CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
     <Target Name="CheckMapFolder" BeforeTargets="Build">
         <!-- Glob không khớp file nào thì MSBuild im lặng. Biến sự im lặng đó thành lỗi build. -->
         <Error Condition="!Exists('$(MSBuildProjectDirectory)/../../Assets/Game/Resources/Maps')"
