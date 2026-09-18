@@ -10,7 +10,7 @@ namespace MMORPG.Shared.World
     /// đầu dây gọi Parse — nên định dạng chỉ có một bản mô tả duy nhất, và bài test round-trip ở
     /// Shared.Tests kiểm được nó bằng máy thay vì bằng mắt.
     /// </summary>
-    public static class MapFile
+    public static class MapGridParser
     {
         /// <summary>
         /// Version của ĐỊNH DẠNG, không phải của map. Luật: thêm một trường tuỳ chọn thì GIỮ NGUYÊN số
@@ -45,7 +45,7 @@ namespace MMORPG.Shared.World
 
         public static MapGrid Parse(string json)
         {
-            MapFileData? definition = JsonConvert.DeserializeObject<MapFileData>(json, Settings);
+            MapConfig? definition = JsonConvert.DeserializeObject<MapConfig>(json, Settings);
 
             if (definition == null)
                 throw new FormatException("File map rỗng hoặc không phải JSON hợp lệ.");
@@ -130,7 +130,7 @@ namespace MMORPG.Shared.World
                 rows.Add(line.ToString());
             }
 
-            var definition = new MapFileData
+            var definition = new MapConfig
             {
                 Version = FORMAT_VERSION,
                 Id = map.MapId,

@@ -60,7 +60,7 @@ namespace MMORPG.Shared.World
         /// hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
         /// </summary>
         public static MoveState Step(MoveState state, MoveIntent intent, float dt,
-            WorldRules world, CharacterProfile profile, MapGrid map)
+            WorldConfig world, CharacterConfig config, MapGrid map)
         {
             // 0. Nhịp của tầng action, thêm bộ đếm rơi xuyên.
             if (state.ActionTicksLeft > 0)
@@ -75,7 +75,7 @@ namespace MMORPG.Shared.World
             if (state.ActionTicksLeft <= 0 && state.Action != ActionState.Die)
                 state.Action = ActionState.None;
 
-            bool locked = profile.GetAction(state.Action).LocksMovement;
+            bool locked = config.GetAction(state.Action).LocksMovement;
 
             // 1. Tư thế. Muốn ngồi thì ngồi được ngay; muốn ĐỨNG DẬY thì còn phải hỏi thế giới —
             //    trần thấp thì không đứng lên được, và giữ nguyên tư thế ngồi là câu trả lời đúng.
@@ -88,7 +88,7 @@ namespace MMORPG.Shared.World
             }
             else if (state.Crouching)
             {
-                state.Crouching = !CanStandUp(map, profile, state);
+                state.Crouching = !CanStandUp(map, config, state);
             }
 
             // 2. Vận tốc ngang + hướng mặt (như Phase 9).
@@ -98,7 +98,7 @@ namespace MMORPG.Shared.World
             }
             else
             {
-                state.VelX = intent.DirX * profile.MoveSpeed;
+                state.VelX = intent.DirX * config.MoveSpeed;
             }
 
             // Hướng mặt: chỉ đổi khi đang thật sự dịch chuyển VÀ không vướng hành động nào.
@@ -125,7 +125,7 @@ namespace MMORPG.Shared.World
             //     người chơi vừa tụt xuống vừa bật lên trong cùng một tick. Đặt cả TicksSinceGrounded
             //     về EXPIRED để coyote time không cho một cú nhảy giữa không trung ngay tick sau.
             if (!locked && intent.Crouch && intent.Jump && state.Grounded &&
-                StandingOnOneWay(map, profile, state))
+                StandingOnOneWay(map, config, state))
             {
                 state.DropThroughTicks = world.DropThroughTicks;
                 state.TicksSinceJumpRequest = EXPIRED;
@@ -137,13 +137,13 @@ namespace MMORPG.Shared.World
                      state.TicksSinceJumpRequest <= world.JumpBufferTicks &&
                      state.TicksSinceGrounded <= world.CoyoteTicks)
             {
-                state.VelY = profile.JumpSpeed;
+                state.VelY = config.JumpSpeed;
                 state.TicksSinceJumpRequest = EXPIRED;
                 state.TicksSinceGrounded = EXPIRED;
             }
 
             // 5. Xin hành động (như Phase 9).
-            ActionDefinition attack = profile.GetAction(ActionState.Attack);
+            ActionData attack = config.GetAction(ActionState.Attack);
 
             if (intent.Action == ActionRequest.Attack &&
                 state.TicksSinceAttack >= attack.CooldownTicks &&
@@ -155,18 +155,18 @@ namespace MMORPG.Shared.World
             }
 
             // 6 & 7. Tích phân có va chạm. Thứ tự X trước Y là một phần của contract.
-            state = ResolveHorizontal(map, profile, state, dt);
-            state = ResolveVertical(map, profile, state, dt);
+            state = ResolveHorizontal(map, config, state, dt);
+            state = ResolveVertical(map, config, state, dt);
 
             // 8. Biên ngang — hai mép map, đọc từ file chứ không phải hằng số trong code.
-            state.X = ClampX(map, profile, state.X);
+            state.X = ClampX(map, config, state.X);
 
             return state;
         }
 
-        private static float BodyHeight(CharacterProfile profile, bool crouching)
+        private static float BodyHeight(CharacterConfig config, bool crouching)
         {
-            return crouching ? profile.BodyHeightCrouch : profile.BodyHeight;
+            return crouching ? config.BodyHeightCrouch : config.BodyHeight;
         }
 
         private static bool IsSolid(MapGrid map, float x, float y)
@@ -183,10 +183,10 @@ namespace MMORPG.Shared.World
         /// với 1.6 thì ba mức cách nhau 0.75, an toàn. Vì chiều cao thân giờ là DỮ LIỆU trong profile,
         /// luật này thành ràng buộc lên dữ liệu: lớp nhân vật nào cao quá 2.0 là phải thêm mức quét.
         /// </summary>
-        private static bool OverlapsSolid(MapGrid map, CharacterProfile profile, float x, float y, float height)
+        private static bool OverlapsSolid(MapGrid map, CharacterConfig config, float x, float y, float height)
         {
-            float left = x - profile.BodyHalfWidth;
-            float right = x + profile.BodyHalfWidth;
+            float left = x - config.BodyHalfWidth;
+            float right = x + config.BodyHalfWidth;
 
             float footY = y + EDGE;
             float midY = y + height * 0.5f;
@@ -198,53 +198,53 @@ namespace MMORPG.Shared.World
         }
 
         /// <summary>Có đủ chỗ trống để đứng thẳng dậy tại chỗ đang đứng không.</summary>
-        public static bool CanStandUp(MapGrid map, CharacterProfile profile, in MoveState state)
+        public static bool CanStandUp(MapGrid map, CharacterConfig config, in MoveState state)
         {
-            return !OverlapsSolid(map, profile, state.X, state.Y, profile.BodyHeight);
+            return !OverlapsSolid(map, config, state.X, state.Y, config.BodyHeight);
         }
 
         /// <summary>Ô ngay dưới chân có phải bệ một chiều không — điều kiện để được chủ động tụt xuống.</summary>
-        private static bool StandingOnOneWay(MapGrid map, CharacterProfile profile, in MoveState state)
+        private static bool StandingOnOneWay(MapGrid map, CharacterConfig config, in MoveState state)
         {
             float probeY = state.Y - EDGE;
 
-            return map.AtWorld(state.X - profile.BodyHalfWidth, probeY) == CellType.OneWay
-                   || map.AtWorld(state.X + profile.BodyHalfWidth, probeY) == CellType.OneWay;
+            return map.AtWorld(state.X - config.BodyHalfWidth, probeY) == CellType.OneWay
+                   || map.AtWorld(state.X + config.BodyHalfWidth, probeY) == CellType.OneWay;
         }
 
         /// <summary>
         /// Dịch theo trục X rồi dán lại nếu đâm tường. Chỉ kiểm điểm cuối: 5 unit/giây là 0.25 unit
         /// mỗi tick, không cách nào vượt qua một ô rộng 1.0.
         /// </summary>
-        private static MoveState ResolveHorizontal(MapGrid map, CharacterProfile profile, MoveState state, float dt)
+        private static MoveState ResolveHorizontal(MapGrid map, CharacterConfig config, MoveState state, float dt)
         {
             state.X += state.VelX * dt;
 
             if (state.VelX == 0f)
                 return state;
 
-            float height = BodyHeight(profile, state.Crouching);
+            float height = BodyHeight(config, state.Crouching);
             float footY = state.Y + EDGE;
             float midY = state.Y + height * 0.5f;
             float headY = state.Y + height - EDGE;
 
             if (state.VelX > 0f)
             {
-                float edgeX = state.X + profile.BodyHalfWidth;
+                float edgeX = state.X + config.BodyHalfWidth;
 
                 if (IsSolid(map, edgeX, footY) || IsSolid(map, edgeX, midY) || IsSolid(map, edgeX, headY))
                 {
-                    state.X = MapGrid.ColumnLeft(MapGrid.CellX(edgeX)) - profile.BodyHalfWidth;
+                    state.X = MapGrid.ColumnLeft(MapGrid.CellX(edgeX)) - config.BodyHalfWidth;
                     state.VelX = 0f;
                 }
             }
             else
             {
-                float edgeX = state.X - profile.BodyHalfWidth;
+                float edgeX = state.X - config.BodyHalfWidth;
 
                 if (IsSolid(map, edgeX, footY) || IsSolid(map, edgeX, midY) || IsSolid(map, edgeX, headY))
                 {
-                    state.X = MapGrid.ColumnRight(MapGrid.CellX(edgeX)) + profile.BodyHalfWidth;
+                    state.X = MapGrid.ColumnRight(MapGrid.CellX(edgeX)) + config.BodyHalfWidth;
                     state.VelX = 0f;
                 }
             }
@@ -259,20 +259,20 @@ namespace MMORPG.Shared.World
         /// đúng 1.00 unit mỗi tick — vừa đủ để lọt qua một tấm bệ dày 1 ô giữa hai lần kiểm. Chiều lên
         /// (0.55 unit/tick) và chiều ngang (0.25) thì kiểm điểm cuối là đủ.
         /// </summary>
-        private static MoveState ResolveVertical(MapGrid map, CharacterProfile profile, MoveState state, float dt)
+        private static MoveState ResolveVertical(MapGrid map, CharacterConfig config, MoveState state, float dt)
         {
             float prevFeetY = state.Y;
             state.Y += state.VelY * dt;
 
-            float height = BodyHeight(profile, state.Crouching);
+            float height = BodyHeight(config, state.Crouching);
 
             if (state.VelY > 0f)
             {
                 float headY = state.Y + height;
 
                 // Bệ một chiều KHÔNG chặn chiều lên — đó là toàn bộ ý nghĩa của nó.
-                if (IsSolid(map, state.X - profile.BodyHalfWidth, headY) ||
-                    IsSolid(map, state.X + profile.BodyHalfWidth, headY))
+                if (IsSolid(map, state.X - config.BodyHalfWidth, headY) ||
+                    IsSolid(map, state.X + config.BodyHalfWidth, headY))
                 {
                     state.Y = MapGrid.RowBottom(MapGrid.CellY(headY)) - height;
                     state.VelY = 0f;
@@ -289,7 +289,7 @@ namespace MMORPG.Shared.World
 
             for (int row = fromRow; row >= toRow; row--)
             {
-                if (!BlocksFall(map, profile, state, row, prevFeetY))
+                if (!BlocksFall(map, config, state, row, prevFeetY))
                     continue;
 
                 state.Y = MapGrid.RowTop(row);
@@ -311,10 +311,10 @@ namespace MMORPG.Shared.World
         /// (thiếu điều kiện này thì đi ngang vào cạnh bệ là bị bắn lên mặt bệ), và người chơi không
         /// đang chủ động tụt xuống.
         /// </summary>
-        private static bool BlocksFall(MapGrid map, CharacterProfile profile, in MoveState state, int row, float prevFeetY)
+        private static bool BlocksFall(MapGrid map, CharacterConfig config, in MoveState state, int row, float prevFeetY)
         {
-            int leftCell = MapGrid.CellX(state.X - profile.BodyHalfWidth);
-            int rightCell = MapGrid.CellX(state.X + profile.BodyHalfWidth);
+            int leftCell = MapGrid.CellX(state.X - config.BodyHalfWidth);
+            int rightCell = MapGrid.CellX(state.X + config.BodyHalfWidth);
 
             for (int cx = leftCell; cx <= rightCell; cx++)
             {
@@ -335,9 +335,9 @@ namespace MMORPG.Shared.World
         }
 
         /// <summary>Kẹp vào biên ngang của map. Biên là DỮ LIỆU đọc từ file, không còn là hằng số.</summary>
-        public static float ClampX(MapGrid map, CharacterProfile profile, float x)
+        public static float ClampX(MapGrid map, CharacterConfig config, float x)
         {
-            return Math.Clamp(x, map.MinX + profile.BodyHalfWidth, map.MaxX - profile.BodyHalfWidth);
+            return Math.Clamp(x, map.MinX + config.BodyHalfWidth, map.MaxX - config.BodyHalfWidth);
         }
 
         /// <summary>
@@ -345,13 +345,13 @@ namespace MMORPG.Shared.World
         /// hình dạng map thì sửa được bất cứ lúc nào: mỗi lần bạn vẽ thêm một bức tường là một lần có
         /// ai đó đang offline ở đúng chỗ ấy.
         /// </summary>
-        public static float ResolveSpawnY(MapGrid map, CharacterProfile profile, float x, float y)
+        public static float ResolveSpawnY(MapGrid map, CharacterConfig config, float x, float y)
         {
             // Trần lặp = chiều cao map: tường dày mấy hàng cũng thoát ra được, mà không có đường nào
             // để vòng lặp này chạy mãi nếu một ngày nào đó At() đổi cách trả lời.
             for (int guard = 0; guard < map.Height + 1; guard++)
             {
-                if (!OverlapsSolid(map, profile, x, y, profile.BodyHeight))
+                if (!OverlapsSolid(map, config, x, y, config.BodyHeight))
                     return y;
 
                 // Nhảy lên mặt trên của hàng ô đang kẹt rồi thử lại.

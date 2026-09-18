@@ -1,7 +1,7 @@
 using MMORPG.GameServer.Db;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Db;
-using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.Net;
 

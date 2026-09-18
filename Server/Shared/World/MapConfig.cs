@@ -12,10 +12,10 @@ namespace MMORPG.Shared.World
     ///
     /// Tên trường trong file LẤY THẲNG tên property, không có [JsonProperty] nào. Đổi lại sự gọn gàng
     /// ấy: tên property ở đây LÀ định dạng file, nên đổi tên một property là đổi định dạng — phải tăng
-    /// <see cref="MapFile.FORMAT_VERSION"/> và export lại mọi map, chứ không phải một thao tác Rename
+    /// <see cref="MapGridParser.FORMAT_VERSION"/> và export lại mọi map, chứ không phải một thao tác Rename
     /// bình thường trong IDE.
     /// </summary>
-    public sealed class MapFileData
+    public sealed class MapConfig
     {
         public int Version { get; set; }
 

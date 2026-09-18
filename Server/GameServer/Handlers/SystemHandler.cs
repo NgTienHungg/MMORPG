@@ -26,7 +26,7 @@ namespace MMORPG.GameServer.Handlers
             }));
         }
 
-        [TcpHandler(NetCmd.Echo)]
+        [TcpHandler(NetCmd.Echo, MinState = SessionState.Verified)]
         public static Task<NetResult> OnEcho(NetRequest req)
         {
             var request = req.GetData<EchoRequest>();
@@ -39,7 +39,7 @@ namespace MMORPG.GameServer.Handlers
             }));
         }
 
-        [TcpHandler(NetCmd.ServerInfo)]
+        [TcpHandler(NetCmd.ServerInfo, MinState = SessionState.Verified)]
         public static async Task<NetResult> OnServerInfo(NetRequest req)
         {
             var serverMeta = await DbClient.CallAsync<ServerMetaGetRequest, ServerMetaGetResponse>(

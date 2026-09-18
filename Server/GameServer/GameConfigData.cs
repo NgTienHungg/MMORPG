@@ -10,9 +10,9 @@ namespace MMORPG.GameServer
     {
         public int Version { get; set; } = 1;
 
-        public WorldRulesData World { get; set; } = new WorldRulesData();
+        public WorldConfig World { get; set; } = new();
 
-        public ServerConfigData Server { get; set; } = new ServerConfigData();
+        public ServerConfigData Server { get; set; } = new();
     }
 
     public sealed class ServerConfigData

@@ -12,34 +12,6 @@ namespace MMORPG.GameServer.World
     /// </summary>
     public sealed class WorldService
     {
-        public const int DEFAULT_CLASS_ID = 1;
-
-        /// <summary>
-        /// Bán kính tầm nhìn theo trục X, world unit. Phải lớn hơn nửa bề RỘNG màn hình: camera
-        /// orthographic size 9 cho nửa bề CAO là 9, còn nửa bề RỘNG = 9 × tỉ lệ khung hình — 16 unit
-        /// ở 16:9, 21 unit ở 21:9. Lấy nhầm con số 9 thì người chơi biến mất trong khi vẫn còn nằm
-        /// giữa khung hình.
-        ///
-        /// 24 phủ tới tận 21:9 và còn dư một quãng đệm, nhờ đó người khác được dựng lên TRƯỚC khi
-        /// trôi vào mép màn hình — hiện ra là đã ở đúng chỗ, không đột ngột nhảy vào giữa hình.
-        ///
-        /// Chỉ chặn theo trục X: map cao ~11 unit mà một màn hình đã cao 18, nên chặn cả trục Y là
-        /// tốn thêm một phép so để nhận về một phép lọc gần như không lọc gì.
-        /// </summary>
-        private const float AOI_RADIUS_X = 24f;
-
-        /// <summary>
-        /// Bề ngang một cột chỉ mục, CỐ Ý bằng đúng bán kính tầm nhìn: khi đó 3 cột (cx-1, cx, cx+1)
-        /// chắc chắn chứa mọi người trong bán kính, dù viewer đứng chỗ nào trong cột của mình.
-        ///
-        /// Cột chỉ là phép lọc THÔ để khỏi duyệt cả world; phép lọc THẬT là khoảng cách trong
-        /// <see cref="CollectVisible"/>. Tự thân lưới cột cho một hình chữ nhật LỆCH — đứng sát mép
-        /// trái một cột thì thấy xa 24 unit về bên trái nhưng tới 48 unit về bên phải — nên bỏ phép
-        /// so khoảng cách là tầm nhìn đổi theo chỗ đứng, với triệu chứng "đi sang phải mãi không ai
-        /// biến mất, đi sang trái một đoạn ngắn đã mất".
-        /// </summary>
-        private const float AOI_COLUMN_WIDTH = AOI_RADIUS_X;
-
         // Ba bộ đệm của vòng tick, giữ làm field và Clear() mỗi lần dùng. Cấp phát mới mỗi tick là
         // rác GC đều đặn 20 lần/giây suốt đời server — thứ chạy mỗi tick thì hình dạng bộ nhớ của nó
         // là một phần thiết kế. Chỉ luồng tick chạm vào, nên không cần đồng bộ gì.
@@ -60,6 +32,9 @@ namespace MMORPG.GameServer.World
         // đi qua ranh giới luồng; entity thì không ai ngoài tick được chạm vào.
         private readonly ConcurrentQueue<ForcedActionCommand> _forcedActions = new();
 
+        private readonly float _aoiRadiusX;
+        private readonly float _aoiColumnWidth;
+
         private int _nextEntityId;
 
         public int OnlineCount => _entities.Count;
@@ -68,9 +43,21 @@ namespace MMORPG.GameServer.World
         // giữ một MapGrid ở đây là ép cả server chỉ có một map, ngay ở tầng kiểu dữ liệu.
         private readonly MapRegistry _maps;
 
-        public WorldService(MapRegistry maps)
+        private readonly ConfigService _config;
+
+        public WorldService(MapRegistry maps, ConfigService config)
         {
             _maps = maps;
+            _config = config;
+
+            // Chốt MỘT LẦN lúc dựng, không đọc config.Current mỗi tick. Cùng lý do với WorldRules
+            // trong PlayerEntity — nhưng ở đây còn thêm một lý do nữa: đổi bán kính giữa chừng làm
+            // tập Visible của mọi người lệch với tập đã gửi, và một loạt EntityDespawn giả sinh ra.
+            _aoiRadiusX = config.Current.Server.AoiRadiusX;
+
+            // Cột rộng BẰNG ĐÚNG bán kính (Phase 11). Tính từ bán kính chứ không cho nó một dòng
+            // config riêng: hai con số rời nhau là hai con số sẽ lệch nhau.
+            _aoiColumnWidth = _aoiRadiusX;
         }
 
         public PlayerEntity Spawn(CharacterRow row, ClientSession owner)
@@ -80,7 +67,7 @@ namespace MMORPG.GameServer.World
             // có thể cùng đọc một giá trị và hai entity nhận trùng id.
             int entityId = Interlocked.Increment(ref _nextEntityId);
             MapGrid map = _maps.ResolveFor(row);
-            var entity = new PlayerEntity(entityId, row, owner, map);
+            var entity = new PlayerEntity(entityId, row, owner, map, _config.World);
 
             _entities[entityId] = entity;
             _entityIdByAccount[entity.AccountId] = entity.EntityId;
@@ -217,16 +204,16 @@ namespace MMORPG.GameServer.World
             }
         }
 
-        private static (int MapId, int Column) ColumnOf(PlayerEntity entity)
+        private (int MapId, int Column) ColumnOf(PlayerEntity entity)
         {
             // Floor chứ không phải cast: toạ độ X âm (nửa trái của map) phải rơi về cột bên trái,
             // không gom hết về cột 0 — cast cắt về phía 0 nên -5 và +5 sẽ cùng ra cột 0.
-            return (entity.MapId, (int)MathF.Floor(entity.State.X / AOI_COLUMN_WIDTH));
+            return (entity.MapId, (int)MathF.Floor(entity.State.X / _aoiColumnWidth));
         }
 
         /// <summary>
         /// Đổ vào <see cref="_visibleNow"/> mọi entity cùng map, cách viewer không quá
-        /// <see cref="AOI_RADIUS_X"/> theo trục X, trừ chính viewer.
+        /// <see cref="_aoiRadiusX"/> theo trục X, trừ chính viewer.
         ///
         /// Hai tầng lọc, và tầng nào cũng cần: 3 cột quanh viewer thu phạm vi phải duyệt từ "cả
         /// world" xuống "vài người quanh đây", rồi phép so khoảng cách cắt ra đúng một hình chữ nhật
@@ -256,7 +243,7 @@ namespace MMORPG.GameServer.World
                     // Phép lọc thật. Cùng một ngưỡng cho cả chiều vào lẫn chiều ra, nên người đứng
                     // đúng mốc 24 unit sẽ nhấp nháy hiện/biến — xem ghi chú hysteresis ở cuối tài
                     // liệu Phase 11. Chấp nhận được vì mốc ấy nằm ngoài khung hình.
-                    if (MathF.Abs(entity.State.X - viewerX) > AOI_RADIUS_X)
+                    if (MathF.Abs(entity.State.X - viewerX) > _aoiRadiusX)
                         continue;
 
                     _visibleNow.Add(entity);

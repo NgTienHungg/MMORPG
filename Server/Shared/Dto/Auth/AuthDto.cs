@@ -1,6 +1,6 @@
 using MemoryPack;
 
-namespace MMORPG.Shared.Dto
+namespace MMORPG.Shared.Dto.Auth
 {
     [MemoryPackable]
     public partial class RegisterRequest

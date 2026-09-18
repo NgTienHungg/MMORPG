@@ -15,7 +15,7 @@ namespace MMORPG.GameServer.World
         /// Map của nhân vật mới toanh. Là LUẬT CHƠI ("người mới bắt đầu ở đâu"), không phải thuộc
         /// tính của map nào — nên nó nằm ở đây chứ không nằm trong file map.
         /// </summary>
-        public const int STARTING_MAP_ID = 1;
+        private readonly int _startingMapId;
 
         private readonly Dictionary<int, MapGrid> _byId = new();
 
@@ -24,8 +24,10 @@ namespace MMORPG.GameServer.World
 
         public int Count => _byId.Count;
 
-        public MapRegistry()
+        public MapRegistry(ConfigService config)
         {
+            _startingMapId = config.Current.Server.StartingMapId;
+
             // AppContext.BaseDirectory chứ không phải thư mục hiện hành: chỗ gõ lệnh không phải chỗ
             // file exe nằm, và `dotnet run` từ thư mục khác là hỏng.
             string folder = Path.Combine(AppContext.BaseDirectory, "Data", "Maps");
@@ -39,7 +41,7 @@ namespace MMORPG.GameServer.World
 
                 try
                 {
-                    map = MapFile.Parse(File.ReadAllText(path));
+                    map = MapGridParser.Parse(File.ReadAllText(path));
                 }
                 catch (FormatException ex)
                 {
@@ -58,11 +60,11 @@ namespace MMORPG.GameServer.World
                          $"origin ({map.OriginX}, {map.OriginY}), checksum {map.Checksum():X8}");
             }
 
-            if (!_byId.TryGetValue(STARTING_MAP_ID, out MapGrid starting))
-                throw new InvalidOperationException($"Không có map khởi đầu #{STARTING_MAP_ID} trong {_byId.Count} map đã nạp.");
+            if (!_byId.TryGetValue(_startingMapId, out MapGrid starting))
+                throw new InvalidOperationException($"Không có map khởi đầu #{_startingMapId} trong {_byId.Count} map đã nạp.");
 
             Starting = starting;
-            Log.Info($"Đã nạp {_byId.Count.ToString().Green()} map, khởi đầu ở #{STARTING_MAP_ID}");
+            Log.Info($"Đã nạp {_byId.Count.ToString().Green()} map, khởi đầu ở #{_startingMapId}");
         }
 
         public bool TryGet(int mapId, out MapGrid map)
@@ -83,7 +85,7 @@ namespace MMORPG.GameServer.World
                 return map;
 
             Log.Warn($"{row.Name.Cyan()} đang ở map {row.MapId} — không có trong {Count} map đã nạp. " +
-                     $"Đưa về map khởi đầu #{STARTING_MAP_ID}.");
+                     $"Đưa về map khởi đầu #{_startingMapId}.");
 
             map = Starting;
             row.MapId = map.MapId;

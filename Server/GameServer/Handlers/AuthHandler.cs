@@ -1,6 +1,6 @@
 using MMORPG.GameServer.Auth;
 using MMORPG.GameServer.Net;
-using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.GameServer.Handlers

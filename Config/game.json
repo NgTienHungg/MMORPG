@@ -1,0 +1,15 @@
+{
+  "Version": 1,
+  "World": {
+    "Gravity": 30.0,
+    "MaxFallSpeed": 20.0,
+    "CoyoteSeconds": 0.15,
+    "JumpBufferSeconds": 0.15,
+    "DropThroughSeconds": 0.3
+  },
+  "Server": {
+    "StartingMapId": 1,
+    "DefaultClassId": 1,
+    "AoiRadiusX": 24.0
+  }
+}

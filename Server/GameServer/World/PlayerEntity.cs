@@ -58,7 +58,16 @@ namespace MMORPG.GameServer.World
         /// Bộ số của lớp nhân vật này: tốc độ chạy, độ cao nhảy, thời lượng và hồi chiêu từng hành động.
         /// Tra đúng một lần lúc dựng entity — nó không đổi trong suốt đời entity.
         /// </summary>
-        private readonly CharacterProfile _profile;
+        private readonly CharacterConfig _config;
+
+        /// <summary>
+        /// Luật thế giới của PHIÊN này, chốt lúc dựng entity. Cố tình KHÔNG đọc ConfigService.Current
+        /// mỗi tick: client bên kia đang dự đoán bằng đúng bộ số nó nhận lúc vào world, nên đổi số
+        /// giữa chừng là rubber-band hàng loạt cho những người không làm gì sai cả.
+        ///
+        /// Hot reload áp dụng cho người vào SAU.
+        /// </summary>
+        private readonly WorldConfig _world;
 
         /// <summary>Lưới va chạm của map entity đang đứng. Một map cho tới khi có cửa chuyển map.</summary>
         private MapGrid _map;
@@ -82,16 +91,7 @@ namespace MMORPG.GameServer.World
         /// </summary>
         public HashSet<int> Visible { get; } = new();
 
-        /// <summary>
-        /// Luật thế giới của PHIÊN này, chốt lúc dựng entity. Cố tình KHÔNG đọc ConfigService.Current
-        /// mỗi tick: client bên kia đang dự đoán bằng đúng bộ số nó nhận lúc vào world, nên đổi số
-        /// giữa chừng là rubber-band hàng loạt cho những người không làm gì sai cả.
-        ///
-        /// Hot reload áp dụng cho người vào SAU.
-        /// </summary>
-        private readonly WorldRules _world;
-
-        public PlayerEntity(int entityId, CharacterRow row, ClientSession owner, MapGrid map)
+        public PlayerEntity(int entityId, CharacterRow row, ClientSession owner, MapGrid map, WorldConfig world)
         {
             EntityId = entityId;
             CharacterId = row.CharacterId;
@@ -105,8 +105,10 @@ namespace MMORPG.GameServer.World
             // Thiếu dòng này thì Step nhận profile null và ném NRE ở MỌI tick. GameLoop nuốt lỗi để
             // một tick hỏng không giết nhịp tim server, nên triệu chứng không phải là crash mà là:
             // không ai được tích phân, không gói MoveState/WorldSnapshot nào được gửi đi.
-            _profile = CharacterProfiles.Get(row.ClassId);
+            _config = CharacterConfigContainer.Get(row.ClassId);
             _map = map;
+            _world = world;
+
             State = ResolveSpawn(map, row.X, row.Y, warnIfStuck: true);
         }
 
@@ -152,8 +154,8 @@ namespace MMORPG.GameServer.World
         /// </summary>
         private MoveState ResolveSpawn(MapGrid map, float x, float y, bool warnIfStuck)
         {
-            float spawnX = MovementRules.ClampX(map, _profile, x);
-            float spawnY = MovementRules.ResolveSpawnY(map, _profile, spawnX, y);
+            float spawnX = MovementRules.ClampX(map, _config, x);
+            float spawnY = MovementRules.ResolveSpawnY(map, _config, spawnX, y);
 
             if (warnIfStuck && (Math.Abs(spawnX - x) > 0.1f || Math.Abs(spawnY - y) > 0.1f))
             {
@@ -205,7 +207,7 @@ namespace MMORPG.GameServer.World
 
             // Thời lượng tra từ bảng của CHÍNH nhân vật này, không nhận từ người gọi: cùng một đòn thì
             // hai lớp nhân vật choáng khác nhau, và chỗ ra lệnh không cần biết điều đó.
-            state.ActionTicksLeft = _profile.GetAction(action).DurationTicks;
+            state.ActionTicksLeft = _config.GetAction(action).DurationTicks;
             State = state;
 
             return true;
@@ -250,7 +252,7 @@ namespace MMORPG.GameServer.World
             _pendingJump = false;
             _pendingAction = ActionRequest.None;
 
-            State = MovementRules.Step(State, intent, dt, _world, _profile, _map);
+            State = MovementRules.Step(State, intent, dt, _world, _config, _map);
         }
     }
 }

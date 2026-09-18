@@ -1,39 +1,44 @@
 using System;
 using MemoryPack;
+using Newtonsoft.Json;
 
 namespace MMORPG.Shared.World
 {
-    /// <summary>Một hành động trong file, ở đơn vị của người viết số.</summary>
+    /// <summary>
+    /// Các con số của MỘT hành động. Thay cho ActionDefinition của Phase 9 — cùng nội dung, khác ở chỗ
+    /// nó đọc được từ file và đi được trên dây.
+    ///
+    /// Vẫn là STRUCT, và đó không phải chuyện phong cách: <c>default</c> của nó là "0 tick, không khoá
+    /// thân", nên <see cref="CharacterConfig.GetAction"/> trả về được một giá trị hợp lệ cho hành động
+    /// không có trong bảng mà chỗ gọi không phải kiểm null. Đổi sang class là mọi chỗ gọi mọc thêm một
+    /// phép kiểm, và một trong số đó sẽ bị quên.
+    /// </summary>
     [MemoryPackable]
-    public sealed partial class ActionData
+    public partial struct ActionData
     {
         /// <summary>Ghi bằng TÊN enum trong file ("Attack"), không phải số — người sửa file không phải tra bảng.</summary>
-        public ActionState Action { get; set; }
+        public ActionState Action;
 
-        public float DurationSeconds { get; set; }
+        public float DurationSeconds;
 
-        public float CooldownSeconds { get; set; }
+        public float CooldownSeconds;
 
-        public bool LocksMovement { get; set; }
-    }
+        /// <summary>
+        /// Trong lúc hành động này diễn ra thì thân thể có mất quyền điều khiển không. Là dữ liệu chứ
+        /// không phải một nhánh switch: thêm chiêu "đứng yên đọc chú" chỉ là thêm một ô true.
+        /// </summary>
+        public bool LocksMovement;
 
-    /// <summary>Một lớp nhân vật trong file. Cùng kiểu này đi trên dây xuống client.</summary>
-    [MemoryPackable]
-    public sealed partial class CharacterProfileData
-    {
-        public int ClassId { get; set; }
+        // Dẫn xuất — xem ghi chú ở WorldRules, cùng lý do và cùng cặp thuộc tính bỏ qua.
+        [MemoryPackIgnore] [JsonIgnore] public int DurationTicks;
 
-        /// <summary>Tên để đọc log và sửa file cho dễ. Mô phỏng không dùng.</summary>
-        public string Name { get; set; } = string.Empty;
+        [MemoryPackIgnore] [JsonIgnore] public int CooldownTicks;
 
-        public float MoveSpeed { get; set; } = 5f;
-        public float JumpSpeed { get; set; } = 16f;
-        public float BodyHalfWidth { get; set; } = 0.35f;
-        public float BodyHeight { get; set; } = 1.6f;
-        public float BodyHeightCrouch { get; set; } = 0.9f;
-
-        /// <summary>Mảng chứ không phải object có khoá cố định: thêm một hành động mới là thêm phần tử.</summary>
-        public ActionData[] Actions { get; set; } = Array.Empty<ActionData>();
+        public void Prepare()
+        {
+            DurationTicks = MovementRules.ToTicks(DurationSeconds);
+            CooldownTicks = MovementRules.ToTicks(CooldownSeconds);
+        }
     }
 
     /// <summary>
@@ -46,7 +51,7 @@ namespace MMORPG.Shared.World
     {
         public int Version { get; set; } = 1;
 
-        public CharacterProfileData[] Classes { get; set; } = Array.Empty<CharacterProfileData>();
+        public CharacterConfig[] Classes { get; set; } = Array.Empty<CharacterConfig>();
 
         /// <summary>
         /// Dấu vân tay của NỘI DUNG bảng. Không băm Name: nó chỉ để người đọc file dễ chịu, đổi nó
@@ -58,7 +63,7 @@ namespace MMORPG.Shared.World
 
             hash = Fnv1a.Mix(hash, Version);
 
-            foreach (CharacterProfileData profile in Classes)
+            foreach (CharacterConfig profile in Classes)
             {
                 hash = Fnv1a.Mix(hash, profile.ClassId);
                 hash = Fnv1a.Mix(hash, profile.MoveSpeed);

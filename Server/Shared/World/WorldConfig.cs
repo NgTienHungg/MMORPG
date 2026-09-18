@@ -11,7 +11,7 @@ namespace MMORPG.Shared.World
     /// vì làm cả server đứng.
     /// </summary>
     [MemoryPackable]
-    public sealed partial class WorldRulesData
+    public sealed partial class WorldConfig
     {
         /// <summary>Gia tốc rơi, unit/giây². Lớn hơn 9.81 rất nhiều — trọng lực "đúng vật lý" cho cảm giác lơ lửng.</summary>
         public float Gravity { get; set; } = 30f;
@@ -27,31 +27,9 @@ namespace MMORPG.Shared.World
 
         /// <summary>Bỏ qua va chạm với bệ một chiều bao lâu sau khi bấm ngồi + nhảy.</summary>
         public float DropThroughSeconds { get; set; } = 0.3f;
-    }
 
-    /// <summary>
-    /// Luật thế giới ở ĐƠN VỊ CỦA MÔ PHỎNG: tick. Dựng một lần từ <see cref="WorldRulesData"/>, và từ
-    /// đó về sau vòng mô phỏng chỉ còn làm việc với số nguyên — hai đầu dây không có cửa nào lệch nhau
-    /// ở chữ số cuối.
-    ///
-    /// Phép dựng nằm ở Shared có chủ đích: server dựng từ FILE, client dựng từ GÓI TIN, và cả hai chạy
-    /// đúng hàm này. Quy đổi giây→tick mà có hai bản là có hai thế giới.
-    /// </summary>
-    public sealed class WorldRules
-    {
-        public float Gravity { get; }
-        public float MaxFallSpeed { get; }
-        public int CoyoteTicks { get; }
-        public int JumpBufferTicks { get; }
-        public int DropThroughTicks { get; }
-
-        public WorldRules(WorldRulesData data)
-        {
-            Gravity = data.Gravity;
-            MaxFallSpeed = data.MaxFallSpeed;
-            CoyoteTicks = MovementRules.ToTicks(data.CoyoteSeconds);
-            JumpBufferTicks = MovementRules.ToTicks(data.JumpBufferSeconds);
-            DropThroughTicks = MovementRules.ToTicks(data.DropThroughSeconds);
-        }
+        public int CoyoteTicks => MovementRules.ToTicks(CoyoteSeconds);
+        public int JumpBufferTicks => MovementRules.ToTicks(JumpBufferSeconds);
+        public int DropThroughTicks => MovementRules.ToTicks(DropThroughSeconds);
     }
 }

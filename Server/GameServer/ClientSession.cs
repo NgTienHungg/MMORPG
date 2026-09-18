@@ -5,7 +5,7 @@ using MMORPG.GameServer.Handlers;
 using MMORPG.GameServer.Net;
 using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
-using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.GameServer
@@ -43,7 +43,6 @@ namespace MMORPG.GameServer
 
         /// <summary>Entity đang điều khiển. null khi chưa vào world.</summary>
         public PlayerEntity Entity { get; private set; }
-
 
         public ClientSession(TcpClient tcpClient)
         {
@@ -165,6 +164,17 @@ namespace MMORPG.GameServer
             }
         }
 
+        /// <summary>
+        /// Contract khớp. Không mang theo dữ liệu gì — nó chỉ mở cửa cho các lệnh khác.
+        ///
+        /// Không có đường lùi: một session đã kiểm xong thì kiểm lại cũng vô nghĩa, và MarkLoggedOut
+        /// cố tình hạ về Connected chứ không về Verified — xem bên dưới.
+        /// </summary>
+        public void MarkVerified()
+        {
+            State = SessionState.Verified;
+        }
+
         public void MarkAuthenticated(long accountId, string username)
         {
             AccountId = accountId;
@@ -176,7 +186,11 @@ namespace MMORPG.GameServer
         {
             AccountId = 0;
             Username = string.Empty;
-            State = SessionState.Connected;
+
+            // Verified chứ không Connected: đăng xuất là quên DANH TÍNH, không phải quên kết quả kiểm
+            // phiên bản. Hạ về Connected thì người chơi bấm Đăng xuất xong không đăng nhập lại được,
+            // và lỗi trả về là NotAuthenticated — một thông điệp chỉ sai hướng hoàn toàn.
+            State = SessionState.Verified;
         }
 
         public void Kick(string reason)

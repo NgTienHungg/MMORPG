@@ -2,7 +2,7 @@ using MMORPG.Shared.World;
 
 namespace MMORPG.Shared.Tests
 {
-    public class MapFileTests
+    public class MapGridParserTests
     {
         /// <summary>
         /// Lưới 4×3 có đủ ba loại ô và KHÔNG đối xứng theo trục Y — cố ý, để phép lật trục sai thì bài
@@ -36,7 +36,7 @@ namespace MMORPG.Shared.Tests
         public void Write_then_parse_gives_back_the_same_grid()
         {
             MapGrid original = BuildSample();
-            MapGrid parsed = MapFile.Parse(MapFile.Write(original));
+            MapGrid parsed = MapGridParser.Parse(MapGridParser.Write(original));
 
             Assert.Equal(original.MapId, parsed.MapId);
             Assert.Equal(original.OriginX, parsed.OriginX);
@@ -60,23 +60,23 @@ namespace MMORPG.Shared.Tests
         /// Số version dựng từ chính hằng số chứ không gõ tay: tăng FORMAT_VERSION thì bài test đi
         /// theo, thay vì âm thầm thành một phép Replace không khớp gì cả.
         /// </summary>
-        private static string VersionField => $"\"{nameof(MapFileData.Version)}\": {MapFile.FORMAT_VERSION}";
+        private static string VersionField => $"\"{nameof(MapConfig.Version)}\": {MapGridParser.FORMAT_VERSION}";
 
         [Fact]
         public void Parse_rejects_unknown_format_version()
         {
-            string json = MapFile.Write(BuildSample()).Replace(VersionField, "\"Version\": 99");
+            string json = MapGridParser.Write(BuildSample()).Replace(VersionField, "\"Version\": 99");
 
-            Assert.Throws<FormatException>(() => MapFile.Parse(json));
+            Assert.Throws<FormatException>(() => MapGridParser.Parse(json));
         }
 
         [Fact]
         public void Parse_rejects_row_with_wrong_cell_count()
         {
             // Hàng đáy của lưới mẫu là bốn ô Solid. Cắt đi một ô để hàng lệch số ô so với hàng đầu.
-            string json = MapFile.Write(BuildSample()).Replace("\"1 1 1 1\"", "\"1 1 1\"");
+            string json = MapGridParser.Write(BuildSample()).Replace("\"1 1 1 1\"", "\"1 1 1\"");
 
-            Assert.Throws<FormatException>(() => MapFile.Parse(json));
+            Assert.Throws<FormatException>(() => MapGridParser.Parse(json));
         }
 
         /// <summary>
@@ -86,9 +86,9 @@ namespace MMORPG.Shared.Tests
         [Fact]
         public void Parse_rejects_unknown_cell_id()
         {
-            string json = MapFile.Write(BuildSample()).Replace("\"0 2 2 0\"", "\"0 9 2 0\"");
+            string json = MapGridParser.Write(BuildSample()).Replace("\"0 2 2 0\"", "\"0 9 2 0\"");
 
-            Assert.Throws<FormatException>(() => MapFile.Parse(json));
+            Assert.Throws<FormatException>(() => MapGridParser.Parse(json));
         }
 
         /// <summary>
@@ -103,14 +103,14 @@ namespace MMORPG.Shared.Tests
         [Fact]
         public void Parse_ignores_fields_it_does_not_know()
         {
-            string json = MapFile.Write(BuildSample())
+            string json = MapGridParser.Write(BuildSample())
                 .Replace(VersionField, $"\"weather\": \"rain\",\n  {VersionField}");
 
             // Chốt rằng phép Replace ĐÃ chèn được: không có dòng này thì một lần đổi tên trường biến
             // bài test thành "parse một file y hệt bản gốc" và nó xanh mà chẳng kiểm gì.
             Assert.Contains("weather", json);
 
-            MapGrid parsed = MapFile.Parse(json);
+            MapGrid parsed = MapGridParser.Parse(json);
 
             Assert.Equal(BuildSample().Checksum(), parsed.Checksum());
         }
@@ -129,7 +129,7 @@ namespace MMORPG.Shared.Tests
                 X = 4.5f, Y = -1.5f, Width = 2f, Height = 3f, ToMapId = 9, ToSpawnId = "from_map_7",
             };
 
-            MapGrid parsed = MapFile.Parse(MapFile.Write(BuildSample(new[] { portal })));
+            MapGrid parsed = MapGridParser.Parse(MapGridParser.Write(BuildSample(new[] { portal })));
 
             Portal round = Assert.Single(parsed.Portals);
 
@@ -140,7 +140,7 @@ namespace MMORPG.Shared.Tests
             Assert.Equal(portal.ToMapId, round.ToMapId);
             Assert.Equal(portal.ToSpawnId, round.ToSpawnId);
 
-            Assert.DoesNotContain(nameof(MapFileData.Portals), MapFile.Write(BuildSample()));
+            Assert.DoesNotContain(nameof(MapConfig.Portals), MapGridParser.Write(BuildSample()));
         }
     }
 }

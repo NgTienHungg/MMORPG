@@ -1,5 +1,6 @@
 using MemoryPack;
 using MMORPG.Shared.Net;
+using MMORPG.Shared.World;
 
 namespace MMORPG.Shared.Dto.Character
 {
@@ -29,5 +30,7 @@ namespace MMORPG.Shared.Dto.Character
 
         /// <summary>Mốc thời gian server (Unix ms) tại thời điểm vào world.</summary>
         public long ServerTimeMs { get; set; }
+
+        public WorldConfig World { get; set; }
     }
 }

@@ -117,7 +117,8 @@ namespace MMORPG.Shared.World
         {
             return new MoveState
             {
-                X = x, Y = y, VelX = 0f, VelY = 0f,
+                X = x, Y = y,
+                VelX = 0f, VelY = 0f,
                 Grounded = false,
                 TicksSinceGrounded = MovementRules.EXPIRED, // Bắt đầu ở trạng thái hết hạn: vừa vào world thì chưa có tư cách nhảy nào cả.
                 TicksSinceJumpRequest = MovementRules.EXPIRED,
