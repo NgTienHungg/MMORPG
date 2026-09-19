@@ -1,5 +1,5 @@
 using System;
-using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.Client.Network.Handlers

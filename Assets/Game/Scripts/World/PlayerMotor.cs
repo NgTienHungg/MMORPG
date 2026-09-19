@@ -32,7 +32,7 @@ namespace MMORPG.Client.World
         /// Bộ số của lớp nhân vật mình đang chơi. Client PHẢI dự đoán bằng đúng bảng server dùng —
         /// lệch một con số là lệch quỹ đạo, và reconciliation sẽ kéo giật liên tục mà không rõ vì sao.
         /// </summary>
-        private CharacterProfile _profile;
+        private CharacterConfig _characterConfig;
 
         /// <summary>
         /// Lưới va chạm client dự đoán bằng. PHẢI là đúng lưới server đang chạy — hai bên đọc cùng
@@ -85,14 +85,16 @@ namespace MMORPG.Client.World
         {
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
-            _profile = CharacterProfiles.Get(classId);
+
+            //todo: fix tạm
+            _characterConfig = new CharacterConfig(); // CharacterConfigContainer.Get(classId);
             _map = map;
 
             _simState = MoveState.AtRest(spawnPos.x, spawnPos.y);
             _prevSimState = _simState;
 
             // Animator cần cùng bảng đó, nhưng chỉ để co clip cho vừa thời lượng.
-            _characterAnimator.Init(_profile);
+            _characterAnimator.Init(_characterConfig);
 
             _worldNetHandler.OnMoveStateResult += OnMoveStateResult;
         }
@@ -177,7 +179,7 @@ namespace MMORPG.Client.World
             _jumpLatched = false;
             _attackLatched = false;
 
-            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, _profile, _map);
+            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, WorldApi.Config, _characterConfig, _map);
 
             _pending.Add(new PendingInput(seq, intent));
             _worldApi.Move(seq, intent);
@@ -213,7 +215,8 @@ namespace MMORPG.Client.World
                 // Vòng replay PHẢI dùng đúng map của bước dự đoán. Đây là chỗ dễ quên nhất trong cả
                 // phase, và triệu chứng của việc quên không phải "sai vị trí" mà là RUNG ở sát tường:
                 // dự đoán chặn, replay cho qua, mỗi gói MoveState là một lần đổi ý.
-                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT, _profile, _map);
+                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT,
+                    WorldApi.Config, _characterConfig, _map);
             }
 
             _prevSimState = previous;

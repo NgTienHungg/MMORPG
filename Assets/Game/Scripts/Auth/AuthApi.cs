@@ -2,6 +2,7 @@ using HungNT;
 using MMORPG.Client.Network;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Net;
 
 namespace MMORPG.Client.Auth

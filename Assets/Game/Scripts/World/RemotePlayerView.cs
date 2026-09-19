@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using HungNT;
 using MMORPG.Shared.World;
 using UnityEngine;
 
@@ -54,9 +53,9 @@ namespace MMORPG.Client.World
         /// Bảng số của LỚP NHÂN VẬT KIA — cần để co clip cho vừa thời lượng hành động của họ.
         /// Gọi ngay sau Instantiate, trước mẫu đầu tiên.
         /// </summary>
-        public void Init(CharacterProfile profile)
+        public void Init(CharacterConfig config)
         {
-            _characterAnimator.Init(profile);
+            _characterAnimator.Init(config);
         }
 
         /// <summary>Gọi mỗi lần snapshot đến. Mốc thời gian là đồng hồ MÁY MÌNH lúc nhận.</summary>

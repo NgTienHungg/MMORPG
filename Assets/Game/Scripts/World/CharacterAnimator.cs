@@ -50,12 +50,12 @@ namespace MMORPG.Client.World
         /// tick, để co clip cho vừa. Nhân vật của mình lấy từ ClassId trong EnterWorldResponse,
         /// nhân vật người khác lấy từ ClassId trong EntitySpawnNotice.
         /// </summary>
-        private CharacterProfile _profile;
+        private CharacterConfig _config;
 
         /// <summary>Gọi ngay sau khi Instantiate, trước lần Apply đầu tiên.</summary>
-        public void Init(CharacterProfile profile)
+        public void Init(CharacterConfig config)
         {
-            _profile = profile;
+            _config = config;
         }
 
         private void Awake()
@@ -107,7 +107,7 @@ namespace MMORPG.Client.World
             // Co clip cho vừa số tick mà LUẬT quy định, thay vì để độ dài clip quyết định luật.
             // Không co thì clip dài hơn bị cắt ngọn giữa chừng, clip ngắn hơn đứng hình chờ —
             // và cách "sửa" hiển nhiên là đi chỉnh clip, tức là mời người làm hình chỉnh cân bằng game.
-            int ticks = _profile.GetAction(action).DurationTicks;
+            int ticks = _config.GetAction(action).DurationTicks;
             float wanted = ticks * MovementRules.TICK_DT;
 
             _animator.speed = wanted > 0f ? _actionLengths[action] / wanted : 1f;

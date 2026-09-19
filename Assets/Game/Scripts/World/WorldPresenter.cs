@@ -1,6 +1,6 @@
 using HungNT;
 using MMORPG.Client.Network.Handlers;
-using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Dto.Character;
 using UnityEngine;
 using VContainer;
@@ -64,6 +64,9 @@ namespace MMORPG.Client.World
                 this.LogWarning($"EnterWorld thất bại: {response.Error}");
                 return;
             }
+
+            //todo: luu tam vao day de dung trong Step()
+            WorldApi.Config = response.World;
 
             _localPlayer.Apply(response);
             _worldSpawner.SpawnLocalPlayer(response);

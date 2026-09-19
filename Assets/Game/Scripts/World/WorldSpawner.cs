@@ -109,7 +109,8 @@ namespace MMORPG.Client.World
 
             // Bảng số tra từ ClassId của NGƯỜI KIA, không phải của mình: hai lớp nhân vật có thời
             // lượng hành động khác nhau, và người xem phải co clip theo bảng của người bị xem.
-            view.Init(CharacterProfiles.Get(notice.ClassId));
+            //todo: fix tam
+            view.Init(new CharacterConfig() /*CharacterConfigContainer.Get(notice.ClassId)*/);
             view.PushState(new Vector2(notice.X, notice.Y), notice.FacingLeft, notice.Crouching, notice.Action);
 
             _remotes[notice.EntityId] = view;

@@ -41,7 +41,7 @@ namespace MMORPG.Client.World
             if (asset == null)
                 throw new FileNotFoundException($"Không thấy Resources/{RESOURCE_FOLDER}/{fileName}.json. Chạy Tools/MMORPG/Export Map.");
 
-            Current = MapFile.Parse(asset.text);
+            Current = MapGridParser.Parse(asset.text);
 
             // In checksum ra để đối chiếu với dòng server in lúc khởi động. Hai số khác nhau nghĩa là
             // hai bên đang chạy hai map khác nhau — biết ngay ở đây, thay vì đoán qua triệu chứng.

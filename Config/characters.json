@@ -1,0 +1,19 @@
+{
+  "Version": 1,
+  "Classes": [
+    {
+      "ClassId": 1,
+      "Name": "Dragon Warrior",
+      "MoveSpeed": 5.0,
+      "JumpSpeed": 16.0,
+      "BodyHalfWidth": 0.35,
+      "BodyHeight": 1.6,
+      "BodyHeightCrouch": 0.9,
+      "Actions": [
+        { "Action": "Attack", "DurationSeconds": 0.25, "CooldownSeconds": 0.4, "LocksMovement": false },
+        { "Action": "Hurt",   "DurationSeconds": 0.2,  "CooldownSeconds": 0.0, "LocksMovement": true },
+        { "Action": "Die",    "DurationSeconds": 1.0,  "CooldownSeconds": 0.0, "LocksMovement": true }
+      ]
+    }
+  ]
+}

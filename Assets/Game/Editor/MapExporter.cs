@@ -106,7 +106,7 @@ namespace MMORPG.Client.EditorTools
 
             Directory.CreateDirectory(OUTPUT_FOLDER);
             string path = $"{OUTPUT_FOLDER}/{string.Format(MapService.FILE_MAP_FORMAT, map.MapId)}.json";
-            File.WriteAllText(path, MapFile.Write(map));
+            File.WriteAllText(path, MapGridParser.Write(map));
 
             // Không có dòng này thì file mới nằm trên đĩa nhưng Unity chưa biết, và Resources.Load vẫn
             // trả về nội dung cũ cho tới lần focus lại cửa sổ Editor.

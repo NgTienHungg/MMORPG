@@ -4,7 +4,7 @@ using Cysharp.Threading.Tasks;
 using HungNT;
 using MMORPG.Client.Network;
 using MMORPG.Client.Network.Handlers;
-using MMORPG.Shared.Dto;
+using MMORPG.Shared.Dto.Auth;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using VContainer;

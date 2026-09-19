@@ -12,6 +12,8 @@ namespace MMORPG.Client.World
     /// </summary>
     public sealed class WorldApi
     {
+        public static WorldConfig Config;
+
         private readonly NetService _netService;
 
         public WorldApi(NetService netService)

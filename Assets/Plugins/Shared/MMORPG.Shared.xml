@@ -65,7 +65,7 @@
         <member name="M:MMORPG.Shared.Db.DbFrame.Decode(System.Byte[],System.Int32@)">
             <summary>Tách request id ra khỏi payload mà <see cref="M:MMORPG.Shared.Net.FrameReader.TryRead(System.Int32@,System.Byte[]@)"/> vừa trả về.</summary>
         </member>
-        <member name="T:MMORPG.Shared.Dto.RegisterRequest">
+        <member name="T:MMORPG.Shared.Dto.Auth.RegisterRequest">
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
@@ -74,7 +74,7 @@
             </code>
             </remarks>
         </member>
-        <member name="T:MMORPG.Shared.Dto.LoginRequest">
+        <member name="T:MMORPG.Shared.Dto.Auth.LoginRequest">
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
@@ -83,7 +83,7 @@
             </code>
             </remarks>
         </member>
-        <member name="T:MMORPG.Shared.Dto.AuthResponse">
+        <member name="T:MMORPG.Shared.Dto.Auth.AuthResponse">
              <summary>
              Dùng chung cho Register / Login / Logout.
             
@@ -101,18 +101,18 @@
             </code>
             </remarks>
         </member>
-        <member name="P:MMORPG.Shared.Dto.AuthResponse.Error">
+        <member name="P:MMORPG.Shared.Dto.Auth.AuthResponse.Error">
             <summary><see cref="F:MMORPG.Shared.Net.ErrorCode.None"/> khi thành công.</summary>
         </member>
-        <member name="P:MMORPG.Shared.Dto.AuthResponse.Username">
+        <member name="P:MMORPG.Shared.Dto.Auth.AuthResponse.Username">
             <summary>Tên hiển thị, server trả về đúng như đã lưu (đã chuẩn hoá chữ thường).</summary>
         </member>
-        <member name="P:MMORPG.Shared.Dto.AuthResponse.SessionToken">
+        <member name="P:MMORPG.Shared.Dto.Auth.AuthResponse.SessionToken">
             <summary>
             Token phiên do server cấp khi đăng nhập thành công. Rỗng khi thất bại.
             </summary>
         </member>
-        <member name="T:MMORPG.Shared.Dto.KickedNotice">
+        <member name="T:MMORPG.Shared.Dto.Auth.KickedNotice">
             <summary>Server báo lý do đá client ra.</summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
@@ -121,7 +121,7 @@
             </code>
             </remarks>
         </member>
-        <member name="P:MMORPG.Shared.Dto.KickedNotice.Reason">
+        <member name="P:MMORPG.Shared.Dto.Auth.KickedNotice.Reason">
             <summary>Chuỗi tiếng Việt hiển thị thẳng cho người chơi.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.Character.EnterWorldResponse">
@@ -139,7 +139,7 @@
             <b>float</b> X<br/>
             <b>float</b> Y<br/>
             <b>long</b> ServerTimeMs<br/>
-            <b>MMORPG.Shared.World.WorldConfigData</b> World<br/>
+            <b>MMORPG.Shared.World.WorldConfig</b> World<br/>
             </code>
             </remarks>
         </member>
@@ -438,7 +438,7 @@
         </member>
         <member name="P:MMORPG.Shared.Dto.World.MoveInputRequest.Intent">
             <summary>
-            Đúng cái struct mà <see cref="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.WorldConfigData,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MapGrid)"/> nhận, không phải bản sao dàn phẳng của nó.
+            Đúng cái struct mà <see cref="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.WorldConfig,MMORPG.Shared.World.CharacterConfig,MMORPG.Shared.World.MapGrid)"/> nhận, không phải bản sao dàn phẳng của nó.
             Client dự đoán bằng struct này rồi gửi chính nó đi; thêm một nút bấm mới sau này là sửa
             một chỗ, không phải bốn.
             </summary>
@@ -550,18 +550,6 @@
             coyote/jump-buffer của map cũ còn nguyên, và tick đầu ở map mới diễn ra với một cú nhảy
             đang dở.
             </summary>
-        </member>
-        <member name="T:MMORPG.Shared.HandshakeDto">
-            <summary>
-            DTO thử để kiểm chứng đường ống Shared → Unity đã thông. Không còn luồng nào dùng — xoá được.
-            </summary>
-            <remarks>
-            MemoryPack GenerateType: Object<br/>
-            <code>
-            <b>int</b> ProtocolVersion<br/>
-            <b>string</b> ServerName<br/>
-            </code>
-            </remarks>
         </member>
         <member name="T:MMORPG.Shared.Net.Contract">
              <summary>
@@ -684,7 +672,7 @@
         <member name="F:MMORPG.Shared.Net.NetCmd.Kicked">
             <summary>
             Server chủ động đá client ra. Chỉ server gửi, client không bao giờ gửi lệnh này.
-            Payload: <see cref="T:MMORPG.Shared.Dto.KickedNotice"/>
+            Payload: <see cref="!:KickedNotice"/>
             </summary>
         </member>
         <member name="F:MMORPG.Shared.Net.NetCmd.VersionCheck">
@@ -696,21 +684,21 @@
         <member name="F:MMORPG.Shared.Net.NetCmd.Register">
             <summary>
             Tạo tài khoản mới.
-            Request: <see cref="T:MMORPG.Shared.Dto.RegisterRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.AuthResponse"/>
+            Request: <see cref="!:RegisterRequest"/> · Response: <see cref="!:AuthResponse"/>
             Client chủ động gửi.
             </summary>
         </member>
         <member name="F:MMORPG.Shared.Net.NetCmd.Login">
             <summary>
             Đăng nhập.
-            Request: <see cref="T:MMORPG.Shared.Dto.LoginRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.AuthResponse"/>
+            Request: <see cref="!:LoginRequest"/> · Response: <see cref="!:AuthResponse"/>
             Client chủ động gửi.
             </summary>
         </member>
         <member name="F:MMORPG.Shared.Net.NetCmd.Logout">
             <summary>
             Đăng xuất chủ động (về màn hình login mà không cắt TCP).
-            Request: <see cref="T:MMORPG.Shared.Dto.EmptyRequest"/> · Response: <see cref="T:MMORPG.Shared.Dto.AuthResponse"/>
+            Request: <see cref="T:MMORPG.Shared.Dto.EmptyRequest"/> · Response: <see cref="!:AuthResponse"/>
             </summary>
         </member>
         <member name="F:MMORPG.Shared.Net.NetCmd.EnterWorld">
@@ -819,14 +807,14 @@
             Đóng khung một gói hoàn chỉnh, sẵn sàng ghi thẳng lên socket.
             </summary>
         </member>
-        <member name="T:MMORPG.Shared.World.CharacterProfile">
+        <member name="T:MMORPG.Shared.World.CharacterConfig">
              <summary>
              Bộ số của một lớp nhân vật. Ba vai, một hình dạng: dòng trong characters.json, phần tử của gói
              EnterWorld, và bộ số MovementRules.Step đọc.
             
              Property có setter là cái giá của việc tuần tự hoá được — kiểu bất biến thì không bộ tuần tự
              hoá nào dựng được nó. Bù lại bằng kỷ luật, không bằng trình biên dịch: CHỈ
-             <see cref="M:MMORPG.Shared.World.CharacterProfiles.Load(MMORPG.Shared.World.CharacterTableData)"/> được ghi vào, và nó chỉ ghi vào object vừa dựng xong,
+             <see cref="M:MMORPG.Shared.World.CharacterConfigContainer.Load(MMORPG.Shared.World.CharacterTableData)"/> được ghi vào, và nó chỉ ghi vào object vừa dựng xong,
              chưa ai cầm.
              </summary>
             <remarks>
@@ -843,34 +831,34 @@
             </code>
             </remarks>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfile.Name">
+        <member name="P:MMORPG.Shared.World.CharacterConfig.Name">
             <summary>Tên để đọc log và sửa file cho dễ. Mô phỏng không dùng, nên nó cũng không vào Checksum.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfile.MoveSpeed">
+        <member name="P:MMORPG.Shared.World.CharacterConfig.MoveSpeed">
             <summary>Tốc độ chạy ngang, world unit/giây.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfile.JumpSpeed">
+        <member name="P:MMORPG.Shared.World.CharacterConfig.JumpSpeed">
             <summary>Vận tốc bật lên tức thời khi nhảy.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfile.BodyHalfWidth">
+        <member name="P:MMORPG.Shared.World.CharacterConfig.BodyHalfWidth">
             <summary>Nửa bề ngang thân. Hẹp hơn nửa ô để lọt vừa khe rộng đúng 1 ô.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfile.BodyHeight">
+        <member name="P:MMORPG.Shared.World.CharacterConfig.BodyHeight">
             <summary>Chiều cao thân khi đứng. Gốc toạ độ ở CHÂN nên thân chiếm [Y, Y + cao].</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfile.BodyHeightCrouch">
+        <member name="P:MMORPG.Shared.World.CharacterConfig.BodyHeightCrouch">
             <summary>Chiều cao khi ngồi — thấp hơn 1 ô nên chui được vào khe cao đúng một ô.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfile.Actions">
+        <member name="P:MMORPG.Shared.World.CharacterConfig.Actions">
             <summary>Mảng chứ không phải object có khoá cố định: thêm một hành động mới là thêm phần tử.</summary>
         </member>
-        <member name="M:MMORPG.Shared.World.CharacterProfile.Prepare">
+        <member name="M:MMORPG.Shared.World.CharacterConfig.Prepare">
             <summary>
-            Quy giây ra tick cho mọi hành động. Gọi từ <see cref="M:MMORPG.Shared.World.CharacterProfiles.Load(MMORPG.Shared.World.CharacterTableData)"/>, tức là
+            Quy giây ra tick cho mọi hành động. Gọi từ <see cref="M:MMORPG.Shared.World.CharacterConfigContainer.Load(MMORPG.Shared.World.CharacterTableData)"/>, tức là
             đúng một chỗ ở mỗi bên — cùng cơ chế với <see cref="!:WorldRules.Prepare"/>.
             </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.CharacterProfile.GetAction(MMORPG.Shared.World.ActionState)">
+        <member name="M:MMORPG.Shared.World.CharacterConfig.GetAction(MMORPG.Shared.World.ActionState)">
              <summary>
              Số liệu của một hành động. Hành động không có trong bảng (kể cả None) trả về bản rỗng:
              0 tick, không khoá thân — nhờ vậy chỗ gọi không phải kiểm null hay kiểm None.
@@ -879,7 +867,7 @@
              nhanh hơn một phép băm. Đổi khi nào một lớp nhân vật có vài chục chiêu.
              </summary>
         </member>
-        <member name="T:MMORPG.Shared.World.CharacterProfiles">
+        <member name="T:MMORPG.Shared.World.CharacterConfigContainer">
              <summary>
              Bảng tra profile theo lớp nhân vật. Bảng TĨNH nhưng NẠP ĐƯỢC: server nạp từ file lúc boot,
              client nạp từ gói EnterWorld. Một bảng, hai đường vào, một hàm dựng — nên hai bên không có cửa
@@ -890,10 +878,10 @@
              và đó là hành vi đúng, không phải thiếu sót.
              </summary>
         </member>
-        <member name="P:MMORPG.Shared.World.CharacterProfiles.Checksum">
+        <member name="P:MMORPG.Shared.World.CharacterConfigContainer.Checksum">
             <summary>Checksum của bảng đang nạp — để in log và để so hai đầu dây.</summary>
         </member>
-        <member name="M:MMORPG.Shared.World.CharacterProfiles.Load(MMORPG.Shared.World.CharacterTableData)">
+        <member name="M:MMORPG.Shared.World.CharacterConfigContainer.Load(MMORPG.Shared.World.CharacterTableData)">
              <summary>
              Thay cả bảng bằng dữ liệu vừa đọc (server) hoặc vừa nhận (client). Dựng NGUYÊN bảng mới rồi
              mới gán — xem câu 4 phần tự kiểm tra.
@@ -949,7 +937,7 @@
              nó đọc được từ file và đi được trên dây.
             
              Vẫn là STRUCT, và đó không phải chuyện phong cách: <c>default</c> của nó là "0 tick, không khoá
-             thân", nên <see cref="M:MMORPG.Shared.World.CharacterProfile.GetAction(MMORPG.Shared.World.ActionState)"/> trả về được một giá trị hợp lệ cho hành động
+             thân", nên <see cref="M:MMORPG.Shared.World.CharacterConfig.GetAction(MMORPG.Shared.World.ActionState)"/> trả về được một giá trị hợp lệ cho hành động
              không có trong bảng mà chỗ gọi không phải kiểm null. Đổi sang class là mọi chỗ gọi mọc thêm một
              phép kiểm, và một trong số đó sẽ bị quên.
              </summary>
@@ -982,7 +970,7 @@
             MemoryPack GenerateType: Object<br/>
             <code>
             <b>int</b> Version<br/>
-            <b>MMORPG.Shared.World.CharacterProfile[]</b> Classes<br/>
+            <b>MMORPG.Shared.World.CharacterConfig[]</b> Classes<br/>
             </code>
             </remarks>
         </member>
@@ -1011,52 +999,7 @@
             cách viết nó.
             </summary>
         </member>
-        <member name="T:MMORPG.Shared.World.Maps">
-            <summary>
-            Nạp bản đồ từ nội dung dạng chữ và tính hash phiên bản của nó.
-            Bản đồ không còn là hằng số trong code: nó là DỮ LIỆU, có một bản gốc duy nhất ở file,
-            và client nhận đúng bản mà server đang chạy.
-            </summary>
-        </member>
-        <member name="M:MMORPG.Shared.World.Maps.SplitRows(System.String)">
-            <summary>Tách nội dung file thành các hàng, bỏ dòng trống và ký tự xuống dòng của Windows.</summary>
-        </member>
-        <member name="M:MMORPG.Shared.World.Maps.Version(System.String[])">
-            <summary>
-            Hash phiên bản của một bảng dữ liệu. FNV-1a 32-bit: không phải hàm băm mật mã, chỉ cần
-            hai tính chất — cùng nội dung cho cùng số, và đổi một ký tự thì số đổi. Đặt ở Shared để
-            hai bên tính ra cùng kết quả; mỗi bên tự viết một hàm băm là chép tay contract.
-            </summary>
-        </member>
-        <member name="T:MMORPG.Shared.World.MapFile">
-            <summary>
-            Đọc và ghi file map JSON. Hai chiều nằm cùng một chỗ có chủ đích: tool export gọi Write, hai
-            đầu dây gọi Parse — nên định dạng chỉ có một bản mô tả duy nhất, và bài test round-trip ở
-            Shared.Tests kiểm được nó bằng máy thay vì bằng mắt.
-            </summary>
-        </member>
-        <member name="F:MMORPG.Shared.World.MapFile.FORMAT_VERSION">
-             <summary>
-             Version của ĐỊNH DẠNG, không phải của map. Luật: thêm một trường tuỳ chọn thì GIỮ NGUYÊN số
-             này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
-             đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
-             file map đọc sai một nửa còn tệ hơn một file map không đọc được.
-            
-             Version 2 đổi tên MỌI trường sang đúng tên property (bỏ [JsonProperty]) và bỏ trường
-             "_comment". File version 1 mà đọc bằng code này thì "prefab" không khớp "PrefabKey" nữa và
-             map mất hình trong im lặng — đúng loại hỏng mà con số này sinh ra để chặn.
-             </summary>
-        </member>
-        <member name="M:MMORPG.Shared.World.MapFile.SplitRow(System.String,System.Int32)">
-            <summary>
-            Tách một hàng thành các id. Chuỗi rỗng bắt luôn cả trường hợp JSON ghi null trong mảng —
-            không có hàng hợp lệ nào rỗng, vì width lấy từ hàng đầu và width = 0 thì MapGrid từ chối.
-            </summary>
-        </member>
-        <member name="M:MMORPG.Shared.World.MapFile.MaxIdWidth(MMORPG.Shared.World.MapGrid)">
-            <summary>Số chữ số của id lớn nhất trong lưới — bề rộng cột để canh phải lúc ghi.</summary>
-        </member>
-        <member name="T:MMORPG.Shared.World.MapFileData">
+        <member name="T:MMORPG.Shared.World.MapConfig">
              <summary>
              Bản đối chiếu 1-1 với file map JSON. KHÔNG dùng để chạy game — chỉ để đọc/ghi file; kiểu chạy
              trong game là <see cref="T:MMORPG.Shared.World.MapGrid"/>.
@@ -1067,11 +1010,11 @@
             
              Tên trường trong file LẤY THẲNG tên property, không có [JsonProperty] nào. Đổi lại sự gọn gàng
              ấy: tên property ở đây LÀ định dạng file, nên đổi tên một property là đổi định dạng — phải tăng
-             <see cref="F:MMORPG.Shared.World.MapFile.FORMAT_VERSION"/> và export lại mọi map, chứ không phải một thao tác Rename
+             <see cref="F:MMORPG.Shared.World.MapGridParser.FORMAT_VERSION"/> và export lại mọi map, chứ không phải một thao tác Rename
              bình thường trong IDE.
              </summary>
         </member>
-        <member name="P:MMORPG.Shared.World.MapFileData.PrefabKey">
+        <member name="P:MMORPG.Shared.World.MapConfig.PrefabKey">
             <summary>
             Khoá tài nguyên của prefab chứa HÌNH của map — thứ Resources.Load nhận. Là khoá chứ không
             phải đường dẫn hệ thống tệp: server đọc cùng file này và nó không biết gì về bố cục thư mục
@@ -1079,13 +1022,13 @@
             không đọc trường này bao giờ.
             </summary>
         </member>
-        <member name="P:MMORPG.Shared.World.MapFileData.Portals">
+        <member name="P:MMORPG.Shared.World.MapConfig.Portals">
             <summary>
             Cổng sang map khác. Trường TUỲ CHỌN: map chưa nối đi đâu thì file thiếu hẳn trường này, và
             đó là lý do FORMAT_VERSION không phải tăng khi thêm nó.
             </summary>
         </member>
-        <member name="P:MMORPG.Shared.World.MapFileData.Cells">
+        <member name="P:MMORPG.Shared.World.MapConfig.Cells">
             <summary>Lưới ô, mỗi phần tử là MỘT HÀNG. Hàng đầu là mép TRÊN map — đọc file như nhìn bản vẽ.</summary>
         </member>
         <member name="T:MMORPG.Shared.World.CellPoint">
@@ -1178,6 +1121,34 @@
              dựng chặn từ trước — đó mới là thứ không chơi được.
              </summary>
         </member>
+        <member name="T:MMORPG.Shared.World.MapGridParser">
+            <summary>
+            Đọc và ghi file map JSON. Hai chiều nằm cùng một chỗ có chủ đích: tool export gọi Write, hai
+            đầu dây gọi Parse — nên định dạng chỉ có một bản mô tả duy nhất, và bài test round-trip ở
+            Shared.Tests kiểm được nó bằng máy thay vì bằng mắt.
+            </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.MapGridParser.FORMAT_VERSION">
+             <summary>
+             Version của ĐỊNH DẠNG, không phải của map. Luật: thêm một trường tuỳ chọn thì GIỮ NGUYÊN số
+             này (JSON tự lo — trường thiếu về mặc định, trường lạ bị bỏ qua); chỉ tăng khi đổi ý nghĩa,
+             đổi tên hoặc xoá một trường đã có. Đọc phải version lạ thì ném ngay chứ không cố đoán: một
+             file map đọc sai một nửa còn tệ hơn một file map không đọc được.
+            
+             Version 2 đổi tên MỌI trường sang đúng tên property (bỏ [JsonProperty]) và bỏ trường
+             "_comment". File version 1 mà đọc bằng code này thì "prefab" không khớp "PrefabKey" nữa và
+             map mất hình trong im lặng — đúng loại hỏng mà con số này sinh ra để chặn.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapGridParser.SplitRow(System.String,System.Int32)">
+            <summary>
+            Tách một hàng thành các id. Chuỗi rỗng bắt luôn cả trường hợp JSON ghi null trong mảng —
+            không có hàng hợp lệ nào rỗng, vì width lấy từ hàng đầu và width = 0 thì MapGrid từ chối.
+            </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.MapGridParser.MaxIdWidth(MMORPG.Shared.World.MapGrid)">
+            <summary>Số chữ số của id lớn nhất trong lưới — bề rộng cột để canh phải lúc ghi.</summary>
+        </member>
         <member name="T:MMORPG.Shared.World.MovementRules">
              <summary>
              Luật di chuyển dùng CHUNG: server mô phỏng thật, client dự đoán trước rồi replay.
@@ -1212,7 +1183,7 @@
              lượng tử hoá theo 50ms, viết 0.23s hay 0.25s đều ra 5 tick.
              </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.WorldConfigData,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MapGrid)">
+        <member name="M:MMORPG.Shared.World.MovementRules.Step(MMORPG.Shared.World.MoveState,MMORPG.Shared.World.MoveIntent,System.Single,MMORPG.Shared.World.WorldConfig,MMORPG.Shared.World.CharacterConfig,MMORPG.Shared.World.MapGrid)">
              <summary>
              Một bước mô phỏng. Hàm THUẦN: không đọc thời gian, không random, không đọc biến ngoài —
              cùng (state, intent, dt, profile) luôn cho cùng kết quả, ở cả hai đầu dây.
@@ -1225,7 +1196,7 @@
              hai bên chạy cùng file nên nó sẽ không lệch ngay — nó lệch vào ngày ai đó sửa một bên.
              </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.OverlapsSolid(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,System.Single,System.Single,System.Single)">
+        <member name="M:MMORPG.Shared.World.MovementRules.OverlapsSolid(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,System.Single,System.Single,System.Single)">
              <summary>
              Thân (đặt tại x, y, cao height) có đè lên ô đặc nào không. Bệ một chiều KHÔNG tính: nó chỉ
              chặn theo chiều rơi, còn đứng lọt trong nó là chuyện bình thường.
@@ -1236,19 +1207,19 @@
              luật này thành ràng buộc lên dữ liệu: lớp nhân vật nào cao quá 2.0 là phải thêm mức quét.
              </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.CanStandUp(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState@)">
+        <member name="M:MMORPG.Shared.World.MovementRules.CanStandUp(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,MMORPG.Shared.World.MoveState@)">
             <summary>Có đủ chỗ trống để đứng thẳng dậy tại chỗ đang đứng không.</summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.StandingOnOneWay(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState@)">
+        <member name="M:MMORPG.Shared.World.MovementRules.StandingOnOneWay(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,MMORPG.Shared.World.MoveState@)">
             <summary>Ô ngay dưới chân có phải bệ một chiều không — điều kiện để được chủ động tụt xuống.</summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.ResolveHorizontal(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState,System.Single)">
+        <member name="M:MMORPG.Shared.World.MovementRules.ResolveHorizontal(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,MMORPG.Shared.World.MoveState,System.Single)">
             <summary>
             Dịch theo trục X rồi dán lại nếu đâm tường. Chỉ kiểm điểm cuối: 5 unit/giây là 0.25 unit
             mỗi tick, không cách nào vượt qua một ô rộng 1.0.
             </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.ResolveVertical(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState,System.Single)">
+        <member name="M:MMORPG.Shared.World.MovementRules.ResolveVertical(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,MMORPG.Shared.World.MoveState,System.Single)">
              <summary>
              Dịch theo trục Y rồi dán lại nếu chạm trần hoặc chạm sàn.
             
@@ -1257,7 +1228,7 @@
              (0.55 unit/tick) và chiều ngang (0.25) thì kiểm điểm cuối là đủ.
              </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.BlocksFall(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,MMORPG.Shared.World.MoveState@,System.Int32,System.Single)">
+        <member name="M:MMORPG.Shared.World.MovementRules.BlocksFall(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,MMORPG.Shared.World.MoveState@,System.Int32,System.Single)">
             <summary>
             Hàng ô <paramref name="row"/> có chặn cú rơi này không.
             Ô đặc thì luôn chặn. Bệ một chiều chỉ chặn khi ĐỦ CẢ HAI: chân đã ở trên mặt bệ từ đầu tick
@@ -1265,10 +1236,10 @@
             đang chủ động tụt xuống.
             </summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.ClampX(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,System.Single)">
+        <member name="M:MMORPG.Shared.World.MovementRules.ClampX(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,System.Single)">
             <summary>Kẹp vào biên ngang của map. Biên là DỮ LIỆU đọc từ file, không còn là hằng số.</summary>
         </member>
-        <member name="M:MMORPG.Shared.World.MovementRules.ResolveSpawnY(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterProfile,System.Single,System.Single)">
+        <member name="M:MMORPG.Shared.World.MovementRules.ResolveSpawnY(MMORPG.Shared.World.MapGrid,MMORPG.Shared.World.CharacterConfig,System.Single,System.Single)">
             <summary>
             Đẩy một điểm spawn lên chỗ đứng được gần nhất. Cần vì vị trí người chơi đã LƯU trong DB còn
             hình dạng map thì sửa được bất cứ lúc nào: mỗi lần bạn vẽ thêm một bức tường là một lần có
@@ -1380,7 +1351,7 @@
             phát hiện sàn, thay vì tin rằng toạ độ lấy từ DB đang đứng đúng trên mặt đất.
             </summary>
         </member>
-        <member name="T:MMORPG.Shared.World.WorldConfigData">
+        <member name="T:MMORPG.Shared.World.WorldConfig">
              <summary>
              Luật thế giới ở ĐƠN VỊ CỦA NGƯỜI VIẾT SỐ: giây, không phải tick. Vừa là bản đối chiếu 1-1 với
              khối "World" trong game.json, vừa là thứ đi trên dây xuống client — hai vai mà cùng một hình
@@ -1403,19 +1374,19 @@
             </code>
             </remarks>
         </member>
-        <member name="P:MMORPG.Shared.World.WorldConfigData.Gravity">
+        <member name="P:MMORPG.Shared.World.WorldConfig.Gravity">
             <summary>Gia tốc rơi, unit/giây². Lớn hơn 9.81 rất nhiều — trọng lực "đúng vật lý" cho cảm giác lơ lửng.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.WorldConfigData.MaxFallSpeed">
+        <member name="P:MMORPG.Shared.World.WorldConfig.MaxFallSpeed">
             <summary>Trần tốc độ rơi. Trần này là ĐIỀU KIỆN ĐÚNG của phép quét va chạm, không phải sở thích.</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.WorldConfigData.CoyoteSeconds">
+        <member name="P:MMORPG.Shared.World.WorldConfig.CoyoteSeconds">
             <summary>Còn được nhảy bao lâu sau khi đã rời mép sàn (coyote time).</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.WorldConfigData.JumpBufferSeconds">
+        <member name="P:MMORPG.Shared.World.WorldConfig.JumpBufferSeconds">
             <summary>Một cú bấm nhảy còn được giữ lại chờ tiếp đất bao lâu (jump buffer).</summary>
         </member>
-        <member name="P:MMORPG.Shared.World.WorldConfigData.DropThroughSeconds">
+        <member name="P:MMORPG.Shared.World.WorldConfig.DropThroughSeconds">
             <summary>Bỏ qua va chạm với bệ một chiều bao lâu sau khi bấm ngồi + nhảy.</summary>
         </member>
     </members>
