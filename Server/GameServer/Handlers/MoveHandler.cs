@@ -3,6 +3,8 @@ using MMORPG.GameServer.World;
 using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Character;
+using MMORPG.Shared.World.Movement;
 
 namespace MMORPG.GameServer.Handlers
 {

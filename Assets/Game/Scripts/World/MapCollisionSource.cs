@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using MMORPG.Shared.World;
+using MMORPG.Shared.World.Map;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 

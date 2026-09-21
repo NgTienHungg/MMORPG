@@ -1,4 +1,6 @@
-namespace MMORPG.Shared.World
+using MMORPG.Shared.World.Movement;
+
+namespace MMORPG.Shared.World.Character
 {
     /// <summary>
     /// Tư thế thân thể — SUY RA từ trạng thái vật lý, không đi trên dây và không ai "quyết" nó cả.

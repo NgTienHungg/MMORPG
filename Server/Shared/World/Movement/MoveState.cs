@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
+using MMORPG.Shared.World.Character;
 
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Movement
 {
     /// <summary>
     /// Ý định của người chơi tại một tick — đúng những gì bấm được trên bàn phím, không hơn.

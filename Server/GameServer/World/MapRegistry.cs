@@ -1,6 +1,7 @@
 using MMORPG.ServerCore;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Map;
 
 namespace MMORPG.GameServer.World
 {

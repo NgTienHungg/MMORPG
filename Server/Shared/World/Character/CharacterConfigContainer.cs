@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Character
 {
     /// <summary>
     /// Bảng tra profile theo lớp nhân vật. Bảng TĨNH nhưng NẠP ĐƯỢC: server nạp từ file lúc boot,
@@ -16,14 +16,14 @@ namespace MMORPG.Shared.World
     {
         public const int DRAGON_WARRIOR = 1;
 
-        private static Dictionary<int, CharacterConfig> _byClassId = new();
+        private static Dictionary<int, Character.CharacterConfig> _byClassId = new();
 
         /// <summary>Checksum của bảng đang nạp — để in log và để so hai đầu dây.</summary>
         public static uint Checksum { get; private set; }
 
-        public static CharacterConfig Get(int classId)
+        public static Character.CharacterConfig Get(int classId)
         {
-            if (_byClassId.TryGetValue(classId, out CharacterConfig profile))
+            if (_byClassId.TryGetValue(classId, out Character.CharacterConfig profile))
                 return profile;
 
             // Bảng rỗng (chưa nạp) thì đây là chỗ duy nhất phát hiện ra, và nó phải ném chứ không trả
@@ -43,9 +43,9 @@ namespace MMORPG.Shared.World
         /// </summary>
         public static void Load(CharacterTableData table)
         {
-            var built = new Dictionary<int, CharacterConfig>();
+            var built = new Dictionary<int, Character.CharacterConfig>();
 
-            foreach (CharacterConfig profile in table.Classes)
+            foreach (Character.CharacterConfig profile in table.Classes)
             {
                 profile.Prepare();
                 built[profile.ClassId] = profile;

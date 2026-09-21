@@ -1,5 +1,6 @@
 using MemoryPack;
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Movement;
 
 namespace MMORPG.Shared.Dto.World
 {

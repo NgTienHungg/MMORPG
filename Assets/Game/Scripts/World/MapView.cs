@@ -1,5 +1,5 @@
 using HungNT;
-using MMORPG.Shared.World;
+using MMORPG.Shared.World.Map;
 using UnityEngine;
 using UnityEngine.Tilemaps;
 

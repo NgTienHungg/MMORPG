@@ -9,6 +9,7 @@ using MMORPG.GameServer.Net;
 using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Character;
 
 Console.OutputEncoding = Encoding.UTF8;
 

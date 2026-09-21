@@ -1,6 +1,8 @@
 using System;
+using MMORPG.Shared.World.Character;
+using MMORPG.Shared.World.Map;
 
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Movement
 {
     /// <summary>
     /// Luật di chuyển dùng CHUNG: server mô phỏng thật, client dự đoán trước rồi replay.

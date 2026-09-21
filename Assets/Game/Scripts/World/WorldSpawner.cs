@@ -3,7 +3,8 @@ using HungNT;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto.Character;
 using MMORPG.Shared.Dto.World;
-using MMORPG.Shared.World;
+using MMORPG.Shared.World.Character;
+using MMORPG.Shared.World.Map;
 using UnityEngine;
 using VContainer;
 

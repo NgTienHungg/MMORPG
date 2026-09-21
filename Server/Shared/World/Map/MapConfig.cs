@@ -1,6 +1,6 @@
 using System.Collections.Generic;
 
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Map
 {
     /// <summary>
     /// Bản đối chiếu 1-1 với file map JSON. KHÔNG dùng để chạy game — chỉ để đọc/ghi file; kiểu chạy

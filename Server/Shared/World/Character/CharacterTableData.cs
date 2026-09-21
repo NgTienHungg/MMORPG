@@ -1,15 +1,16 @@
 using System;
 using MemoryPack;
+using MMORPG.Shared.World.Movement;
 using Newtonsoft.Json;
 
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Character
 {
     /// <summary>
     /// Các con số của MỘT hành động. Thay cho ActionDefinition của Phase 9 — cùng nội dung, khác ở chỗ
     /// nó đọc được từ file và đi được trên dây.
     ///
     /// Vẫn là STRUCT, và đó không phải chuyện phong cách: <c>default</c> của nó là "0 tick, không khoá
-    /// thân", nên <see cref="CharacterConfig.GetAction"/> trả về được một giá trị hợp lệ cho hành động
+    /// thân", nên <see cref="Character.CharacterConfig.GetAction"/> trả về được một giá trị hợp lệ cho hành động
     /// không có trong bảng mà chỗ gọi không phải kiểm null. Đổi sang class là mọi chỗ gọi mọc thêm một
     /// phép kiểm, và một trong số đó sẽ bị quên.
     /// </summary>
@@ -51,7 +52,7 @@ namespace MMORPG.Shared.World
     {
         public int Version { get; set; } = 1;
 
-        public CharacterConfig[] Classes { get; set; } = Array.Empty<CharacterConfig>();
+        public Character.CharacterConfig[] Classes { get; set; } = Array.Empty<Character.CharacterConfig>();
 
         /// <summary>
         /// Dấu vân tay của NỘI DUNG bảng. Không băm Name: nó chỉ để người đọc file dễ chịu, đổi nó
@@ -63,7 +64,7 @@ namespace MMORPG.Shared.World
 
             hash = Fnv1a.Mix(hash, Version);
 
-            foreach (CharacterConfig profile in Classes)
+            foreach (Character.CharacterConfig profile in Classes)
             {
                 hash = Fnv1a.Mix(hash, profile.ClassId);
                 hash = Fnv1a.Mix(hash, profile.MoveSpeed);

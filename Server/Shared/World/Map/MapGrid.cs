@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Map
 {
     /// <summary>Loại ô. Ba loại, và loại thứ ba là thứ làm nên thể loại platformer.</summary>
     public enum CellType : byte

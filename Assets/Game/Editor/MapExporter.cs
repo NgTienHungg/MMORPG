@@ -3,7 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using HungNT;
 using MMORPG.Client.World;
-using MMORPG.Shared.World;
+using MMORPG.Shared.World.Map;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.Tilemaps;

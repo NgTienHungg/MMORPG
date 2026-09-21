@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using MMORPG.ServerCore;
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Movement;
 
 namespace MMORPG.GameServer.World
 {

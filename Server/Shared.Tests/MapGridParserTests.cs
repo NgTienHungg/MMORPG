@@ -1,4 +1,5 @@
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Map;
 
 namespace MMORPG.Shared.Tests
 {

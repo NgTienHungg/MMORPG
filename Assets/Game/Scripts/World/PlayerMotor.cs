@@ -1,7 +1,9 @@
 using System.Collections.Generic;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto.World;
-using MMORPG.Shared.World;
+using MMORPG.Shared.World.Character;
+using MMORPG.Shared.World.Map;
+using MMORPG.Shared.World.Movement;
 using UnityEngine;
 
 namespace MMORPG.Client.World

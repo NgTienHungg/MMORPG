@@ -1,4 +1,5 @@
 using MemoryPack;
+using MMORPG.Shared.World.Movement;
 
 namespace MMORPG.Shared.World
 {

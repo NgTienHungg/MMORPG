@@ -4,6 +4,7 @@ using MMORPG.Shared.Dto;
 using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Movement;
 
 namespace MMORPG.Client.World
 {

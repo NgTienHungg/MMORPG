@@ -4,6 +4,8 @@ using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
 using MMORPG.Shared.World;
+using MMORPG.Shared.World.Character;
+using MMORPG.Shared.World.Map;
 
 namespace MMORPG.GameServer.World
 {

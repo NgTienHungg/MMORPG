@@ -1,7 +1,7 @@
 using System;
 using MemoryPack;
 
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Character
 {
     /// <summary>
     /// Bộ số của một lớp nhân vật. Ba vai, một hình dạng: dòng trong characters.json, phần tử của gói
