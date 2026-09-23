@@ -11,8 +11,15 @@
 > (3) **delta ≠ snapshot**, và vì sao thứ UI cần không phải là "trạng thái mới" mà là "cái gì vừa đổi";
 > (4) `itemId` (một vật cụ thể) ≠ `templateId` (một loại vật) — hai khái niệm mà lẫn lộn thì sửa lại
 > phải đụng cả DB lẫn contract.
-
 Format như trước: **hướng làm** hiện sẵn, **📖 Lời giải** trong foldout.
+
+> **Viết lại 2026-09-22.** Bản trước có 845 dòng nhưng chỉ **6 khối code** — nó tả rất kỹ *vì sao*
+> rồi bỏ trống gần hết phần *làm thế nào*: `Inventory` chỉ có mỗi `TryAdd`, `InventoryService` không
+> có dòng nào, cả tầng ⑤ và ⑥ chỉ có một class client. Làm theo nó là kẹt ở Bước 2.
+>
+> Bản này có **đủ code cho từng dòng trong bảng file dưới đây**, và toàn bộ code đã được biên dịch
+> thật trước khi đưa vào doc. Tên class cũng đã đổi theo quy ước chốt ở Phase 12:
+> `ItemTemplate` → `ItemConfig`, `ItemTemplates` → `ItemConfigContainer` (xem `CONVENTIONS.md` §2).
 
 ---
 
@@ -65,6 +72,60 @@ Phase 12: **thêm nó sau khi đã có người chơi là một cuộc di cư.**
 
 ---
 
+## Danh sách file — tạo gì, sửa gì
+
+Gạch từng dòng khi xong. **Mỗi dòng ở đây có một khối code tương ứng trong foldout lời giải của bước
+đó** — thấy một dòng không có code là doc hỏng, báo lại.
+
+**Bước 1 — bảng item (loại B thứ ba)**
+
+| File | Việc |
+|---|---|
+| `Assets/Game/Resources/Config/items.json` | 🆕 tạo (+ file `.meta`) |
+| `Server/Shared/World/Item/ItemKind.cs` | 🆕 tạo |
+| `Server/Shared/World/Item/ItemConfig.cs` | 🆕 tạo |
+| `Server/Shared/World/Item/ItemTableData.cs` | 🆕 tạo |
+| `Server/Shared/World/Item/ItemConfigContainer.cs` | 🆕 tạo |
+| `Server/GameServer/Config/ConfigService.cs` | ✏️ **một dòng** `LoadTable<ItemTableData>` + hàm `ValidateItems` |
+| *(không đụng `EnterWorldResponse`)* | bảng không đi trên dây — contract không đổi một dòng |
+| `Server/Shared/World/ConfigFiles.cs` | ✏️ thêm hằng `ITEMS` |
+| `Assets/Game/Scripts/Config/ConfigService.cs` | ✏️ **một dòng** `LoadTable<ItemTableData>(ConfigFiles.ITEMS, ItemConfigContainer.Load)` |
+
+**Bước 2 — DB → RAM server**
+
+| File | Việc |
+|---|---|
+| `Server/DBServer/Data/Migrator.cs` | ✏️ thêm migration `(4, ...)` |
+| `Server/Shared/Dto/Db/InventoryDbDto.cs` | 🆕 tạo |
+| `Server/Shared/Db/DbCmd.cs` | ✏️ thêm dải Inventory 1300–1399 |
+| `Server/DBServer/Repositories/InventoryRepository.cs` | 🆕 tạo |
+| `Server/DBServer/Handlers/InventoryDbHandler.cs` | 🆕 tạo |
+| `Server/DBServer/Program.cs` | ✏️ gán `InventoryDbHandler.Repository` |
+| `Server/GameServer/World/Inventory.cs` | 🆕 tạo (`ItemStack` + `Inventory`) |
+| `Server/GameServer/World/InventoryService.cs` | 🆕 tạo |
+| `Server/GameServer/World/PlayerEntity.cs` | ✏️ thêm property `Inventory` |
+| `Server/GameServer/World/WorldService.cs` | ✏️ nhận `InventoryService`, gọi `Tick` ở vòng 0b |
+| `Server/GameServer/World/CharacterService.cs` | ✏️ nạp túi khi vào world, lưu khi rời |
+| `Server/GameServer/Boot/ServerBootstrap.cs` | ✏️ **đăng ký `InventoryService`**, trước `WorldService` |
+| `Server/GameServer/Program.cs` | ✏️ phím `G` phát đồ |
+
+**Bước 3 — contract và UI**
+
+| File | Việc |
+|---|---|
+| `Server/Shared/Net/NetCmd.cs` | ✏️ thêm dải Inventory 400–499 |
+| `Server/Shared/Dto/Inventory/InventoryDto.cs` | 🆕 tạo |
+| `Server/GameServer/Handlers/InventoryHandler.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Inventory/InventoryModel.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Inventory/InventoryApi.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Inventory/InventoryPresenter.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Inventory/InventoryPanel.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Inventory/InventorySlotView.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Network/Handlers/InventoryNetHandler.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Boot/GameLifetimeScope.cs` | ✏️ **đăng ký 5 thứ** — dòng dễ quên nhất |
+
+---
+
 ## Bước 1 — Bảng item: loại B thứ ba
 
 ### Hướng làm
@@ -72,7 +133,7 @@ Phase 12: **thêm nó sau khi đã có người chơi là một cuộc di cư.**
 Không có gì mới về cơ chế — làm y hệt bảng nhân vật ở Phase 12, và đó chính là điều đáng nói: khuôn đã
 dựng xong thì bảng thứ ba tốn một buổi thay vì một phase.
 
-`Config/items.json`:
+**`Assets/Game/Resources/Config/items.json`** — trong Resources của client, csproj copy sang server:
 
 ```json
 {
@@ -114,21 +175,30 @@ server mang theo vài chuỗi nó không dùng.
 > Luật rút ra: **một thực thể, một dòng.** Chia bảng theo "ai đọc" nghe có lý nhưng tạo ra hai bảng phải
 > đồng bộ; chia theo "cái gì" thì chỉ có một chỗ để sai.
 
-**Đường đi của bảng** giống hệt bảng nhân vật: `ConfigService` đọc file → `ItemTemplates.Load(...)` →
-`EnterWorldResponse` mang cả bảng xuống → client gọi `ItemTemplates.Load(...)` với đúng dữ liệu ấy.
-Checksum bằng `Fnv1a` (bỏ qua `Name`/`Description`/`IconKey` — chúng không đổi hành vi nào, xem lý do ở
-`CharacterTableData.Checksum` của Phase 12).
+**Đường đi của bảng** giống hệt bảng nhân vật, và đó là toàn bộ điểm đáng nói: khuôn đã dựng xong ở
+Phase 12 thì bảng thứ ba không phát minh gì cả.
 
-Và đây là lúc để lại một dấu mốc, vì nó sẽ tới sớm hơn bạn nghĩ:
+```
+Assets/Game/Resources/Config/items.json
+   ├─► client đọc thẳng (lúc khởi động)  ──► ItemConfigContainer.Load
+   └─► csproj copy ──► Data/Config/ ──► server đọc ──► ItemConfigContainer.Load
+                                              └─► vân tay in ra log (KHÔNG đi trên dây)
+```
 
-> `EnterWorldResponse` giờ mang: luật thế giới, bảng nhân vật, bảng item, checksum map. Phase 15 thêm
-> bảng quái và bảng drop. **Tới bảng thứ năm là gói EnterWorld thành cái xe tải**, và đó đúng là lúc
-> chuyển sang chế độ "client cache, server chỉ gửi hash" của Phase 18. Trường `Version` trong mỗi bảng
-> đã có sẵn cho ngày ấy.
+Vân tay do `ConfigFingerprint.Of(table)` tính — **không** viết `Checksum()` cho bảng item. Nó băm byte
+đã tuần tự hoá, tức là băm đúng những trường `[MemoryPackable]` ghi ra, kể cả `Name` và `IconKey`.
+
+> Trước đây doc này nói "chỉ băm thứ đổi hành vi, bỏ qua Description". Lập luận ấy đúng cho **chế độ
+> gửi cả bảng** — ở đó một thay đổi cosmetic không nên chặn client cũ. Ở chế độ hai bản thì ngược
+> lại: hai file **phải** giống hệt nhau, nên một khác biệt ở `Description` nghĩa là bạn đã sửa một
+> bên và quên build bên kia. Báo lệch là đúng.
+>
+> Bài học: **"băm cái gì" phụ thuộc vào "hai bản được phép khác nhau tới đâu"**, không phải vào bản
+> thân dữ liệu.
 
 ### ✅ CHECKPOINT A
 
-1. Server boot in: `Bảng item: 2 loại, checksum XXXXXXXX`.
+1. Server boot in: `Bảng items.json: 2 dòng, version 1, checksum XXXXXXXX`.
 2. Client vào world, log ra đúng checksum đó.
 3. Thêm một item vào `items.json`, restart server, **client không build lại** → client log checksum mới.
 4. Ghi `"Kind": "Vuqua"` → server báo lỗi rõ ràng, không im lặng bỏ qua.
@@ -136,14 +206,14 @@ Và đây là lúc để lại một dấu mốc, vì nó sẽ tới sớm hơn 
    thì không có "giá trị mặc định an toàn" nào để lùi về — bảng đã tự mâu thuẫn.)
 
 <details>
-<summary><b>📖 Lời giải — <code>Shared/World/ItemTable.cs</code></b></summary>
+<summary><b>📖 Lời giải — bộ ba <code>ItemKind</code> / <code>ItemConfig</code> / <code>ItemTableData</code> / <code>ItemConfigContainer</code></b></summary>
+
+Bốn file, mỗi file một class — `CONVENTIONS.md` §3: một class một file.
+
+**`Server/Shared/World/Item/ItemKind.cs`** (file mới, nguyên văn):
 
 ```csharp
-using System;
-using System.Collections.Generic;
-using MemoryPack;
-
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Item
 {
     /// <summary>
     /// Loại đồ quyết định nó LÀM ĐƯỢC GÌ, nên nó là một nhánh xử lý chứ không phải một con số —
@@ -160,104 +230,213 @@ namespace MMORPG.Shared.World
         /// <summary>Mặc được. Phase 13 chưa mặc được gì — đó là việc của Phase 14.</summary>
         Equipment = 2,
     }
+}
+```
 
+**`Server/Shared/World/Item/ItemConfig.cs`** (file mới, nguyên văn) — bản của Phase 13;
+Phase 14 thêm `EquipSlot` + `Bonuses`:
+
+```csharp
+using MemoryPack;
+
+namespace MMORPG.Shared.World.Item
+{
     /// <summary>
     /// Định nghĩa một LOẠI đồ. Bất biến trong suốt phiên chạy: nó là dữ liệu game design, không phải
     /// trạng thái người chơi.
     /// </summary>
     [MemoryPackable]
-    public sealed partial class ItemTemplate
+    public sealed partial class ItemConfig
     {
+        /// <summary>Khoá của bảng. Một món đồ trong túi trỏ về đây bằng số này.</summary>
         public int TemplateId { get; set; }
 
+        /// <summary>Tên hiển thị cho người chơi.</summary>
         public string Name { get; set; } = string.Empty;
 
+        /// <summary>Mô tả hiển thị cho người chơi.</summary>
         public string Description { get; set; } = string.Empty;
 
         /// <summary>
         /// Khoá tài nguyên của icon — THUẦN client, server không đọc dòng này bao giờ. Vẫn để chung
-        /// bảng: tách ra là có hai bảng phải khớp nhau theo TemplateId, tức dựng lại đúng cái bệnh
-        /// mà Phase 12 vừa chữa.
+        /// bảng vì tách ra là có hai bảng phải khớp nhau theo <see cref="TemplateId"/>.
         /// </summary>
         public string IconKey { get; set; } = string.Empty;
 
+        /// <summary>Quyết định món đồ dùng được hay chỉ để bán, và nằm ở nhóm nào trong túi.</summary>
         public ItemKind Kind { get; set; }
 
         /// <summary>Tối đa bao nhiêu cái trong một ô. 1 nghĩa là không xếp chồng.</summary>
         public int MaxStack { get; set; } = 1;
     }
+}
+```
 
+**`Server/Shared/World/Item/ItemTableData.cs`** (file mới, nguyên văn) — chú ý nó **không có**
+`Checksum()`: vân tay do `ConfigFingerprint` lo, một hàm cho mọi bảng:
+
+```csharp
+using System;
+using MemoryPack;
+using Newtonsoft.Json;
+
+namespace MMORPG.Shared.World.Item
+{
+    /// <summary>
+    /// Cả bảng item, bản đối chiếu 1-1 với <c>items.json</c>. Không đi trên dây: mỗi bên đọc file
+    /// của chính nó, và vân tay chỉ để in ra log (<see cref="ConfigFingerprint"/>).
+    /// </summary>
     [MemoryPackable]
-    public sealed partial class ItemTableData
+    public sealed partial class ItemTableData : IConfigFile
     {
+        /// <summary>Phiên bản schema, nằm trong file.</summary>
         public int Version { get; set; } = 1;
 
-        public ItemTemplate[] Items { get; set; } = Array.Empty<ItemTemplate>();
+        /// <summary>Mỗi phần tử là một loại đồ.</summary>
+        public ItemConfig[] Items { get; set; } = Array.Empty<ItemConfig>();
 
-        /// <summary>
-        /// Chỉ băm thứ ĐỔI HÀNH VI. Sửa Description cho hay hơn mà bắt cả hai bên báo lệch phiên bản
-        /// là dạy người ta bỏ qua cảnh báo — và một cảnh báo bị bỏ qua thì không còn là cảnh báo.
-        /// </summary>
-        public uint Checksum()
-        {
-            uint hash = Fnv1a.START;
-
-            hash = Fnv1a.Mix(hash, Version);
-
-            foreach (ItemTemplate item in Items)
-            {
-                hash = Fnv1a.Mix(hash, item.TemplateId);
-                hash = Fnv1a.Mix(hash, (int)item.Kind);
-                hash = Fnv1a.Mix(hash, item.MaxStack);
-            }
-
-            return hash;
-        }
+        /// <summary>Đếm ra từ <see cref="Items"/>, nên không tuần tự hoá ở cả hai bộ.</summary>
+        [MemoryPackIgnore] [JsonIgnore] public int RowCount => Items.Length;
     }
+}
+```
 
+**`Server/Shared/World/Item/ItemConfigContainer.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using System.Collections.Generic;
+
+namespace MMORPG.Shared.World.Item
+{
     /// <summary>
-    /// Bảng tra template theo id. Cùng khuôn với CharacterProfiles ở Phase 12: bảng tĩnh NẠP ĐƯỢC,
-    /// server nạp từ file, client nạp từ gói EnterWorld, một hàm dựng cho cả hai.
+    /// Bảng tra template item theo id. Cùng khuôn với <see cref="Character.CharacterConfigContainer"/>:
+    /// bảng tĩnh NẠP ĐƯỢC, và cả hai bên đều nạp từ file của chính mình.
     /// </summary>
-    public static class ItemTemplates
+    public static class ItemConfigContainer
     {
-        private static Dictionary<int, ItemTemplate> _byId = new();
+        /// <summary>Bảng đang chạy. Chỉ <see cref="Load"/> được gán vào nó.</summary>
+        private static Dictionary<int, ItemConfig> _byId = new();
 
-        public static uint Checksum { get; private set; }
-
-        public static int Count => _byId.Count;
-
-        /// <summary>
-        /// Template của một id, hoặc null. Trả null chứ không ném: một id lạ đến từ DB (đồ của bảng
-        /// cũ, item bị gỡ khỏi bảng) là chuyện sẽ xảy ra, và cách xử lý đúng là bỏ qua món đồ đó chứ
-        /// không phải chặn người chơi vào game.
-        /// </summary>
-        public static ItemTemplate Find(int templateId)
+        /// <summary>Số loại đồ trong bảng đang chạy.</summary>
+        public static int Count
         {
-            return _byId.TryGetValue(templateId, out ItemTemplate template) ? template : null;
+            get { return _byId.Count; }
         }
 
-        /// <summary>Thay cả bảng. Dựng nguyên bảng mới rồi mới gán — xem Phase 12 câu 4.</summary>
+        /// <summary>
+        /// Template của một id, hoặc null. Trả null chứ không ném vì nguồn của id khác
+        /// <c>CharacterConfigContainer.Get</c>: templateId đến từ DB và có thể là đồ của một bảng cũ
+        /// hoặc item đã bị gỡ. Cách xử lý đúng cho một dòng như vậy là bỏ qua món đồ đó, không phải
+        /// chặn người chơi vào game.
+        /// </summary>
+        public static ItemConfig Find(int templateId)
+        {
+            return _byId.TryGetValue(templateId, out ItemConfig config) ? config : null;
+        }
+
+        /// <summary>Thay cả bảng. Dựng nguyên bảng mới rồi mới gán — cùng lý do như bảng nhân vật.</summary>
         public static void Load(ItemTableData table)
         {
-            var built = new Dictionary<int, ItemTemplate>();
+            if (table == null)
+                throw new ArgumentNullException(nameof(table));
 
-            foreach (ItemTemplate item in table.Items)
+            var built = new Dictionary<int, ItemConfig>();
+
+            foreach (ItemConfig config in table.Items)
             {
-                // Trùng id thì KHÔNG có giá trị mặc định nào để lùi về: bảng đã tự mâu thuẫn, và cái
-                // nào thắng là chuyện của thứ tự dòng trong file. Ném, để người sửa bảng biết ngay.
-                if (built.ContainsKey(item.TemplateId))
-                    throw new InvalidOperationException($"Hai item cùng TemplateId {item.TemplateId}: \"{built[item.TemplateId].Name}\" và \"{item.Name}\".");
+                // Trùng id thì không có giá trị mặc định nào để lùi về: bảng đã tự mâu thuẫn, và cái
+                // nào thắng là chuyện của thứ tự dòng trong file.
+                if (built.ContainsKey(config.TemplateId))
+                    throw new InvalidOperationException($"Hai item cùng TemplateId {config.TemplateId}: \"{built[config.TemplateId].Name}\" và \"{config.Name}\".");
 
-                built[item.TemplateId] = item;
+                built[config.TemplateId] = config;
             }
 
             _byId = built;
-            Checksum = table.Checksum();
         }
     }
 }
 ```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — nối bảng item vào đường ống (4 dòng)</b></summary>
+
+Đây là phần thưởng của Bước 3 Phase 12: bảng thứ ba tốn **bốn dòng** cộng một hàm `Validate`.
+Đây là phần thưởng của Bước 3 Phase 12: bảng thứ ba tốn **bốn dòng** cộng một hàm `Validate`.
+Và không phải đụng vào `EnterWorldResponse`: bảng không đi trên dây, nên bảng thứ tư và thứ năm
+cũng sẽ không đụng tới một dòng nào của contract.
+
+**`Server/Shared/World/ConfigFiles.cs`** — một hằng:
+
+```csharp
+        public const string ITEMS = "items";
+```
+
+**`Server/GameServer/Config/ConfigService.cs`** — một dòng trong `Load()`:
+
+```csharp
+        public void Load()
+        {
+            LoadFile<GameConfigData>(GAME, ValidateGame, ApplyGame, WhenBroken.UseDefaults);
+
+            LoadTable<CharacterTableData>(ConfigFiles.CHARACTERS, ValidateCharacters, CharacterConfigContainer.Load);
+            LoadTable<ItemTableData>(ConfigFiles.ITEMS, ValidateItems, ItemConfigContainer.Load);
+        }
+```
+
+Và hàm kiểm — ngắn hơn `ValidateCharacters` nhiều, vì bảng item có ít con số đi vào mô phỏng hơn:
+
+```csharp
+        /// <summary>
+        /// Kẹp bảng item. Ít trường hơn bảng nhân vật rất nhiều, và đó là điều bình thường — hàm
+        /// Validate dài bao nhiêu là tuỳ bảng có bao nhiêu con số đi vào mô phỏng.
+        /// </summary>
+        private static void ValidateItems(ItemTableData table)
+        {
+            foreach (ItemConfig config in table.Items)
+            {
+                string tag = $"item {config.TemplateId}";
+
+                // TemplateId <= 0 không kẹp được về mặc định nào có nghĩa: id là KHOÁ, và một khoá
+                // sai thì cả dòng vô dụng. Ném để người sửa bảng biết ngay, cùng cách với trùng id.
+                if (config.TemplateId <= 0)
+                    throw new InvalidOperationException($"{tag}: TemplateId phải > 0.");
+
+                if (string.IsNullOrWhiteSpace(config.Name))
+                    throw new InvalidOperationException($"{tag}: thiếu Name.");
+
+                // MaxStack = 0 nghĩa là "không bỏ vào túi được cái nào" — không phải một lựa chọn
+                // thiết kế, mà là một ô bị bỏ trống trong file. Trần 9999 để một số gõ nhầm không
+                // biến thành ô túi chứa cả kho.
+                config.MaxStack = (int)Clamp(config.MaxStack, 1f, 9999f, 1f, $"{tag}.MaxStack");
+            }
+        }
+```
+
+**`Assets/Game/Scripts/Config/ConfigService.cs`** — một dòng trong `LoadTables()`, và **đây là dòng
+dễ quên nhất của Bước 1**: quên nó thì server hoàn toàn bình thường, còn client có `Find(templateId)`
+trả **null** cho mọi món đồ — túi đồ hiện ra trống trơn hoặc toàn ô không tên, không exception nào,
+không lỗi biên dịch nào. Đây đúng là kiểu hỏng câm mà cả Phase 12 dựng lên để chống.
+
+```csharp
+        /// <summary>
+        /// <b>Thêm bảng mới thì thêm đúng một dòng ở đây.</b>
+        ///
+        /// Nạp hết lúc khởi động là lựa chọn của hôm nay, không phải ràng buộc: hai bảng đọc xong
+        /// trong vài mili giây. Ngày cần tải lười hoặc tải từ xa thì chỗ phải sửa là
+        /// <see cref="LoadTable{TTable}"/>, và không ai khác biết.
+        /// </summary>
+        private void LoadTables()
+        {
+            LoadTable<CharacterTableData>(ConfigFiles.CHARACTERS, CharacterConfigContainer.Load);
+            LoadTable<ItemTableData>(ConfigFiles.ITEMS, ItemConfigContainer.Load);
+        }
+```
+
+Nhớ thêm `using MMORPG.Shared.World.Item;` ở đầu cả hai file.
 
 </details>
 
@@ -279,7 +458,7 @@ CREATE TABLE inventory_item (
     slot         INTEGER NOT NULL
 );
 
--- Một ô chỉ chứa được một chồng. Ràng buộc ở DB chứ không ở code: xem Phase 5, cùng lý do với
+-- Một ô chỉ chứa được một chồng. Ràng buộc ở DB chứ không ở code, cùng lý do với
 -- UNIQUE(account_id) của bảng character.
 CREATE UNIQUE INDEX idx_inventory_slot ON inventory_item (character_id, slot);
 ```
@@ -353,7 +532,7 @@ một dữ liệu mà **không ai đọc ngoài chính chủ**.
 Cái giá phải trả, nói thẳng ra: **server chết đột ngột là mất mọi thay đổi từ lần lưu cuối.** Đó là một
 đánh đổi có ý thức, không phải một lỗ hổng — và thử nghiệm 2 ở cuối bài bắt bạn nhìn thấy nó bằng mắt.
 
-**Nguồn item của phase này là một phím trên console server.** `G` → `InventoryService.GrantToAll(...)`.
+**Nguồn item của phase này là một phím trên console server.** `G` → `InventoryService.EnqueueGrantAll(...)`.
 Không có quái, không có đồ rơi dưới đất — cả hai là Phase 15. Xếp hàng qua `ConcurrentQueue` rồi tiêu
 thụ ở đầu tick, y hệt `EnqueueForceAll` của Phase 9: **luồng đọc phím không được chạm vào entity.**
 
@@ -367,24 +546,432 @@ thụ ở đầu tick, y hệt `EnqueueForceAll` của Phase 9: **luồng đọc
 6. Đổ đầy 30 ô rồi gõ `G` → log `Túi đầy, không nhận` và **không có ô nào đổi**.
 
 <details>
-<summary><b>📖 Lời giải — <code>Inventory.TryAdd</code></b></summary>
+<summary><b>📖 Lời giải — DB: migration, DTO, <code>DbCmd</code>, repository, handler</b></summary>
+
+**`Server/DBServer/Data/Migrator.cs`** — thêm vào cuối mảng `_migrations`, KHÔNG sửa ba cái trước:
 
 ```csharp
+            (4, """
+                CREATE TABLE inventory_item (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES character(id) ON DELETE CASCADE,
+                    template_id  INTEGER NOT NULL,
+                    quantity     INTEGER NOT NULL,
+                    slot         INTEGER NOT NULL
+                );
+
+                -- Một ô chỉ chứa được một chồng. Ràng buộc ở DB chứ không ở code, cùng lý do với
+                -- UNIQUE(account_id) của bảng character.
+                CREATE UNIQUE INDEX idx_inventory_slot ON inventory_item (character_id, slot);
+                """),
+```
+
+**`Server/Shared/Dto/Db/InventoryDbDto.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MemoryPack;
+
+namespace MMORPG.Shared.Dto.Db
+{
+    /// <summary>
+    /// Một dòng nguyên vẹn của bảng <c>inventory_item</c>. Chỉ đi trên đường nội bộ GameServer ↔ DBServer.
+    ///
+    /// Hình dạng của CHỖ DỮ LIỆU NẰM, không phải của thứ chạy trong game — thứ chạy là
+    /// <c>ItemStack</c> trong <c>Inventory</c>, và nó không có <c>CharacterId</c> vì cả cái túi đã
+    /// thuộc về một nhân vật rồi. Cùng mẫu với CharacterRow ≠ PlayerEntity ở Phase 5.
+    /// </summary>
+    [MemoryPackable]
+    public partial class InventoryRow
+    {
+        /// <summary>Id của MỘT VẬT cụ thể. DB cấp bằng AUTOINCREMENT — xem bảng itemId ≠ templateId.</summary>
+        public long ItemId { get; set; }
+
+        public int TemplateId { get; set; }
+
+        public int Quantity { get; set; }
+
+        public int Slot { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class InventoryLoadRequest
+    {
+        public long CharacterId { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class InventoryLoadResponse
+    {
+        public InventoryRow[] Items { get; set; } = Array.Empty<InventoryRow>();
+    }
+
+    /// <summary>
+    /// Ghi TOÀN BỘ túi. Không có "lưu một ô": xem bảng so sánh ở Bước 2 — xoá sạch rồi ghi lại là
+    /// lựa chọn có ý thức, và nó chỉ đúng khi cả cái túi đi cùng nhau trong một transaction.
+    /// </summary>
+    [MemoryPackable]
+    public partial class InventorySaveRequest
+    {
+        public long CharacterId { get; set; }
+
+        public InventoryRow[] Items { get; set; } = Array.Empty<InventoryRow>();
+    }
+}
+```
+
+**`Server/Shared/Db/DbCmd.cs`** — thêm một region vào cuối enum:
+
+```csharp
+        #region Inventory (1300–1399)
+
+        /// <summary>
+        /// Đọc cả túi của một nhân vật.
+        /// Request: <see cref="Dto.Db.InventoryLoadRequest"/> · Response: <see cref="Dto.Db.InventoryLoadResponse"/>
+        /// </summary>
+        InventoryLoad = 1300,
+
+        /// <summary>
+        /// Ghi TOÀN BỘ túi: xoá sạch rồi ghi lại trong một transaction. Không có "lưu một ô".
+        /// Request: <see cref="Dto.Db.InventorySaveRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
+        /// </summary>
+        InventorySave = 1301,
+
+        #endregion
+```
+
+**`Server/DBServer/Repositories/InventoryRepository.cs`** (file mới, nguyên văn):
+
+```csharp
+using Microsoft.Data.Sqlite;
+using MMORPG.DBServer.Data;
+using MMORPG.Shared.Dto.Db;
+
+namespace MMORPG.DBServer.Repositories
+{
+    /// <summary>
+    /// Chỉ SQL, không biết gì về game: không biết túi có bao nhiêu ô, không biết MaxStack là gì,
+    /// không biết đồ nào dùng được. Nhờ vậy Phase 20 đổi SQLite sang MySQL chỉ phải sửa tầng này.
+    /// </summary>
+    public sealed class InventoryRepository
+    {
+        private readonly Database _database;
+
+        public InventoryRepository(Database database)
+        {
+            _database = database;
+        }
+
+        public async Task<InventoryLoadResponse> LoadAsync(InventoryLoadRequest request, CancellationToken ct = default)
+        {
+            await using SqliteConnection connection = await _database.OpenAsync(ct);
+            await using SqliteCommand command = connection.CreateCommand();
+
+            // ORDER BY slot để chỗ gọi nhận được dãy có thứ tự — không phải vì Inventory cần (nó tra
+            // theo chỉ số ô), mà vì log đọc dễ hơn và vì một thứ tự xác định là thứ test dựa vào được.
+            command.CommandText = """
+                                  SELECT id, template_id, quantity, slot
+                                  FROM inventory_item
+                                  WHERE character_id = $characterId
+                                  ORDER BY slot;
+                                  """;
+            command.Parameters.AddWithValue("$characterId", request.CharacterId);
+
+            var rows = new List<InventoryRow>();
+
+            await using SqliteDataReader reader = await command.ExecuteReaderAsync(ct);
+
+            while (await reader.ReadAsync(ct))
+            {
+                rows.Add(new InventoryRow
+                {
+                    ItemId = reader.GetInt64(0),
+                    TemplateId = reader.GetInt32(1),
+                    Quantity = reader.GetInt32(2),
+                    Slot = reader.GetInt32(3),
+                });
+            }
+
+            return new InventoryLoadResponse { Items = rows.ToArray() };
+        }
+
+        /// <summary>
+        /// Ghi TOÀN BỘ túi: xoá sạch rồi ghi lại.
+        ///
+        /// Trông thô, và nó thô thật — nhưng cách "đúng bài" (diff từng dòng, sinh INSERT/UPDATE/DELETE)
+        /// là ~80 dòng với ba nhánh, mỗi nhánh một cách sai. Cái giá của cách này: itemId ĐỔI sau mỗi
+        /// lần lưu, vì AUTOINCREMENT cấp số mới. Hôm nay chưa ai dựa vào itemId; ngày có log giao dịch
+        /// hoặc đồ khoá theo id thì đây là chỗ phải sửa — và nó là một LỰA CHỌN, không phải sơ suất.
+        ///
+        /// TRANSACTION là bắt buộc, không phải cẩn thận thừa: giữa DELETE và INSERT mà process chết
+        /// thì người chơi mất sạch túi. Một transaction biến "mất sạch" thành "không đổi gì".
+        /// </summary>
+        public async Task SaveAsync(InventorySaveRequest request, CancellationToken ct = default)
+        {
+            await using SqliteConnection connection = await _database.OpenAsync(ct);
+            await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
+
+            await using (SqliteCommand delete = connection.CreateCommand())
+            {
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM inventory_item WHERE character_id = $characterId;";
+                delete.Parameters.AddWithValue("$characterId", request.CharacterId);
+
+                await delete.ExecuteNonQueryAsync(ct);
+            }
+
+            await using (SqliteCommand insert = connection.CreateCommand())
+            {
+                insert.Transaction = transaction;
+                insert.CommandText = """
+                                     INSERT INTO inventory_item (character_id, template_id, quantity, slot)
+                                     VALUES ($characterId, $templateId, $quantity, $slot);
+                                     """;
+
+                // Dựng tham số MỘT LẦN rồi chỉ đổi giá trị trong vòng lặp: SQLite chuẩn bị lại câu
+                // lệnh mỗi khi tập tham số đổi, và 30 lần chuẩn bị lại cho một lần lưu là lãng phí
+                // không có lý do nào.
+                insert.Parameters.AddWithValue("$characterId", request.CharacterId);
+
+                SqliteParameter templateId = insert.Parameters.AddWithValue("$templateId", 0);
+                SqliteParameter quantity = insert.Parameters.AddWithValue("$quantity", 0);
+                SqliteParameter slot = insert.Parameters.AddWithValue("$slot", 0);
+
+                foreach (InventoryRow row in request.Items)
+                {
+                    templateId.Value = row.TemplateId;
+                    quantity.Value = row.Quantity;
+                    slot.Value = row.Slot;
+
+                    await insert.ExecuteNonQueryAsync(ct);
+                }
+            }
+
+            await transaction.CommitAsync(ct);
+        }
+    }
+}
+```
+
+**`Server/DBServer/Handlers/InventoryDbHandler.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.DBServer.Net;
+using MMORPG.DBServer.Repositories;
+using MMORPG.Shared.Db;
+using MMORPG.Shared.Dto.Db;
+
+namespace MMORPG.DBServer.Handlers
+{
+    public static class InventoryDbHandler
+    {
+        /// <summary>Gán một lần trong <c>Program.cs</c> của DBServer.</summary>
+        public static InventoryRepository Repository { get; set; }
+
+        [DbHandler(DbCmd.InventoryLoad)]
+        public static async Task<DbResult> OnLoad(DbRequest req)
+        {
+            return DbResult.Ok(await Repository.LoadAsync(req.GetData<InventoryLoadRequest>()));
+        }
+
+        [DbHandler(DbCmd.InventorySave)]
+        public static async Task<DbResult> OnSave(DbRequest req)
+        {
+            await Repository.SaveAsync(req.GetData<InventorySaveRequest>());
+
+            return DbResult.Ok(new DbOkResponse { Success = true });
+        }
+    }
+}
+```
+
+**`Server/DBServer/Program.cs`** — một dòng, cạnh ba dòng đã có. ⚠️ **Quên dòng này thì không có
+lỗi biên dịch**, chỉ có `NullReferenceException` ở query túi đầu tiên:
+
+```csharp
+CharacterDbHandler.Repository = new CharacterRepository(database);
+InventoryDbHandler.Repository = new InventoryRepository(database);
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — <code>Inventory</code>: cả class, bốn thao tác</b></summary>
+
+**`Server/GameServer/World/Inventory.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.Shared.Dto.Db;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.World.Item;
+
+namespace MMORPG.GameServer.World
+{
+    /// <summary>Một ô túi trong RAM server. Struct: 30 ô là một mảng liền kề, không phải 30 object.</summary>
+    public struct ItemStack
+    {
+        /// <summary>Id của một VẬT cụ thể. 0 khi món đồ vừa sinh ra và chưa qua lần lưu nào.</summary>
+        public long ItemId;
+
+        /// <summary>0 = ô TRỐNG. Dùng chính trường này làm dấu "trống" nên không cần một cờ riêng.</summary>
+        public int TemplateId;
+
+        public int Quantity;
+
+        public bool IsEmpty
+        {
+            get { return TemplateId == 0; }
+        }
+    }
+
+    /// <summary>
+    /// Túi đồ của MỘT nhân vật, sống trong RAM server. Nạp từ DB một lần lúc vào world, đổi trong
+    /// RAM, ghi xuống DB khi rời world hoặc khi autosave thấy <see cref="IsDirty"/>.
+    ///
+    /// <b>CHỈ LUỒNG TICK được chạm vào.</b> Không có khoá nào ở đây, và đó là cố ý: mọi lối vào đều
+    /// đi qua <see cref="InventoryService"/>, và service ấy xếp lệnh vào hàng đợi để tick tiêu thụ.
+    /// Thêm một lối vào từ luồng khác là phải thêm khoá vào tất cả — rẻ hơn nhiều là đừng thêm.
+    ///
+    /// Mọi thao tác trả về <b>danh sách ô vừa đổi</b>, không phải bool: tầng gửi gói cần đúng thứ đó
+    /// để dựng delta, và tầng UI cần đúng thứ đó để vẽ lại. Trả bool rồi để chỗ gọi tự đoán đã đổi ô
+    /// nào là mời nó đoán sai.
+    /// </summary>
+    public sealed class Inventory
+    {
+        public const int SLOT_COUNT = 30;
+
+        private readonly ItemStack[] _slots = new ItemStack[SLOT_COUNT];
+
+        // Bộ đệm của TryAdd, giữ làm field và Clear() mỗi lần dùng — cùng lý do với ba bộ đệm của
+        // vòng tick trong WorldService: thứ chạy thường xuyên thì hình dạng bộ nhớ của nó là thiết kế.
+        private readonly List<(int Slot, int Amount)> _scratch = new();
+
+        /// <summary>
+        /// Id tạm cho đồ vừa sinh ra, đếm LÙI từ -1. Âm để không bao giờ đụng id thật của DB
+        /// (AUTOINCREMENT luôn dương), nên nhìn một con số là biết nó đã qua DB hay chưa.
+        /// </summary>
+        private long _nextTempId = -1;
+
+        /// <summary>Có thay đổi chưa được ghi xuống DB không. Autosave đọc cờ này.</summary>
+        public bool IsDirty { get; private set; }
+
+        public int UsedSlots
+        {
+            get
+            {
+                int count = 0;
+
+                for (int i = 0; i < _slots.Length; i++)
+                {
+                    if (!_slots[i].IsEmpty)
+                        count++;
+                }
+
+                return count;
+            }
+        }
+
+        /// <summary>Nạp từ DB. Bỏ qua dòng hỏng thay vì ném — xem ghi chú trong thân hàm.</summary>
+        public void Load(InventoryRow[] rows)
+        {
+            System.Array.Clear(_slots, 0, _slots.Length);
+
+            foreach (InventoryRow row in rows)
+            {
+                // Ba loại dòng hỏng, và cả ba đều BỎ QUA chứ không ném: ô ngoài phạm vi (túi từng
+                // rộng hơn rồi bị thu lại), template không còn trong bảng (item bị gỡ), số lượng vô
+                // nghĩa. Ném ở đây nghĩa là một dòng DB rác chặn hẳn người chơi vào game — và người
+                // chơi thì không sửa được dòng đó.
+                if (row.Slot < 0 || row.Slot >= SLOT_COUNT)
+                    continue;
+
+                if (row.Quantity <= 0 || ItemConfigContainer.Find(row.TemplateId) == null)
+                    continue;
+
+                _slots[row.Slot] = new ItemStack
+                {
+                    ItemId = row.ItemId,
+                    TemplateId = row.TemplateId,
+                    Quantity = row.Quantity,
+                };
+            }
+
+            // Vừa nạp từ DB thì RAM và DB đang khớp nhau — nếu để dirty thì autosave đầu tiên ghi lại
+            // đúng thứ vừa đọc lên, 30 lượt ghi không có lý do.
+            IsDirty = false;
+        }
+
+        /// <summary>Kết xuất để ghi DB. Chỉ ô có đồ — ô trống không cần một dòng để nói rằng nó trống.</summary>
+        public InventoryRow[] ToRows()
+        {
+            var rows = new List<InventoryRow>(UsedSlots);
+
+            for (int slot = 0; slot < _slots.Length; slot++)
+            {
+                if (_slots[slot].IsEmpty)
+                    continue;
+
+                rows.Add(new InventoryRow
+                {
+                    ItemId = _slots[slot].ItemId,
+                    TemplateId = _slots[slot].TemplateId,
+                    Quantity = _slots[slot].Quantity,
+                    Slot = slot,
+                });
+            }
+
+            return rows.ToArray();
+        }
+
+        /// <summary>Toàn bộ túi cho gói snapshot. Chỉ ô có đồ, cùng lý do với <see cref="ToRows"/>.</summary>
+        public InventorySlotDto[] ToSnapshot()
+        {
+            var slots = new List<InventorySlotDto>(UsedSlots);
+
+            for (int slot = 0; slot < _slots.Length; slot++)
+            {
+                if (_slots[slot].IsEmpty)
+                    continue;
+
+                slots.Add(ToDto(slot));
+            }
+
+            return slots.ToArray();
+        }
+
+        /// <summary>Một ô dưới dạng gói tin. Ô trống ra <c>TemplateId = 0</c> — client hiểu đó là "xoá ô".</summary>
+        public InventorySlotDto ToDto(int slot)
+        {
+            return new InventorySlotDto
+            {
+                Slot = slot,
+                TemplateId = _slots[slot].TemplateId,
+                Quantity = _slots[slot].Quantity,
+            };
+        }
+
+        public void MarkSaved()
+        {
+            IsDirty = false;
+        }
+
+        //--------------------------------------------------------------------------------------------
+        // Bốn thao tác. Tất cả trả về danh sách ô vừa đổi; RỖNG = không làm gì cả.
+        //--------------------------------------------------------------------------------------------
+
         /// <summary>
         /// Nhận đồ vào túi. Trả danh sách ô vừa đổi; RỖNG nghĩa là không nhận được gì.
         ///
         /// Hoặc nhận TRỌN, hoặc từ chối TRỌN. Nhận một phần nghĩa là phần còn lại bốc hơi mà không có
         /// gì báo — và người chơi sẽ không bao giờ tha thứ cho điều đó, kể cả khi nó chỉ là một bình
         /// máu. Phần thừa đi đâu là quyết định của chỗ GỌI, không phải của cái túi.
-        ///
-        /// CHỈ GỌI TỪ LUỒNG TICK.
         /// </summary>
         public IReadOnlyList<int> TryAdd(int templateId, int quantity)
         {
-            ItemTemplate template = ItemTemplates.Find(templateId);
+            ItemConfig config = ItemConfigContainer.Find(templateId);
 
-            if (template == null || quantity <= 0)
-                return Array.Empty<int>();
+            if (config == null || quantity <= 0)
+                return System.Array.Empty<int>();
 
             // THỬ trên bản nháp trước, chỉ ghi vào thật khi chắc chắn đủ chỗ. Cách còn lại — ghi dần
             // rồi hoàn tác khi hết chỗ — là tự viết một transaction bằng tay, và hoàn tác sai thì
@@ -396,12 +983,10 @@ thụ ở đầu tick, y hệt `EnqueueForceAll` của Phase 9: **luồng đọc
             // mở ô mới, nếu không thì mỗi lần nhặt một cái là chiếm thêm một ô trong khi ô cũ còn chỗ.
             for (int slot = 0; slot < _slots.Length && remaining > 0; slot++)
             {
-                ref ItemStack stack = ref _slots[slot];
-
-                if (stack.TemplateId != templateId || stack.Quantity >= template.MaxStack)
+                if (_slots[slot].TemplateId != templateId || _slots[slot].Quantity >= config.MaxStack)
                     continue;
 
-                int take = Math.Min(remaining, template.MaxStack - stack.Quantity);
+                int take = System.Math.Min(remaining, config.MaxStack - _slots[slot].Quantity);
 
                 _scratch.Add((slot, take));
                 remaining -= take;
@@ -410,35 +995,33 @@ thụ ở đầu tick, y hệt `EnqueueForceAll` của Phase 9: **luồng đọc
             // Vòng 2: ô trống.
             for (int slot = 0; slot < _slots.Length && remaining > 0; slot++)
             {
-                if (_slots[slot].TemplateId != 0)
+                if (!_slots[slot].IsEmpty)
                     continue;
 
-                int take = Math.Min(remaining, template.MaxStack);
+                int take = System.Math.Min(remaining, config.MaxStack);
 
                 _scratch.Add((slot, take));
                 remaining -= take;
             }
 
             if (remaining > 0)
-                return Array.Empty<int>();
+                return System.Array.Empty<int>();
 
             var changed = new List<int>(_scratch.Count);
 
             foreach ((int slot, int amount) in _scratch)
             {
-                ref ItemStack stack = ref _slots[slot];
-
                 // Ô trống thì đây là lúc món đồ RA ĐỜI — và ra đời nghĩa là nhận một itemId mới.
-                // Id âm tạm thời do server cấp: DB sẽ cấp id thật ở lần lưu kế tiếp. Client không bao
-                // giờ đọc con số này, nó chỉ cần slot; id chỉ có nghĩa với DB và với log.
-                if (stack.TemplateId == 0)
+                // Id âm tạm thời do server cấp; DB cấp id thật ở lần lưu kế tiếp. Client không bao
+                // giờ đọc con số này, nó chỉ cần số ô.
+                if (_slots[slot].IsEmpty)
                 {
-                    stack.TemplateId = templateId;
-                    stack.ItemId = NextTempId();
-                    stack.Quantity = 0;
+                    _slots[slot].TemplateId = templateId;
+                    _slots[slot].ItemId = _nextTempId--;
+                    _slots[slot].Quantity = 0;
                 }
 
-                stack.Quantity += amount;
+                _slots[slot].Quantity += amount;
                 changed.Add(slot);
             }
 
@@ -446,7 +1029,434 @@ thụ ở đầu tick, y hệt `EnqueueForceAll` của Phase 9: **luồng đọc
 
             return changed;
         }
+
+        /// <summary>
+        /// Dùng một món ở ô này: giảm đúng một cái. Chỉ đồ <see cref="ItemKind.Consumable"/> —
+        /// tác dụng thật (hồi máu) là việc của Phase 14, ở đây mới chỉ có phép trừ.
+        /// </summary>
+        public IReadOnlyList<int> TryUse(int slot)
+        {
+            if (!IsValidSlot(slot) || _slots[slot].IsEmpty)
+                return System.Array.Empty<int>();
+
+            ItemConfig config = ItemConfigContainer.Find(_slots[slot].TemplateId);
+
+            if (config == null || config.Kind != ItemKind.Consumable)
+                return System.Array.Empty<int>();
+
+            return TryRemove(slot, 1);
+        }
+
+        /// <summary>Bỏ bớt số lượng ở một ô. Về 0 thì ô thành trống.</summary>
+        public IReadOnlyList<int> TryRemove(int slot, int quantity)
+        {
+            if (!IsValidSlot(slot) || _slots[slot].IsEmpty || quantity <= 0)
+                return System.Array.Empty<int>();
+
+            // Bỏ nhiều hơn số đang có: từ chối TRỌN chứ không bỏ hết những gì có. Cùng luật
+            // all-or-nothing của TryAdd — một yêu cầu vô nghĩa không được biến thành một hành động
+            // gần đúng.
+            if (quantity > _slots[slot].Quantity)
+                return System.Array.Empty<int>();
+
+            _slots[slot].Quantity -= quantity;
+
+            if (_slots[slot].Quantity == 0)
+                _slots[slot] = default;
+
+            IsDirty = true;
+
+            return new[] { slot };
+        }
+
+        /// <summary>
+        /// Đổi chỗ hai ô. Không dồn chồng — kéo chồng này lên chồng kia cùng loại thì hai ô ĐỔI CHỖ,
+        /// không cộng vào nhau.
+        ///
+        /// Vì sao không dồn: "dồn" và "đổi chỗ" là hai ý định khác nhau của người chơi, và một thao
+        /// tác kéo-thả không nói được họ muốn cái nào. Đoán sai thì người chơi mất bố cục túi mà
+        /// không hoàn tác được. Nút "sắp xếp túi" là chỗ của phép dồn — xem "Để dành".
+        /// </summary>
+        public IReadOnlyList<int> TryMove(int from, int to)
+        {
+            if (!IsValidSlot(from) || !IsValidSlot(to) || from == to)
+                return System.Array.Empty<int>();
+
+            // Kéo một ô trống đi đâu cũng là không làm gì. Trả rỗng thì không có gói nào được gửi.
+            if (_slots[from].IsEmpty)
+                return System.Array.Empty<int>();
+
+            (_slots[from], _slots[to]) = (_slots[to], _slots[from]);
+
+            IsDirty = true;
+
+            return new[] { from, to };
+        }
+
+        private static bool IsValidSlot(int slot)
+        {
+            return slot >= 0 && slot < SLOT_COUNT;
+        }
+    }
+}
 ```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — <code>InventoryService</code> và chỗ nối nó vào world</b></summary>
+
+**`Server/GameServer/World/InventoryService.cs`** (file mới, nguyên văn):
+
+```csharp
+using System.Collections.Concurrent;
+using MMORPG.GameServer.Db;
+using MMORPG.ServerCore;
+using MMORPG.Shared.Db;
+using MMORPG.Shared.Dto.Db;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+using MMORPG.Shared.World.Item;
+
+namespace MMORPG.GameServer.World
+{
+    /// <summary>
+    /// Toàn bộ nghiệp vụ túi đồ: nạp lúc vào world, gửi snapshot/delta, autosave, lưu lúc rời world.
+    ///
+    /// Handler không chứa gì ngoài lời gọi vào đây — nếu có ngày một hàm trong
+    /// <c>InventoryHandler</c> dài quá mười dòng thì nghiệp vụ đang rò rỉ ra khỏi chỗ này.
+    /// </summary>
+    public sealed class InventoryService
+    {
+        /// <summary>
+        /// Bao lâu ghi DB một lần nếu túi bẩn. Đây là con số của một ĐÁNH ĐỔI, không phải một hằng
+        /// tuỳ ý: nó là số giây tối đa người chơi mất khi server chết đột ngột, đổi lấy số lượt ghi
+        /// DB tiết kiệm được. Hạ xuống 5 thì mất ít hơn, ghi nhiều hơn.
+        /// </summary>
+        private const float AUTOSAVE_SECONDS = 30f;
+
+        private readonly DbClient _dbClient;
+
+        // Bên GHI là luồng đọc phím, bên ĐỌC là luồng tick. Chỉ hàng đợi này đi qua ranh giới luồng;
+        // Inventory thì không ai ngoài tick được chạm vào. Cùng khuôn với _forcedActions ở WorldService.
+        private readonly ConcurrentQueue<GrantCommand> _grants = new();
+
+        private float _autosaveTimer;
+
+        public InventoryService(DbClient dbClient)
+        {
+            _dbClient = dbClient;
+        }
+
+        /// <summary>Lệnh phát đồ, xếp hàng chờ tick tiêu thụ.</summary>
+        private readonly struct GrantCommand
+        {
+            public readonly int TemplateId;
+            public readonly int Quantity;
+
+            public GrantCommand(int templateId, int quantity)
+            {
+                TemplateId = templateId;
+                Quantity = quantity;
+            }
+        }
+
+        /// <summary>
+        /// Xin phát đồ cho TẤT CẢ người trong world. Gọi được từ luồng bất kỳ — lệnh chỉ được xếp
+        /// hàng ở đây, và chỉ thật sự có hiệu lực ở đầu tick kế tiếp.
+        /// </summary>
+        public void EnqueueGrantAll(int templateId, int quantity)
+        {
+            _grants.Enqueue(new GrantCommand(templateId, quantity));
+        }
+
+        /// <summary>
+        /// Nạp túi từ DB và gửi snapshot. Gọi từ <c>CharacterService.EnterWorldAsync</c>, SAU khi
+        /// entity đã spawn — snapshot là gói đầu tiên client nhận về túi, và nó phải tới sau
+        /// EnterWorldResponse để client đã có bảng item mà tra.
+        /// </summary>
+        public async Task LoadAsync(PlayerEntity entity)
+        {
+            try
+            {
+                var response = await _dbClient.CallAsync<InventoryLoadRequest, InventoryLoadResponse>(
+                    DbCmd.InventoryLoad, new InventoryLoadRequest { CharacterId = entity.CharacterId });
+
+                entity.Inventory.Load(response.Items);
+            }
+            catch (DbUnavailableException ex)
+            {
+                // Vào world với túi RỖNG thì tệ hơn nhiều so với không vào được: người chơi sẽ tưởng
+                // mất đồ, và lần autosave kế tiếp sẽ GHI ĐÈ cái túi rỗng ấy xuống DB — mất thật.
+                Log.Error($"Không nạp được túi của {entity.Name.Cyan()}: {ex.Message}. Đá khỏi world.");
+                entity.Owner?.Kick("Không đọc được dữ liệu nhân vật. Thử lại sau giây lát.");
+
+                return;
+            }
+
+            Log.Info($"Túi của {entity.Name.Cyan()}: {entity.Inventory.UsedSlots}/{Inventory.SLOT_COUNT} ô");
+
+            entity.Owner?.SendData(NetCmd.InventorySnapshot, new InventorySnapshotNotice
+            {
+                Slots = entity.Inventory.ToSnapshot(),
+            });
+        }
+
+        /// <summary>
+        /// Ghi túi xuống DB nếu bẩn. Gọi từ <c>CharacterService.LeaveWorldAsync</c> TRƯỚC khi
+        /// <c>Despawn</c> — sau đó thì entity đã ra khỏi sổ và không ai còn cầm cái túi nữa.
+        /// </summary>
+        public async Task SaveAsync(PlayerEntity entity)
+        {
+            if (!entity.Inventory.IsDirty)
+                return;
+
+            try
+            {
+                await _dbClient.CallAsync<InventorySaveRequest, DbOkResponse>(
+                    DbCmd.InventorySave, new InventorySaveRequest
+                    {
+                        CharacterId = entity.CharacterId,
+                        Items = entity.Inventory.ToRows(),
+                    });
+
+                entity.Inventory.MarkSaved();
+            }
+            catch (DbUnavailableException ex)
+            {
+                // Cùng lý do với SavePosition ở Phase 5: mất một lần lưu thì khó chịu, nhưng làm sập
+                // đường ngắt kết nối thì tệ hơn — session không dọn được, entity treo lại mãi mãi.
+                Log.Warn($"Không lưu được túi của {entity.Name.Cyan()}: {ex.Message}");
+            }
+        }
+
+        //--------------------------------------------------------------------------------------------
+        // Ba thao tác do client xin. Mọi phép kiểm biên đã làm trong Inventory — ở đây chỉ còn việc
+        // gửi delta khi có gì đó thật sự đổi.
+        //--------------------------------------------------------------------------------------------
+
+        public void Use(PlayerEntity entity, int slot)
+        {
+            SendDelta(entity, entity.Inventory.TryUse(slot));
+        }
+
+        public void Drop(PlayerEntity entity, int slot, int quantity)
+        {
+            IReadOnlyList<int> changed = entity.Inventory.TryRemove(slot, quantity);
+
+            if (changed.Count > 0)
+                Log.Debug($"{entity.Name} vứt {quantity} ở ô {slot}");
+
+            SendDelta(entity, changed);
+        }
+
+        public void Move(PlayerEntity entity, int from, int to)
+        {
+            SendDelta(entity, entity.Inventory.TryMove(from, to));
+        }
+
+        /// <summary>
+        /// Gửi những ô vừa đổi. Danh sách RỖNG thì KHÔNG gửi gì — một gói delta không có ô nào bắt
+        /// client vẽ lại vì không có lý do, và tệ hơn là nó nói dối rằng có chuyện vừa xảy ra.
+        /// </summary>
+        private static void SendDelta(PlayerEntity entity, IReadOnlyList<int> changedSlots)
+        {
+            if (changedSlots.Count == 0)
+                return;
+
+            var slots = new InventorySlotDto[changedSlots.Count];
+
+            for (int i = 0; i < changedSlots.Count; i++)
+                slots[i] = entity.Inventory.ToDto(changedSlots[i]);
+
+            entity.Owner?.SendData(NetCmd.InventoryDelta, new InventoryDeltaNotice { Slots = slots });
+        }
+
+        //--------------------------------------------------------------------------------------------
+        // Vòng tick
+        //--------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Gọi mỗi tick từ <c>WorldService.Tick</c>: tiêu thụ lệnh phát đồ rồi đếm giờ autosave.
+        ///
+        /// Nhận cả danh sách entity thay vì tự giữ một sổ riêng: "ai đang trong world" đã có đúng một
+        /// nguồn là <c>WorldService</c>, và sổ thứ hai thì sớm muộn lệch với sổ thứ nhất.
+        ///
+        /// ICollection chứ không IReadOnlyCollection: <c>ConcurrentDictionary.Values</c> trả về
+        /// <c>ICollection</c>, và hai interface ấy KHÔNG kế thừa nhau trong .NET.
+        /// </summary>
+        public void Tick(float dt, ICollection<PlayerEntity> entities)
+        {
+            while (_grants.TryDequeue(out GrantCommand command))
+                GrantAll(command, entities);
+
+            _autosaveTimer += dt;
+
+            if (_autosaveTimer < AUTOSAVE_SECONDS)
+                return;
+
+            _autosaveTimer = 0f;
+
+            foreach (PlayerEntity entity in entities)
+            {
+                if (!entity.Inventory.IsDirty)
+                    continue;
+
+                // KHÔNG await trong vòng tick: một lượt đi-về DBServer là vài ms, nhân với số người
+                // online là cả nhịp tim server đứng lại. Bắn đi rồi quên — SaveAsync tự log khi hỏng.
+                _ = SaveAsync(entity);
+            }
+        }
+
+        private static void GrantAll(GrantCommand command, ICollection<PlayerEntity> entities)
+        {
+            ItemConfig config = ItemConfigContainer.Find(command.TemplateId);
+
+            if (config == null)
+            {
+                Log.Warn($"Phát đồ: không có template {command.TemplateId.ToString().Red()} trong bảng.");
+                return;
+            }
+
+            foreach (PlayerEntity entity in entities)
+            {
+                IReadOnlyList<int> changed = entity.Inventory.TryAdd(command.TemplateId, command.Quantity);
+
+                if (changed.Count == 0)
+                {
+                    Log.Warn($"Túi của {entity.Name.Cyan()} đầy, không nhận {config.Name}");
+                    continue;
+                }
+
+                Log.Info($"+{command.Quantity} {config.Name.Cyan()} → ô {string.Join(", ", changed)} " +
+                         $"({entity.Name})");
+
+                SendDelta(entity, changed);
+            }
+        }
+    }
+}
+```
+
+**`Server/GameServer/World/PlayerEntity.cs`** — thêm một property, đặt cạnh `Visible`:
+
+```csharp
+        /// <summary>
+        /// Túi đồ, sống cùng entity. Dựng rỗng ngay tại đây rồi InventoryService nạp nội dung từ DB:
+        /// nhờ vậy không có khoảnh khắc nào entity tồn tại mà Inventory còn null, và không chỗ nào
+        /// phải kiểm null trước khi chạm vào túi.
+        ///
+        /// CHỈ LUỒNG TICK đọc/ghi, như Visible.
+        /// </summary>
+        public Inventory Inventory { get; } = new();
+```
+
+**`Server/GameServer/World/WorldService.cs`** — nhận `InventoryService` qua constructor:
+
+```csharp
+        private readonly InventoryService _inventoryService;
+
+        public WorldService(MapRegistry maps, ConfigService config, InventoryService inventoryService)
+        {
+            _maps = maps;
+            _config = config;
+            _inventoryService = inventoryService;
+
+            // Chốt MỘT LẦN lúc dựng, không đọc config.Current mỗi tick. Cùng lý do với WorldConfig
+            // trong PlayerEntity — nhưng ở đây còn thêm một lý do nữa: đổi bán kính giữa chừng làm
+            // tập Visible của mọi người lệch với tập đã gửi, và một loạt EntityDespawn giả sinh ra.
+            _aoiRadiusX = config.Current.Server.AoiRadiusX;
+
+            // Cột rộng BẰNG ĐÚNG bán kính (Phase 11). Tính từ bán kính chứ không cho nó một dòng
+            // config riêng: hai con số rời nhau là hai con số sẽ lệch nhau.
+            _aoiColumnWidth = _aoiRadiusX;
+        }
+```
+
+và gọi `Tick` ở đầu vòng tick, ngay sau vòng 0 (tiêu thụ `_forcedActions`):
+
+```csharp
+            // Vòng 0b: túi đồ. Ở đây chứ không ở GameLoop vì nó cần đúng tập entity mà sổ này giữ —
+            // "ai đang trong world" có một nguồn, và sổ thứ hai thì sớm muộn lệch với sổ thứ nhất.
+            _inventoryService.Tick(dt, _entities.Values);
+```
+
+**`Server/GameServer/World/CharacterService.cs`** — ba chỗ.
+
+Nhận service:
+
+```csharp
+        private readonly InventoryService _inventoryService;
+
+        public CharacterService(DbClient dbClient, WorldService worldService, MapRegistry maps,
+            ConfigService config, InventoryService inventoryService)
+        {
+            _dbClient = dbClient;
+            _worldService = worldService;
+            _maps = maps;
+            _config = config;
+            _inventoryService = inventoryService;
+        }
+```
+
+Nạp túi trong `EnterWorldAsync`:
+
+```csharp
+            session.MarkInWorld(entity);
+
+            // Nạp túi SAU khi vào world: LoadAsync gửi luôn gói snapshot, và gói ấy phải tới sau
+            // EnterWorldResponse — client cần bảng item trong response đó để tra tên và icon.
+            //
+            // Không await ở đây thì snapshot có thể vượt mặt response. Await thì EnterWorld chậm thêm
+            // một lượt đi-về DB, và đó là cái giá đúng để trả: nó chỉ xảy ra một lần mỗi phiên.
+            await _inventoryService.LoadAsync(entity);
+```
+
+Lưu túi trong `LeaveWorldAsync`:
+
+```csharp
+            session.MarkLeftWorld();
+
+            // Lưu túi TRƯỚC Despawn: sau Despawn thì entity đã ra khỏi sổ, và lưu một thứ không còn
+            // ai cầm là mở đường cho "lưu nhầm bản cũ".
+            await _inventoryService.SaveAsync(entity);
+
+            _worldService.Despawn(entity);
+```
+
+**`Server/GameServer/Boot/ServerBootstrap.cs`** — ⚠️ **hai dòng, và thứ tự là bắt buộc**:
+`InventoryService` phải đăng ký TRƯỚC `WorldService` vì `WorldService` nhận nó qua constructor.
+
+```csharp
+            var maps = ServerServices.Register(new MapRegistry(config));
+
+            // TRƯỚC WorldService: vòng tick của world gọi InventoryService.Tick mỗi nhịp.
+            var inventoryService = ServerServices.Register(new InventoryService(dbClient));
+
+            var worldService = ServerServices.Register(new WorldService(maps, config, inventoryService));
+
+            ServerServices.Register(new AuthService(dbClient, new LoginRateLimiter()));
+            ServerServices.Register(new CharacterService(dbClient, worldService, maps, config, inventoryService));
+```
+
+**`Server/GameServer/Program.cs`** — phím `G`, nguồn item duy nhất của phase này:
+
+```csharp
+// Id của "Bình máu nhỏ" trong items.json. Hằng số CỦA PHÍM THỬ, không phải của game — ngày có quái
+// rơi đồ thì phím này biến mất cùng nó.
+const int POTION_TEMPLATE_ID = 1;
+
+// ... sau ServerBootstrap.Build():
+var inventoryService = ServerServices.Get<InventoryService>();
+
+// ... trong switch của luồng đọc phím:
+            // Nguồn item DUY NHẤT của Phase 13. Quái và đồ rơi dưới đất là Phase 15.
+            case ConsoleKey.G:
+                inventoryService.EnqueueGrantAll(POTION_TEMPLATE_ID, 3);
+                break;
+```
+
+Sửa luôn dòng log của `Console.IsInputRedirected` cho khớp: `(R/H/K/J/G)`.
 
 </details>
 
@@ -509,7 +1519,7 @@ giá trị trong chính cấu trúc đã có luôn rẻ hơn thêm một cấu t
 gửi lên. Handler phải hỏi đủ, theo đúng thứ tự này:
 
 1. Session đã `InWorld` chưa (`MinState`, dispatcher lo).
-2. `slot` có nằm trong `[0, SLOT_COUNT)` không → client sửa code gửi `slot = -1` là `IndexOutOfRange`
+2. `slot` có nằm trong `[0, SLOT_COUNT)` không → client sửa code gửi `slot = -1` là `IndexOutOfRangeException`
    trong luồng tick, tức là **một tick chết cho cả server**.
 3. Ô ấy có đồ không.
 4. Món đồ ấy có `Kind` cho phép thao tác này không (`ItemUse` trên một cây kiếm thì từ chối).
@@ -562,7 +1572,226 @@ và triệu chứng là "mở túi ra thấy trống" — trông y hệt một b
 7. Sửa tạm client gửi `ItemUse { Slot = 999 }` → server từ chối, **log Warn**, và **không tick nào chết**.
 
 <details>
-<summary><b>📖 Lời giải — client: model và đường đi của delta</b></summary>
+<summary><b>📖 Lời giải — contract: <code>NetCmd</code>, DTO, <code>InventoryHandler</code></b></summary>
+
+**`Server/Shared/Net/NetCmd.cs`** — thêm một region vào cuối enum:
+
+```csharp
+        #region Inventory / Item (400–499)
+
+        /// <summary>
+        /// Toàn bộ túi. Server đẩy MỘT LẦN ngay sau EnterWorld.
+        /// Payload: <see cref="Dto.Inventory.InventorySnapshotNotice"/>
+        /// </summary>
+        InventorySnapshot = 400,
+
+        /// <summary>
+        /// Những ô vừa đổi. Server đẩy sau mỗi thao tác thành công.
+        /// Payload: <see cref="Dto.Inventory.InventoryDeltaNotice"/>
+        /// </summary>
+        InventoryDelta = 401,
+
+        /// <summary>
+        /// Dùng đồ ở một ô. Response đi bằng InventoryDelta chứ không có gói riêng — thứ client cần
+        /// sau khi dùng đúng là "ô nào vừa đổi".
+        /// Payload: <see cref="Dto.Inventory.ItemUseRequest"/>
+        /// </summary>
+        ItemUse = 402,
+
+        /// <summary>
+        /// Vứt bớt số lượng ở một ô. Payload: <see cref="Dto.Inventory.ItemDropRequest"/>
+        /// </summary>
+        ItemDrop = 403,
+
+        /// <summary>
+        /// Kéo ô này sang ô kia. Payload: <see cref="Dto.Inventory.ItemMoveRequest"/>
+        /// </summary>
+        ItemMove = 404,
+
+        #endregion
+```
+
+**`Server/Shared/Dto/Inventory/InventoryDto.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MemoryPack;
+
+namespace MMORPG.Shared.Dto.Inventory
+{
+    /// <summary>
+    /// Một ô túi trên dây. Struct vì nó nhỏ và đi thành mảng — và vì <c>default</c> của nó
+    /// (<c>TemplateId = 0</c>) đã đúng nghĩa "ô trống", nên không cần một giá trị canh riêng.
+    ///
+    /// KHÔNG mang ItemId: client không có việc gì với id của một vật cụ thể — nó thao tác bằng
+    /// SỐ Ô. Gửi thêm một trường mà người nhận không dùng là mời họ dùng nó sai.
+    /// </summary>
+    [MemoryPackable]
+    public partial struct InventorySlotDto
+    {
+        public int Slot;
+
+        /// <summary>0 = ô này TRỐNG. Không có gói "xoá ô" riêng — xem Bước 3.</summary>
+        public int TemplateId;
+
+        public int Quantity;
+    }
+
+    /// <summary>
+    /// Toàn bộ túi. Gửi ĐÚNG MỘT LẦN, ngay sau EnterWorld, khi client chưa có gì để mà "đổi từ".
+    /// Mọi hệ đồng bộ đều có hình dạng này: một trạng thái đầy đủ ban đầu, rồi một dòng thay đổi.
+    /// </summary>
+    [MemoryPackable]
+    public partial class InventorySnapshotNotice
+    {
+        /// <summary>Chỉ các ô CÓ ĐỒ. Ô trống không cần một dòng để nói rằng nó trống.</summary>
+        public InventorySlotDto[] Slots { get; set; } = Array.Empty<InventorySlotDto>();
+    }
+
+    /// <summary>Chỉ những ô VỪA ĐỔI. Đây là thứ UI cần — xem "snapshot ≠ delta" ở Bước 3.</summary>
+    [MemoryPackable]
+    public partial class InventoryDeltaNotice
+    {
+        public InventorySlotDto[] Slots { get; set; } = Array.Empty<InventorySlotDto>();
+    }
+
+    [MemoryPackable]
+    public partial class ItemUseRequest
+    {
+        public int Slot { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class ItemDropRequest
+    {
+        public int Slot { get; set; }
+
+        public int Quantity { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class ItemMoveRequest
+    {
+        public int FromSlot { get; set; }
+
+        public int ToSlot { get; set; }
+    }
+}
+```
+
+**`Server/GameServer/Handlers/InventoryHandler.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.GameServer.Boot;
+using MMORPG.GameServer.Net;
+using MMORPG.GameServer.World;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+
+namespace MMORPG.GameServer.Handlers
+{
+    /// <summary>
+    /// Ba lệnh, và cả ba đều KHÔNG trả response: kết quả đi bằng <c>InventoryDelta</c> mà service
+    /// tự gửi. Đó là cố ý — nếu có cả response lẫn delta thì client có hai nguồn cho cùng một sự
+    /// thật, và hai nguồn thì sớm muộn lệch nhau.
+    /// </summary>
+    public static class InventoryHandler
+    {
+        private static InventoryService InventoryService => ServerServices.Get<InventoryService>();
+
+        [TcpHandler(NetCmd.ItemUse, MinState = SessionState.InWorld)]
+        public static Task<NetResult> OnUse(NetRequest req)
+        {
+            PlayerEntity entity = req.Session.Entity;
+
+            // MinState đã chặn phần lớn, nhưng LeaveWorld có thể xảy ra giữa lúc gói đang bay.
+            if (entity == null)
+                return Task.FromResult(NetResult.None);
+
+            InventoryService.Use(entity, req.GetData<ItemUseRequest>().Slot);
+
+            return Task.FromResult(NetResult.None);
+        }
+
+        [TcpHandler(NetCmd.ItemDrop, MinState = SessionState.InWorld)]
+        public static Task<NetResult> OnDrop(NetRequest req)
+        {
+            PlayerEntity entity = req.Session.Entity;
+
+            if (entity == null)
+                return Task.FromResult(NetResult.None);
+
+            var request = req.GetData<ItemDropRequest>();
+            InventoryService.Drop(entity, request.Slot, request.Quantity);
+
+            return Task.FromResult(NetResult.None);
+        }
+
+        [TcpHandler(NetCmd.ItemMove, MinState = SessionState.InWorld)]
+        public static Task<NetResult> OnMove(NetRequest req)
+        {
+            PlayerEntity entity = req.Session.Entity;
+
+            if (entity == null)
+                return Task.FromResult(NetResult.None);
+
+            var request = req.GetData<ItemMoveRequest>();
+            InventoryService.Move(entity, request.FromSlot, request.ToSlot);
+
+            return Task.FromResult(NetResult.None);
+        }
+    }
+}
+```
+
+Ba handler đều ngắn đúng như vậy, và cả ba đều **không kiểm gì ngoài `entity == null`** — mọi
+phép kiểm biên nằm trong `Inventory`: `IsValidSlot`, `IsEmpty`, `quantity <= 0`,
+`quantity > Quantity`, `Kind != Consumable`. Đặt chúng ở đó chứ không ở handler vì đó là chỗ
+**duy nhất** mọi đường vào đều đi qua: phím `G` của console cũng gọi `TryAdd`, và nó không đi
+qua handler nào cả.
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — client: <code>InventoryNetHandler</code>, <code>InventoryModel</code>, <code>InventoryApi</code>, <code>InventoryPresenter</code></b></summary>
+
+**`Assets/Game/Scripts/Network/Handlers/InventoryNetHandler.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+
+namespace MMORPG.Client.Network.Handlers
+{
+    /// <summary>
+    /// Nhận nhóm lệnh túi đồ. Handler chỉ giải mã rồi bắn event — không đụng model, không đụng UI.
+    ///
+    /// Vì sao không cho nó ghi thẳng vào InventoryModel: handler là tầng MẠNG, model là tầng DỮ LIỆU.
+    /// Nối thẳng thì ngày có thứ hai cần nghe cùng gói tin (âm thanh nhặt đồ, nhiệm vụ "thu thập 10
+    /// cái") là phải sửa handler. Bắn event thì chỉ thêm một người nghe.
+    /// </summary>
+    public sealed class InventoryNetHandler : INetHandlerGroup
+    {
+        public event Action<InventorySnapshotNotice> OnSnapshot;
+        public event Action<InventoryDeltaNotice> OnDelta;
+
+        [NetHandler(NetCmd.InventorySnapshot)]
+        private void HandleSnapshot(NetPacket packet)
+        {
+            OnSnapshot?.Invoke(packet.GetData<InventorySnapshotNotice>());
+        }
+
+        [NetHandler(NetCmd.InventoryDelta)]
+        private void HandleDelta(NetPacket packet)
+        {
+            OnDelta?.Invoke(packet.GetData<InventoryDeltaNotice>());
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Inventory/InventoryModel.cs`** (file mới, nguyên văn):
 
 ```csharp
 using System;
@@ -574,11 +1803,16 @@ namespace MMORPG.Client.Inventory
     /// Bản sao túi đồ của chính mình, do server gửi xuống. Cùng luật với LocalPlayer ở Phase 5:
     /// cache chỉ-đọc, không phải nguồn sự thật, không có setter công khai.
     ///
-    /// Ngày nào có `inventory[3].Quantity--` ở đâu đó trong code UI là ngày golden rule #2 bị phá —
+    /// Ngày nào có <c>inventory[3].Quantity--</c> ở đâu đó trong code UI là ngày golden rule #2 bị phá —
     /// và triệu chứng sẽ là "số lượng hiển thị sai cho tới lúc relog", loại bug không ai tìm ra.
     /// </summary>
     public sealed class InventoryModel
     {
+        /// <summary>
+        /// Phải khớp <c>Inventory.SLOT_COUNT</c> bên server. Hai hằng số rời nhau ở hai bên là hai
+        /// con số sẽ lệch nhau — nhưng đưa nó vào Shared thì nó thành một phần của contract, và đổi
+        /// số ô là đổi contract thật. Chấp nhận hai hằng, và bù bằng phép kiểm biên ở ApplyDelta.
+        /// </summary>
         public const int SLOT_COUNT = 30;
 
         private readonly InventorySlotDto[] _slots = new InventorySlotDto[SLOT_COUNT];
@@ -598,13 +1832,18 @@ namespace MMORPG.Client.Inventory
         {
             Array.Clear(_slots, 0, _slots.Length);
 
+            foreach (InventorySlotDto slot in snapshot.Slots)
+            {
+                if (slot.Slot < 0 || slot.Slot >= SLOT_COUNT)
+                    continue;
+
+                _slots[slot.Slot] = slot;
+            }
+
             var changed = new int[SLOT_COUNT];
 
             for (int i = 0; i < SLOT_COUNT; i++)
                 changed[i] = i;
-
-            foreach (InventorySlotDto slot in snapshot.Slots)
-                _slots[slot.Slot] = slot;
 
             // Snapshot = "mọi ô vừa đổi". Nhờ vậy panel chỉ có MỘT đường vẽ lại, không phải hai.
             OnSlotsChanged?.Invoke(changed);
@@ -612,26 +1851,422 @@ namespace MMORPG.Client.Inventory
 
         public void ApplyDelta(InventoryDeltaNotice delta)
         {
-            var changed = new int[delta.Slots.Length];
+            // Dựng danh sách bằng List chứ không mảng cùng độ dài với delta: một ô ngoài phạm vi bị
+            // bỏ qua sẽ để lại số 0 trong mảng, và số 0 là một ô HỢP LỆ — panel sẽ vẽ lại ô 0 mà
+            // không có lý do nào.
+            var changed = new System.Collections.Generic.List<int>(delta.Slots.Length);
 
-            for (int i = 0; i < delta.Slots.Length; i++)
+            foreach (InventorySlotDto slot in delta.Slots)
             {
-                InventorySlotDto slot = delta.Slots[i];
-
                 // Gói tin đến từ mạng, và mạng thì không bảo đảm gì cả. Kiểm biên ở đây chứ không tin:
                 // server hiện tại đúng, nhưng một server phiên bản khác thì chưa chắc.
                 if (slot.Slot < 0 || slot.Slot >= SLOT_COUNT)
                     continue;
 
                 _slots[slot.Slot] = slot;
-                changed[i] = slot.Slot;
+                changed.Add(slot.Slot);
             }
 
-            OnSlotsChanged?.Invoke(changed);
+            if (changed.Count == 0)
+                return;
+
+            OnSlotsChanged?.Invoke(changed.ToArray());
+        }
+
+        /// <summary>Quên sạch khi rời world. Gọi cùng chỗ với <c>LocalPlayer.Clear</c>.</summary>
+        public void Clear()
+        {
+            Array.Clear(_slots, 0, _slots.Length);
         }
     }
 }
 ```
+
+**`Assets/Game/Scripts/Inventory/InventoryApi.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.Client.Network;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+
+namespace MMORPG.Client.Inventory
+{
+    /// <summary>
+    /// Gom mọi lệnh túi đồ mà client GỬI ĐI. Đối xứng với
+    /// <see cref="Network.Handlers.InventoryNetHandler"/> ở chiều nhận.
+    ///
+    /// Không đụng InventoryModel một dòng nào — và đó là toàn bộ ý nghĩa của class này. Bấm "dùng"
+    /// thì UI KHÔNG giảm số lượng: nó gửi gói, rồi chờ. Server đổi, server gửi delta, model đổi, UI
+    /// vẽ lại. Có một nhịp trễ bằng RTT, và nhịp trễ ấy là cái giá của việc luôn hiển thị sự thật.
+    /// </summary>
+    public sealed class InventoryApi
+    {
+        private readonly NetService _netService;
+
+        public InventoryApi(NetService netService)
+        {
+            _netService = netService;
+        }
+
+        public void Use(int slot)
+        {
+            _netService.Send(NetCmd.ItemUse, new ItemUseRequest { Slot = slot });
+        }
+
+        public void Drop(int slot, int quantity)
+        {
+            _netService.Send(NetCmd.ItemDrop, new ItemDropRequest { Slot = slot, Quantity = quantity });
+        }
+
+        public void Move(int fromSlot, int toSlot)
+        {
+            // Kéo lên chính nó là không có ý định gì — chặn ở đây để không tốn một vòng đi-về chỉ để
+            // server trả lời "không đổi gì". Server vẫn kiểm lại: client là dữ liệu của người lạ.
+            if (fromSlot == toSlot)
+                return;
+
+            _netService.Send(NetCmd.ItemMove, new ItemMoveRequest { FromSlot = fromSlot, ToSlot = toSlot });
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Inventory/InventoryPresenter.cs`** (file mới, nguyên văn) — MonoBehaviour
+cắm sẵn trong scene, **không** phải panel:
+
+```csharp
+using HungNT;
+using MMORPG.Client.Network.Handlers;
+using MMORPG.Shared.Dto.Inventory;
+using UnityEngine;
+using VContainer;
+
+namespace MMORPG.Client.Inventory
+{
+    /// <summary>
+    /// Nối mạng với model, và mở/đóng panel. Đây là chỗ DUY NHẤT biết cả hai bên — panel không biết
+    /// mạng tồn tại, handler không biết panel tồn tại.
+    ///
+    /// MonoBehaviour cắm sẵn trong scene (không phải panel): nó phải sống cả khi túi đang đóng, vì
+    /// gói delta vẫn tới khi người chơi không mở túi. Bỏ qua chúng lúc đóng là mở ra lại thấy dữ
+    /// liệu cũ.
+    /// </summary>
+    public sealed class InventoryPresenter : MonoBehaviour
+    {
+        private InventoryNetHandler _inventoryNetHandler;
+        private InventoryModel _inventoryModel;
+
+        [Inject]
+        public void Construct(InventoryNetHandler inventoryNetHandler, InventoryModel inventoryModel)
+        {
+            _inventoryNetHandler = inventoryNetHandler;
+            _inventoryModel = inventoryModel;
+        }
+
+        private void Start()
+        {
+            _inventoryNetHandler.OnSnapshot += OnSnapshot;
+            _inventoryNetHandler.OnDelta += OnDelta;
+        }
+
+        private void OnDestroy()
+        {
+            if (_inventoryNetHandler == null)
+                return;
+
+            _inventoryNetHandler.OnSnapshot -= OnSnapshot;
+            _inventoryNetHandler.OnDelta -= OnDelta;
+        }
+
+        private void OnSnapshot(InventorySnapshotNotice snapshot)
+        {
+            this.Log($"Nhận snapshot túi: {InventoryModel.SLOT_COUNT} ô, {snapshot.Slots.Length} ô có đồ");
+            _inventoryModel.ApplySnapshot(snapshot);
+        }
+
+        private void OnDelta(InventoryDeltaNotice delta)
+        {
+            _inventoryModel.ApplyDelta(delta);
+        }
+    }
+}
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — client: <code>InventoryPanel</code> và <code>InventorySlotView</code></b></summary>
+
+**`Assets/Game/Scripts/Inventory/InventorySlotView.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.World.Item;
+using TMPro;
+using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.UI;
+
+namespace MMORPG.Client.Inventory
+{
+    /// <summary>
+    /// Một ô túi trên màn hình. Chỉ VẼ và báo người chơi vừa chạm vào nó — không biết mạng, không
+    /// biết model, không tự đổi gì.
+    ///
+    /// Kéo-thả làm bằng ba interface của EventSystem thay vì tự đọc chuột trong Update: Unity đã lo
+    /// chuyện "con trỏ đang ở trên UI nào" rồi, và tự làm lại thì sai ở đúng chỗ khó thấy nhất —
+    /// khi có hai panel chồng nhau.
+    /// </summary>
+    public sealed class InventorySlotView : MonoBehaviour,
+        IPointerClickHandler, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+    {
+        [SerializeField] private Image _icon;
+        [SerializeField] private TMP_Text _quantityText;
+        [SerializeField] private CanvasGroup _canvasGroup;
+
+        private InventoryPanel _panel;
+
+        /// <summary>Số thứ tự ô, gán một lần lúc panel dựng lưới. Đây là thứ mọi lệnh gửi lên server dùng.</summary>
+        public int Slot { get; private set; }
+
+        public void Init(InventoryPanel panel, int slot)
+        {
+            _panel = panel;
+            Slot = slot;
+        }
+
+        /// <summary>
+        /// Vẽ lại ô theo dữ liệu model. Nhận DTO chứ không tự hỏi model: ô không có lý do gì để biết
+        /// model tồn tại, và nhận dữ liệu vào thì test nó bằng một dòng.
+        /// </summary>
+        public void Render(InventorySlotDto data)
+        {
+            // TemplateId = 0 là ô trống — cùng quy ước với server, và là lý do không có gói "xoá ô".
+            if (data.TemplateId == 0)
+            {
+                _icon.enabled = false;
+                _quantityText.text = string.Empty;
+                return;
+            }
+
+            ItemConfig config = ItemConfigContainer.Find(data.TemplateId);
+
+            // Id lạ: bảng item của client cũ hơn server. Vẽ ô trống chứ không ném — người chơi mất
+            // một icon, không mất cả màn hình.
+            if (config == null)
+            {
+                _icon.enabled = false;
+                _quantityText.text = "?";
+                return;
+            }
+
+            _icon.enabled = true;
+            _icon.sprite = Resources.Load<Sprite>(config.IconKey);
+
+            // Số "1" trên mọi ô là nhiễu thị giác — chỉ hiện khi thật sự có một chồng.
+            _quantityText.text = data.Quantity > 1 ? data.Quantity.ToString() : string.Empty;
+        }
+
+        public void OnPointerClick(PointerEventData eventData)
+        {
+            // Chuột phải = dùng. Kéo-thả đã chiếm chuột trái, nên nút còn lại là chỗ cho thao tác
+            // thứ hai — cùng quy ước với phần lớn MMO, tức là thứ người chơi đã biết sẵn.
+            if (eventData.button == PointerEventData.InputButton.Right)
+                _panel.RequestUse(Slot);
+        }
+
+        public void OnBeginDrag(PointerEventData eventData)
+        {
+            // Tắt raycast của CHÍNH ô đang kéo: nếu không thì nó chắn con trỏ và OnDrop của ô bên
+            // dưới không bao giờ chạy — thả ở đâu cũng "không có gì xảy ra".
+            _canvasGroup.blocksRaycasts = false;
+            _canvasGroup.alpha = 0.6f;
+        }
+
+        public void OnDrag(PointerEventData eventData)
+        {
+            // Không di chuyển ô thật: chỉ đổi hình con trỏ. Ô là một phần của lưới layout, kéo nó ra
+            // khỏi chỗ là layout tính lại và cả lưới nhảy.
+        }
+
+        public void OnEndDrag(PointerEventData eventData)
+        {
+            _canvasGroup.blocksRaycasts = true;
+            _canvasGroup.alpha = 1f;
+        }
+
+        public void OnDrop(PointerEventData eventData)
+        {
+            var source = eventData.pointerDrag == null
+                ? null
+                : eventData.pointerDrag.GetComponent<InventorySlotView>();
+
+            if (source == null || source == this)
+                return;
+
+            _panel.RequestMove(source.Slot, Slot);
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Inventory/InventoryPanel.cs`** (file mới, nguyên văn):
+
+```csharp
+using HungNT.UI.Panel;
+using UnityEngine;
+using VContainer;
+
+namespace MMORPG.Client.Inventory
+{
+    /// <summary>
+    /// Panel túi đồ: dựng lưới 30 ô, vẽ lại ĐÚNG những ô model báo vừa đổi, và chuyển thao tác của
+    /// người chơi sang <see cref="InventoryApi"/>.
+    ///
+    /// Không có một dòng nào ghi vào model. Bấm dùng thì gửi gói rồi chờ delta — xem ghi chú ở
+    /// InventoryApi về nhịp trễ RTT.
+    /// </summary>
+    public sealed class InventoryPanel : UIPanelBase
+    {
+        [SerializeField] private InventorySlotView _slotPrefab;
+        [SerializeField] private Transform _slotRoot;
+
+        private readonly InventorySlotView[] _slots = new InventorySlotView[InventoryModel.SLOT_COUNT];
+
+        private InventoryModel _inventoryModel;
+        private InventoryApi _inventoryApi;
+
+        /// <summary>
+        /// Panel sinh lúc runtime từ prefab, nên VContainer không tự inject — PanelManager gọi
+        /// Instantiate, không phải container. Đưa phụ thuộc vào tay ngay sau ShowPanel.
+        /// </summary>
+        [Inject]
+        public void Construct(InventoryModel inventoryModel, InventoryApi inventoryApi)
+        {
+            _inventoryModel = inventoryModel;
+            _inventoryApi = inventoryApi;
+        }
+
+        private void Awake()
+        {
+            for (int slot = 0; slot < _slots.Length; slot++)
+            {
+                InventorySlotView view = Instantiate(_slotPrefab, _slotRoot);
+                view.name = $"Slot_{slot}";
+                view.Init(this, slot);
+
+                _slots[slot] = view;
+            }
+        }
+
+        /// <summary>
+        /// Đăng ký ở OnEnable chứ không Awake, và vẽ lại TOÀN BỘ ngay sau đó.
+        ///
+        /// Lý do thứ nhất: panel có thể được cache và bật/tắt nhiều lần (xem <c>CanCache</c>), nên
+        /// Awake chỉ chạy một lần còn OnEnable chạy mỗi lần mở.
+        ///
+        /// Lý do thứ hai, quan trọng hơn: trong lúc panel đóng, model vẫn nhận delta — presenter
+        /// sống độc lập với panel. Không vẽ lại lúc mở thì lưới hiển thị trạng thái của lần đóng
+        /// trước, và nó sẽ đúng dần lên theo từng delta tiếp theo, tức là sai theo cách khó tin nhất.
+        /// </summary>
+        private void OnEnable()
+        {
+            if (_inventoryModel == null)
+                return;
+
+            _inventoryModel.OnSlotsChanged += OnSlotsChanged;
+
+            RenderAll();
+        }
+
+        private void OnDisable()
+        {
+            if (_inventoryModel == null)
+                return;
+
+            _inventoryModel.OnSlotsChanged -= OnSlotsChanged;
+        }
+
+        public void RequestUse(int slot)
+        {
+            _inventoryApi.Use(slot);
+        }
+
+        public void RequestMove(int from, int to)
+        {
+            _inventoryApi.Move(from, to);
+        }
+
+        public void RequestDrop(int slot, int quantity)
+        {
+            _inventoryApi.Drop(slot, quantity);
+        }
+
+        /// <summary>Vẽ lại đúng những ô vừa đổi. Danh sách này đến từ server, đi qua model, không ai tính lại.</summary>
+        private void OnSlotsChanged(int[] slots)
+        {
+            foreach (int slot in slots)
+            {
+                if (slot < 0 || slot >= _slots.Length)
+                    continue;
+
+                _slots[slot].Render(_inventoryModel.Get(slot));
+            }
+        }
+
+        private void RenderAll()
+        {
+            for (int slot = 0; slot < _slots.Length; slot++)
+                _slots[slot].Render(_inventoryModel.Get(slot));
+        }
+    }
+}
+```
+
+**Prefab phải dựng bằng tay trong Unity** (code không thay được phần này):
+
+- `Resources/UI/InventoryPanel.prefab` — gắn `InventoryPanel`, một `GridLayoutGroup` làm
+  `_slotRoot`, và trỏ `_slotPrefab` sang prefab ô.
+- `Resources/UI/InventorySlot.prefab` — gắn `InventorySlotView`, bên trong có `Image` (icon),
+  `TMP_Text` (số lượng), và một `CanvasGroup` **trên chính GameObject của ô** (kéo-thả cần nó).
+- Scene cần một `EventSystem`; không có nó thì không interface kéo-thả nào chạy, và **không có
+  lỗi nào cả**.
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — <code>GameLifetimeScope</code>: năm dòng dễ quên nhất</b></summary>
+
+**`Assets/Game/Scripts/Boot/GameLifetimeScope.cs`** — thêm vào cuối `Configure`:
+
+```csharp
+            // Túi đồ. Năm dòng, và thiếu dòng nào cũng KHÔNG có lỗi biên dịch:
+            //   · thiếu .As<INetHandlerGroup>()  → gói InventorySnapshot/Delta rơi vào hư không
+            //   · thiếu InventoryModel           → VContainer không dựng nổi InventoryPresenter
+            //   · thiếu RegisterComponentInHierarchy → [Inject] không chạy, field giữ null
+            builder.Register<InventoryNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+            builder.Register<InventoryModel>(Lifetime.Singleton);
+            builder.Register<InventoryApi>(Lifetime.Singleton);
+            builder.RegisterComponentInHierarchy<InventoryPresenter>();
+
+            // PanelManager có sẵn trong scene — đăng ký một lần ở đây, từ đây mỗi panel mới chỉ
+            // tốn một prefab + một class.
+            builder.RegisterComponentInHierarchy<PanelManager>().As<IUIManager>();
+```
+
+Thêm hai `using`: `MMORPG.Client.Inventory` và `HungNT.UI.Panel`.
+
+`InventoryPanel` **không** đăng ký ở đây: nó sinh từ prefab lúc runtime, nên VContainer không
+thấy nó. Chỗ nào gọi `ShowPanel<InventoryPanel>` thì phải tự inject vào — cùng cách
+`WorldSpawner` đưa phụ thuộc vào `PlayerMotor` ở Phase 12:
+
+```csharp
+            var panel = _uiManager.ShowPanel<InventoryPanel>(new PanelOptions("UI/InventoryPanel"));
+            _objectResolver.Inject(panel);
+```
+
+(`IObjectResolver` inject được vào bất kỳ class nào VContainer quản lý — xin nó qua constructor
+như mọi service khác.)
 
 </details>
 

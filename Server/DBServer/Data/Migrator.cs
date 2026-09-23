@@ -40,7 +40,7 @@ namespace MMORPG.DBServer.Data
                 -- Ràng buộc UNIQUE ở DB, không phải ở code. Xem giải thích ở AccountRepository.CreateAsync.
                 CREATE UNIQUE INDEX idx_account_username ON account (username);
                 """),
-            
+
             (3, """
                 CREATE TABLE character (
                     id         INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -54,6 +54,20 @@ namespace MMORPG.DBServer.Data
                     pos_y      REAL    NOT NULL,
                     created_at TEXT    NOT NULL
                 );
+                """),
+
+            (4, """
+                CREATE TABLE inventory_item (
+                    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+                    character_id INTEGER NOT NULL REFERENCES character(id) ON DELETE CASCADE,
+                    template_id  INTEGER NOT NULL,
+                    quantity     INTEGER NOT NULL,
+                    slot         INTEGER NOT NULL
+                );
+
+                -- Một ô chỉ chứa được một chồng. Ràng buộc ở DB chứ không ở code, cùng lý do với
+                -- UNIQUE(account_id) của bảng character.
+                CREATE UNIQUE INDEX idx_inventory_slot ON inventory_item (character_id, slot);
                 """),
         };
 

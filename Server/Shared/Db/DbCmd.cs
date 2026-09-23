@@ -56,5 +56,21 @@ namespace MMORPG.Shared.Db
         CharacterSavePosition = 1201,
 
         #endregion
+
+        #region Inventory (1300–1399)
+
+        /// <summary>
+        /// Đọc cả túi của một nhân vật.
+        /// Request: <see cref="Dto.Db.InventoryLoadRequest"/> · Response: <see cref="Dto.Db.InventoryLoadResponse"/>
+        /// </summary>
+        InventoryLoad = 1300,
+
+        /// <summary>
+        /// Ghi TOÀN BỘ túi: xoá sạch rồi ghi lại trong một transaction. Không có "lưu một ô".
+        /// Request: <see cref="Dto.Db.InventorySaveRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
+        /// </summary>
+        InventorySave = 1301,
+
+        #endregion
     }
 }

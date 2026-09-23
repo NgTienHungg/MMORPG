@@ -25,9 +25,6 @@ namespace MMORPG.GameServer.Config
     /// </summary>
     public sealed class ConfigService
     {
-        /// <summary>Tên file loại A. Ở đây chứ không ở <see cref="ConfigFiles"/> vì client không bao giờ có nó.</summary>
-        private const string GAME = "game";
-
         /// <summary>
         /// <c>MissingMemberHandling.Error</c>, khác file map: file trong Config/ do người gõ tay, nên
         /// gõ nhầm "Gravty" phải là lỗi chứ không phải một giá trị âm thầm về mặc định. Client dùng
@@ -68,7 +65,7 @@ namespace MMORPG.GameServer.Config
         /// </summary>
         public void Load()
         {
-            LoadFile<GameConfigData>(GAME, ValidateGame, ApplyGame, WhenBroken.UseDefaults);
+            LoadFile<GameConfigData>(ConfigFiles.GAME, ValidateGame, ApplyGame, WhenBroken.UseDefaults);
             LoadTable<CharacterTableData>(ConfigFiles.CHARACTERS, ValidateCharacters, CharacterConfigContainer.Load);
             LoadTable<ItemTableData>(ConfigFiles.ITEMS, ValidateItems, ItemConfigContainer.Load);
         }

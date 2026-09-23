@@ -6,6 +6,7 @@ using MMORPG.GameServer.Boot;
 using MMORPG.GameServer.Config;
 using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
+using MMORPG.Shared.World.Character;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -33,6 +34,8 @@ catch (Exception ex)
     return 1;
 }
 
+var config = ServerServices.Get<ConfigService>();
+var worldService = ServerServices.Get<WorldService>();
 var gameLoop = ServerServices.Get<GameLoop>();
 
 var listener = new TcpListener(IPAddress.Any, port);
@@ -48,6 +51,62 @@ Console.CancelKeyPress += (_, e) =>
 };
 
 //----------------------------------------------------------------------------------------------------
+
+#region === Console Key ===
+
+// ĐẶT KHỐI NÀY TRƯỚC vòng `while (!cts.IsCancellationRequested) { ... AcceptTcpClientAsync ... }`.
+//
+// Đây là chỗ dễ sai nhất của cả bước, và sai thì KHÔNG có lỗi biên dịch: đặt nó sau vòng accept thì
+// luồng phím chỉ khởi động lúc server đang tắt, tức là phím R không bao giờ có tác dụng — mà triệu
+// chứng lại giống hệt "hot reload chưa chạy".
+//
+// Vòng đọc phím nằm ở LUỒNG RIÊNG, không trộn vào vòng accept. Console.ReadKey chặn cả luồng, nên
+// đặt chung là không ai vào được game cho tới khi bạn gõ một phím.
+//
+// Thread chứ không Task.Run: đây là blocking I/O, không phải việc CPU. Nhét nó vào thread pool là
+// chiếm một worker suốt đời process. IsBackground = true để nó không giữ process sống lúc thoát.
+var console = new Thread(() =>
+{
+    // Không có bàn phím thì không có gì để đọc: chạy qua dịch vụ Windows, qua Docker, hay đơn giản
+    // là `MMORPG.GameServer.exe < nul`. ReadKey trong hoàn cảnh đó ném InvalidOperationException, và
+    // vì nó ở luồng riêng nên exception ấy KHÔNG ai bắt — .NET kết luận process phải chết. Server
+    // tắt ngóm vì một phím tiện lợi lúc dev là cái giá không đáng trả.
+    if (Console.IsInputRedirected)
+    {
+        Log.Info("stdin bị chuyển hướng — tắt phím điều khiển (R/H/K/J).");
+        return;
+    }
+
+    while (!cts.IsCancellationRequested)
+    {
+        switch (Console.ReadKey(intercept: true).Key)
+        {
+            case ConsoleKey.R:
+                config.Load();
+                break;
+
+            // Ba phím thử, chạy cùng vòng lặp này.
+            case ConsoleKey.H:
+                worldService.EnqueueForceAll(ActionState.Hurt);
+                break;
+
+            case ConsoleKey.K:
+                worldService.EnqueueForceAll(ActionState.Die);
+                break;
+
+            case ConsoleKey.J:
+                worldService.EnqueueReviveAll();
+                break;
+        }
+    }
+})
+{
+    IsBackground = true,
+};
+
+console.Start();
+
+#endregion
 
 _ = gameLoop.RunAsync(cts.Token);
 

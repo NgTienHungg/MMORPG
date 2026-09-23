@@ -10,6 +10,8 @@ namespace MMORPG.Shared.World
     /// </summary>
     public static class ConfigFiles
     {
+        public const string GAME = "game";
+
         public const string CHARACTERS = "characters";
 
         public const string ITEMS = "items";
