@@ -1,3 +1,4 @@
+using MMORPG.GameServer.Boot;
 using MMORPG.GameServer.Db;
 using MMORPG.GameServer.Net;
 using MMORPG.ServerCore;
@@ -10,8 +11,8 @@ namespace MMORPG.GameServer.Handlers
 {
     public static class SystemHandler
     {
-        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
-        public static DbClient DbClient { get; set; }
+        // Xem ghi chú ở AuthHandler: property tra lúc DÙNG, không phải field khởi tạo lúc nạp class.
+        private static DbClient DbClient => ServerServices.Get<DbClient>();
 
         [TcpHandler(NetCmd.Ping)]
         public static Task<NetResult> OnPing(NetRequest req)

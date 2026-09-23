@@ -29,16 +29,40 @@
                  CopyToOutputDirectory="PreserveNewest"/>
     </ItemGroup>
 
+    <!--
+    Config loại A: CHỈ server đọc. Ở gốc repo vì nó là dữ liệu vận hành, và cố tình KHÔNG nằm dưới
+    Assets/ — game.json chứa bán kính AOI và map khởi đầu, là số của thuật toán server. Ship nó
+    trong bản build của client là cho người chơi đọc cách server hoạt động.
+    -->
     <ItemGroup>
         <Content Include="..\..\Config\*.json"
                  Link="Data\Config\%(Filename)%(Extension)"
                  CopyToOutputDirectory="PreserveNewest"/>
     </ItemGroup>
 
-    <Target Name="CheckMapFolder" BeforeTargets="Build">
+    <!--
+    Config loại B: CẢ HAI BÊN cùng đọc. Nguồn nằm trong Resources của client — đó là bên phải có
+    file lúc chạy mà không tải gì thêm — và build copy sang server, đúng chiều và đúng khuôn với
+    file map ở trên.
+
+    Một nguồn trên đĩa, hai bản trong hai output. Hai bản thì lệch được (build lại một bên mà quên
+    bên kia), nên EnterWorldResponse mang vân tay từng bảng để client tự phát hiện — xem
+    ConfigService ở cả hai bên.
+    -->
+    <ItemGroup>
+        <Content Include="..\..\Assets\Game\Resources\Config\*.json"
+                 Link="Data\Config\%(Filename)%(Extension)"
+                 CopyToOutputDirectory="PreserveNewest"/>
+    </ItemGroup>
+
+    <Target Name="CheckDataFolders" BeforeTargets="Build">
         <!-- Glob không khớp file nào thì MSBuild im lặng. Biến sự im lặng đó thành lỗi build. -->
         <Error Condition="!Exists('$(MSBuildProjectDirectory)/../../Assets/Game/Resources/Maps')"
                Text="Không thấy Assets/Game/Resources/Maps. Chạy Tools/MMORPG/Export Map trong Unity trước đã."/>
+        <Error Condition="!Exists('$(MSBuildProjectDirectory)/../../Assets/Game/Resources/Config')"
+               Text="Không thấy Assets/Game/Resources/Config. Bảng loại B (characters.json, items.json) nằm ở đó."/>
+        <Error Condition="!Exists('$(MSBuildProjectDirectory)/../../Config')"
+               Text="Không thấy Config/ ở gốc repo. game.json (config loại A, chỉ server đọc) nằm ở đó."/>
     </Target>
 
 </Project>

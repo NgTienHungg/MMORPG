@@ -8,7 +8,7 @@ namespace MMORPG.Shared.World.Map
     ///
     /// Tách hai kiểu vì hai vai khác nhau: trường nào có trong file là chuyện của ĐỊNH DẠNG, còn tra
     /// một ô nhanh cỡ nào là chuyện của MÔ PHỎNG. Gộp lại thì mỗi lần đổi định dạng là đụng vào thứ
-    /// chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (DB) ≠ PlayerEntity (world) ở Phase 5.
+    /// chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (hàng DB) ≠ PlayerEntity (world).
     ///
     /// Tên trường trong file LẤY THẲNG tên property, không có [JsonProperty] nào. Đổi lại sự gọn gàng
     /// ấy: tên property ở đây LÀ định dạng file, nên đổi tên một property là đổi định dạng — phải tăng
@@ -17,24 +17,30 @@ namespace MMORPG.Shared.World.Map
     /// </summary>
     public sealed class MapConfig
     {
+        /// <summary>Phiên bản ĐỊNH DẠNG file, đối chiếu với <see cref="MapGridParser.FORMAT_VERSION"/>.</summary>
         public int Version { get; set; }
 
+        /// <summary>Id của map, khoá tra trong sổ map ở mỗi bên.</summary>
         public int Id { get; set; }
 
+        /// <summary>Tên để đọc log cho dễ.</summary>
         public string Name { get; set; } = string.Empty;
 
         /// <summary>
-        /// Khoá tài nguyên của prefab chứa HÌNH của map — thứ Resources.Load nhận. Là khoá chứ không
-        /// phải đường dẫn hệ thống tệp: server đọc cùng file này và nó không biết gì về bố cục thư mục
-        /// của project Unity. Thiếu trường thì về chuỗi rỗng — map không có hình riêng, và server thì
-        /// không đọc trường này bao giờ.
+        /// Khoá tài nguyên của prefab chứa HÌNH map, thứ Resources.Load nhận — khoá chứ không phải
+        /// đường dẫn hệ thống tệp, vì server đọc cùng file này mà không biết gì về bố cục thư mục
+        /// của project Unity. Chuỗi rỗng nghĩa là map không có hình riêng.
         /// </summary>
         public string PrefabKey { get; set; } = string.Empty;
 
-        // Cho phép null có chủ đích: file thiếu trường thì Newtonsoft để null, và MapFile.Parse phải
-        // nói ra bằng một thông điệp đọc được — thay vì để NullReferenceException nổ ở đâu đó xa hơn.
+        /// <summary>
+        /// Ô dưới-trái của vùng đã vẽ. Cho phép null có chủ đích: file thiếu trường thì Newtonsoft để
+        /// null, và <see cref="MapGridParser.Parse"/> nói ra bằng một thông điệp đọc được thay vì để
+        /// NullReferenceException nổ ở đâu đó xa hơn.
+        /// </summary>
         public CellPoint? Origin { get; set; }
 
+        /// <summary>Các chỗ người chơi có thể xuất hiện. Map không có điểm nào thì không chơi được.</summary>
         public List<SpawnPoint>? Spawns { get; set; }
 
         /// <summary>
@@ -76,11 +82,19 @@ namespace MMORPG.Shared.World.Map
     /// </summary>
     public sealed class Portal
     {
+        /// <summary>Tâm vùng, toạ độ world.</summary>
         public float X { get; set; }
+
+        /// <summary>Tâm vùng, toạ độ world.</summary>
         public float Y { get; set; }
+
+        /// <summary>Bề ngang vùng, tính cả hai phía của tâm.</summary>
         public float Width { get; set; }
+
+        /// <summary>Bề cao vùng, tính cả hai phía của tâm.</summary>
         public float Height { get; set; }
 
+        /// <summary>Map sẽ sang.</summary>
         public int ToMapId { get; set; }
 
         /// <summary>Id điểm spawn ở map đích. Không có điểm nào mang tên này thì về điểm mặc định.</summary>

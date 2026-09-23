@@ -1,6 +1,6 @@
+using MMORPG.GameServer.Config;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Dto.Db;
-using MMORPG.Shared.World;
 using MMORPG.Shared.World.Map;
 
 namespace MMORPG.GameServer.World
@@ -58,7 +58,7 @@ namespace MMORPG.GameServer.World
                 _byId[map.MapId] = map;
 
                 Log.Info($"Map {map.Name.Cyan()} #{map.MapId} — {map.Width}×{map.Height} ô, " +
-                         $"origin ({map.OriginX}, {map.OriginY}), checksum {map.Checksum():X8}");
+                         $"origin ({map.OriginX}, {map.OriginY})");
             }
 
             if (!_byId.TryGetValue(_startingMapId, out MapGrid starting))

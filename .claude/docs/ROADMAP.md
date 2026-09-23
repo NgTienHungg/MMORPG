@@ -74,7 +74,7 @@ Nhóm thành 5 chặng. **Không nhảy cóc** — mỗi phase dựa trên phase
 | **9** | **State machine trạng thái nhân vật** 🆕 | Nhân vật đổi hình đúng theo việc nó đang làm: idle / walk / jump / fall / crouch. Bấm nút đánh → **server duyệt** → cả hai client cùng thấy anim `attack`, đúng hướng mặt | **Hai tầng trạng thái**: locomotion *suy ra* từ motor (client tự tính, tốn 0 byte) vs action *do server quyết* (đi trong snapshot) · vì sao client không bao giờ được tự bật `hurt`/`die` · bảng chuyển tiếp có ràng buộc thay vì `if` lồng nhau · thời lượng trạng thái đếm bằng **tick**, không bằng độ dài clip |
 | **10** | **Map: hình dạng thật** 🆕 | Vẽ lớp `Collision` trong tilemap → tool Editor export ra file map → **cả server lẫn client cùng đọc đúng file đó**. Có tường chặn, bệ xuyên-một-chiều, khe hẹp phải ngồi mới chui | Va chạm là **luật chơi** nên nó thuộc `Shared` · nhân vật hết là một điểm, nó có **thân** · tách trục X/Y để né câu hỏi không có đáp án đúng · dữ liệu đi **từ Unity sang server** (ngược chiều DLL) và vì sao chiều nào cũng phải để build lo |
 | **11** | **AOI — tầm nhìn + chuyển map** 🆕 | Chỉ nhận gói của người ở gần: chạy xa nhau thì biến mất khỏi màn hình của nhau, chạy lại thì hiện ra. Băng thông tỉ lệ với **mật độ quanh mình**, không phải tổng người online. Rồi bước vào **cổng** là sang hẳn map khác — mà không có dòng code báo tin nào viết riêng cho nó | Spatial partition · interest management theo cột trục X · `EntitySpawn`/`EntityDespawn` đổi từ "sự kiện vào/ra world" thành "hệ quả của tầm nhìn" mà **client không sửa một dòng** · một cơ chế đủ tổng quát thì **tính năng sau nó gần như miễn phí** · phép thử "trạng thái này có thuộc contract không" |
-| **12** | **Data & Config** | Bảng config (tốc độ, trọng lực, spawn) load được, sửa không cần build lại. Phân biệt rõ **config loại A** (chỉ server đọc) và **config loại B** (bảng dữ liệu 2 bên cùng đọc) | Data-driven · 1 nguồn config · hot reload · vì sao "copy file sang cả 2 bên" là bẫy |
+| **12** | **Data & Config** | Bảng config (tốc độ, trọng lực, spawn) load được, sửa không cần build lại. Phân biệt rõ **config loại A** (chỉ server đọc) và **config loại B** (bảng dữ liệu 2 bên cùng đọc) | Data-driven · 1 nguồn config · hot reload · vì sao "copy file sang cả 2 bên" là bẫy · **sổ tra service + composition root ở server** · một hàm nạp cho MỌI bảng |
 
 ### Chặng D — Nội dung game (Phase 13–16)
 > Kết thúc chặng: có một vòng gameplay đủ nhỏ nhưng đầy đủ: mặc đồ → đánh quái → nhận exp và đồ rơi → vào túi → lưu DB.
@@ -148,9 +148,9 @@ server xử lý item B; không lỗi biên dịch, không log, chỉ có bug câ
 |---|---|---|
 | Ví dụ | `moveSpeed`, `gravity`, `jumpForce`, điểm spawn | bảng item, bảng quái, chỉ số gốc theo class, drop table |
 | Ai cần | server xử lý logic; client chỉ cần vài giá trị để dự đoán | **cả 2 bên đều đọc**: server tính logic, client hiển thị tên / icon / mô tả |
-| Cách chữa | **Chỉ server đọc file.** Giá trị nào client cần thì đi trong `EnterWorldResponse` | **Schema** (kiểu C#) đặt ở `Server/Shared/` → 1 nguồn định nghĩa. **Dữ liệu** có 1 bản gốc duy nhất, client kéo về qua Addressables/CDN — **không commit bản copy trong `Assets/`** |
-| Chống lệch bằng gì | Client luôn chạy đúng số của server nó đang nối vào, kể cả 2 server cấu hình khác nhau | Server gửi **hash/version của bảng** lúc login; client lệch version thì **bị chặn vào world** cho tới khi tải bản mới |
-| Làm ở phase nào | Phase 12 | **Bản đồ** (loại B đầu tiên): Phase 10 · trường version + kiểm lúc login: Phase 12 · schema + bảng item: Phase 13 · đường phân phối qua CDN: Phase 18 |
+| Cách chữa | **Chỉ server đọc file.** Giá trị nào client cần thì đi trong `EnterWorldResponse` | **Một nguồn duy nhất trên đĩa**: `Assets/Game/Resources/Config/`, csproj copy sang `Data/Config/` cho server lúc build. **Mỗi bên nạp bản của mình, và mỗi bên tự quyết định nạp bảng nào** — server có bảng client không bao giờ đọc tới (tỉ lệ rơi đồ, AI quái), client có bảng server không cần. Phase 18 đổi `Resources/` thành Addressables/CDN |
+| Chống lệch bằng gì | Client luôn chạy đúng số của server nó đang nối vào, kể cả 2 server cấu hình khác nhau | Hôm nay: **mỗi bên in dấu vân tay ra log** (`ConfigFingerprint.Of`) — đặt hai dòng cạnh nhau là thấy ngay. Phase 18: **một số phiên bản cho cả gói dữ liệu**, kiểm một lần lúc đăng nhập, việc của trình patch. **Không** gửi danh sách vân tay trong `EnterWorldResponse` — nó ép client nạp đúng tập bảng của server và chặn đường tải dần |
+| Làm ở phase nào | Phase 12 | **Bản đồ** (loại B đầu tiên): Phase 10 · trường version + vân tay in log: Phase 12 · schema + bảng item: Phase 13 · phân phối qua CDN + kiểm version lúc login: Phase 18 |
 
 ---
 
@@ -165,6 +165,12 @@ server xử lý item B; không lỗi biên dịch, không log, chỉ có bug câ
 5. Khi phát hiện code có tính hạ tầng, tái dùng cao → ghi vào `CANDIDATE-PACKAGES.md` để cân nhắc tách package.
 
 **Nguyên tắc:** doc mô tả *cái gì* và *vì sao*, kèm code đủ để chép khi bí. Nhưng gõ lại tay vẫn học được nhiều hơn chép.
+
+> **"Đủ để chép" là một yêu cầu cứng, không phải một lời hứa mềm** (chốt 2026-09-22, sau khi Phase 12–14
+> viết hỏng). Mỗi dòng trong bảng "Danh sách file" của một phase phải có một khối code tương ứng trong
+> doc; tên class trong doc phải grep ra được trong repo; và phần client không bao giờ được thiếu. Ba
+> phép đếm để soát, cùng lý do đằng sau, nằm ở `CLAUDE.md` §Viết tài liệu phase và skill
+> `.claude/skills/phase-doc/`. Doc thiếu code không phải "doc xong 80%" — owner sẽ kẹt đúng ở chỗ thiếu.
 
 **Kích thước một phase** (rút ra sau Phase 9 — 2026-08-23): **một phase = một kết quả chạy được, tối đa
 2–3 CHECKPOINT, doc ~400–600 dòng.** Phase 9 dài gấp ba mức đó vì gộp hai việc độc lập (hoạt ảnh theo
@@ -195,7 +201,7 @@ mở lời giải/đáp án sau để đối chiếu.
 | 9 — State machine trạng thái 🆕 | ✅ xong | [`guides/PHASE-9.md`](guides/PHASE-9.md) ✅ (đã soát lại 2026-08-24 cho khớp code đã làm xong) |
 | 10 — Map: hình dạng thật 🆕 | ✅ xong | [`guides/PHASE-10.md`](guides/PHASE-10.md) ✅ (đã soát lại 2026-09-10 cho khớp code đã làm xong: `MapRegistry` tra map theo id thay cho một `MapGrid` cắm cứng trong `WorldService`, client dựng map lúc chạy bằng `MapView` thay vì để sẵn trong scene) |
 | 11 — AOI + chuyển map 🆕 | ✅ xong | [`guides/PHASE-11.md`](guides/PHASE-11.md) ✅ (tách ra từ Phase 10 cũ, 2026-08-24 · soát lại + thêm Bước 2 "chuyển map" 2026-09-10 · sửa bán kính AOI + thêm phép so khoảng cách 2026-09-16) |
-| 12 — Data & Config | ⬜ chưa | [`guides/PHASE-12.md`](guides/PHASE-12.md) ✅ (viết lại toàn bộ 2026-09-17 cho khớp code sau Phase 9–11: chỉ còn 5 hằng toàn cục, bảng `CharacterProfile` thành loại B thứ hai, map chỉ còn phép so checksum) |
+| 12 — Data & Config | ⬜ chưa | [`guides/PHASE-12.md`](guides/PHASE-12.md) ✅ (viết lại toàn bộ 2026-09-17 cho khớp code sau Phase 9–11: chỉ còn 5 hằng toàn cục, bảng `CharacterProfile` thành loại B thứ hai, và **sửa lại 2026-09-22**: bảng loại B cả hai bên tự nạp, không gửi vân tay trên dây, map bỏ `Checksum()`) |
 | 13 — Túi đồ & item | ⬜ chưa | [`guides/PHASE-13.md`](guides/PHASE-13.md) ✅ (viết 2026-09-17) |
 | 14 — Chỉ số nhân vật 🆕 | ⬜ chưa | [`guides/PHASE-14.md`](guides/PHASE-14.md) ✅ (viết 2026-09-17) |
 | 15 — Quái, PvP & EXP | ⬜ chưa | ⬜ chưa viết |

@@ -2,14 +2,10 @@ using System.Net;
 using System.Net.Sockets;
 using System.Text;
 using MMORPG.GameServer;
-using MMORPG.GameServer.Auth;
-using MMORPG.GameServer.Db;
-using MMORPG.GameServer.Handlers;
-using MMORPG.GameServer.Net;
+using MMORPG.GameServer.Boot;
+using MMORPG.GameServer.Config;
 using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
-using MMORPG.Shared.World;
-using MMORPG.Shared.World.Character;
 
 Console.OutputEncoding = Encoding.UTF8;
 
@@ -18,19 +14,26 @@ Console.OutputEncoding = Encoding.UTF8;
 const int port = 7778;
 const int dbPort = 7779;
 
-await using var dbClient = new DbClient("127.0.0.1", dbPort);
-dbClient.Start();
+// Toàn bộ danh sách service nằm trong ServerBootstrap. File này chỉ còn lo VÒNG ĐỜI CỦA PROCESS:
+// mở cổng, nhận kết nối, nghe phím, tắt sạch.
+try
+{
+    ServerBootstrap.Build("127.0.0.1", dbPort);
+}
+catch (Exception ex)
+{
+    // Biên của process là chỗ duy nhất được bắt Exception trần: ở đây không còn ai phía trên để xử lý
+    // tiếp. Và nguyên nhân hay gặp nhất — một file config hoặc file map gõ sai — cần hiện ở dòng đầu
+    // kèm tên file, chứ không nằm sau mười dòng stack của Newtonsoft.
+    Log.Error(ex, "Không boot được, server dừng.");
 
-SystemHandler.DbClient = dbClient;
-AuthHandler.AuthService = new AuthService(dbClient, new LoginRateLimiter());
+    // Dọn những service đã kịp dựng trước khi hỏng: DbClient đang giữ một kết nối mở tới DBServer.
+    await ServerServices.ShutdownAsync();
 
-// Config đọc TRƯỚC mọi thứ khác: MapRegistry và WorldService đều cần số từ nó.
-var config = new ConfigService();
-var maps = new MapRegistry(config);
-var worldService = new WorldService(maps, config);
-CharacterHandler.CharacterService = new CharacterService(dbClient, worldService, maps, config);
+    return 1;
+}
 
-TcpDispatcher.RegisterAll();
+var gameLoop = ServerServices.Get<GameLoop>();
 
 var listener = new TcpListener(IPAddress.Any, port);
 listener.Start();
@@ -46,58 +49,6 @@ Console.CancelKeyPress += (_, e) =>
 
 //----------------------------------------------------------------------------------------------------
 
-#region === Console Key ===
-
-// ĐẶT KHỐI NÀY TRƯỚC vòng `while (!cts.IsCancellationRequested) { ... AcceptTcpClientAsync ... }`.
-//
-// Đây là chỗ dễ sai nhất của cả bước, và sai thì KHÔNG có lỗi biên dịch: đặt nó sau vòng accept thì
-// luồng phím chỉ khởi động lúc server đang tắt, tức là phím R không bao giờ có tác dụng — mà triệu
-// chứng lại giống hệt "hot reload chưa chạy".
-//
-// Vòng đọc phím nằm ở LUỒNG RIÊNG, không trộn vào vòng accept. Console.ReadKey chặn cả luồng, nên
-// đặt chung là không ai vào được game cho tới khi bạn gõ một phím — đó là lý do đoạn code cũ ở đây
-// từng bị comment lại.
-//
-// Thread chứ không Task.Run: đây là blocking I/O, không phải việc CPU. Nhét nó vào thread pool là
-// chiếm một worker suốt đời process. IsBackground = true để nó không giữ process sống lúc thoát.
-var console = new Thread(() =>
-{
-    while (!cts.IsCancellationRequested)
-    {
-        switch (Console.ReadKey(intercept: true).Key)
-        {
-            case ConsoleKey.R:
-                config.Load();
-                break;
-
-            // Ba phím thử của Phase 9, sống lại cùng vòng lặp này.
-            case ConsoleKey.H:
-                worldService.EnqueueForceAll(ActionState.Hurt);
-                break;
-
-            case ConsoleKey.K:
-                worldService.EnqueueForceAll(ActionState.Die);
-                break;
-
-            case ConsoleKey.J:
-                worldService.EnqueueReviveAll();
-                break;
-        }
-    }
-})
-{
-    IsBackground = true,
-};
-
-console.Start();
-
-#endregion
-
-//----------------------------------------------------------------------------------------------------
-
-#region === Game Loop ===
-
-var gameLoop = new GameLoop(worldService);
 _ = gameLoop.RunAsync(cts.Token);
 
 try
@@ -118,7 +69,13 @@ catch (OperationCanceledException)
 finally
 {
     listener.Stop();
+
+    // Đóng mọi service theo chiều ngược thứ tự đăng ký. Thay cho `await using var dbClient` trước
+    // đây: nay sổ giữ service thì sổ cũng giữ trách nhiệm đóng chúng.
+    await ServerServices.ShutdownAsync();
+
     Log.Info("Đã dừng.");
 }
 
-#endregion
+// 0 = dừng bình thường. Mã thoát phải có ở MỌI đường ra vì nhánh boot hỏng trả 1.
+return 0;

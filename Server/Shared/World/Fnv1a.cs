@@ -15,6 +15,21 @@ namespace MMORPG.Shared.World
 
         private const uint PRIME = 16777619u;
 
+        /// <summary>
+        /// Nuốt cả một dãy byte. Đây là lối vào mà <see cref="ConfigFingerprint"/> dùng — băm thẳng
+        /// byte đã tuần tự hoá thay vì liệt kê từng trường bằng tay.
+        /// </summary>
+        public static uint Mix(uint hash, ReadOnlySpan<byte> bytes)
+        {
+            for (int i = 0; i < bytes.Length; i++)
+            {
+                hash ^= bytes[i];
+                hash *= PRIME;
+            }
+
+            return hash;
+        }
+
         /// <summary>Nuốt từng byte một. Cộng thẳng cả int vào thì hai bảng hoán vị vài ô vẫn ra cùng số.</summary>
         public static uint Mix(uint hash, int value)
         {
@@ -25,16 +40,6 @@ namespace MMORPG.Shared.World
             }
 
             return hash;
-        }
-
-        /// <summary>
-        /// Băm BIT của float, không băm chuỗi in ra. 0.1f in ra mấy chữ số là chuyện của ToString và
-        /// của culture; bit thì giống nhau ở mọi nền tảng — mà cái ta cần so là giá trị, không phải
-        /// cách viết nó.
-        /// </summary>
-        public static uint Mix(uint hash, float value)
-        {
-            return Mix(hash, BitConverter.SingleToInt32Bits(value));
         }
 
         public static uint Mix(uint hash, string value)

@@ -3,7 +3,6 @@ using MMORPG.Client.Network;
 using MMORPG.Shared.Dto;
 using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
-using MMORPG.Shared.World;
 using MMORPG.Shared.World.Movement;
 
 namespace MMORPG.Client.World
@@ -13,8 +12,6 @@ namespace MMORPG.Client.World
     /// </summary>
     public sealed class WorldApi
     {
-        public static WorldConfig Config;
-
         private readonly NetService _netService;
 
         public WorldApi(NetService netService)

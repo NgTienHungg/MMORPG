@@ -1,6 +1,7 @@
 using HungNT;
 using HungNT.DataSave;
 using MMORPG.Client.Auth;
+using MMORPG.Client.Config;
 using MMORPG.Client.Network;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Client.World;
@@ -46,6 +47,10 @@ namespace MMORPG.Client.Boot
             builder.Register<SavedLoginStore>(Lifetime.Singleton);
             builder.Register<AuthNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
             builder.RegisterComponentInHierarchy<LoginPresenter>();
+
+            // Config: client đọc file của chính nó trong hàm dựng, TRƯỚC cả màn hình login. Đăng ký
+            // trước nhóm World vì WorldPresenter và WorldSpawner đều inject nó.
+            builder.Register<ConfigService>(Lifetime.Singleton);
 
             // World, EnterWorld
             builder.Register<MapService>(Lifetime.Singleton);

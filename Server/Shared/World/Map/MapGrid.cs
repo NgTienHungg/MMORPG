@@ -203,29 +203,6 @@ namespace MMORPG.Shared.World.Map
         }
 
         /// <summary>
-        /// Dấu vân tay của LƯỚI (FNV-1a). Hai bên in ra cùng một số nghĩa là đang chạy đúng một map —
-        /// bằng chứng rẻ nhất có thể có, và là hạt giống cho phép kiểm version ở Phase 12.
-        ///
-        /// Cố ý không băm danh sách spawn: câu hỏi con số này trả lời là "hai bên có cùng hình dạng va
-        /// chạm không", còn điểm spawn thì chỉ server dùng.
-        /// </summary>
-        public uint Checksum()
-        {
-            uint hash = 2166136261u;
-
-            hash = Mix(hash, MapId);
-            hash = Mix(hash, OriginX);
-            hash = Mix(hash, OriginY);
-            hash = Mix(hash, Width);
-            hash = Mix(hash, Height);
-
-            for (int i = 0; i < _cells.Length; i++)
-                hash = Mix(hash, (int)_cells[i]);
-
-            return hash;
-        }
-
-        /// <summary>
         /// Điểm mang id "default"; không có thì lấy điểm đầu tiên.
         ///
         /// Lùi về điểm đầu chứ không ném: map thiếu điểm mặc định vẫn là map chơi được, và chết lúc
@@ -241,19 +218,6 @@ namespace MMORPG.Shared.World.Map
             }
 
             return spawns[0];
-        }
-
-        // FNV-1a nuốt từng byte một. Cộng thẳng cả int vào thì hai lưới hoán vị vài ô vẫn có thể ra
-        // cùng một số; xor theo byte rồi nhân số nguyên tố ở mỗi bước thì không.
-        private static uint Mix(uint hash, int value)
-        {
-            for (int shift = 0; shift < 32; shift += 8)
-            {
-                hash ^= (uint)((value >> shift) & 0xFF);
-                hash *= 16777619u;
-            }
-
-            return hash;
         }
     }
 }

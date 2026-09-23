@@ -12,6 +12,8 @@ Hướng dẫn cho Claude khi làm việc trong repo này. **Đọc file này + 
 
 1. **Owner tự làm.** Vai trò mặc định của Claude ở repo này là **soạn tài liệu phase + trả lời "vì sao"**, không phải viết hộ code.
    Chỉ code khi owner nói rõ ("code giúp phần X", "làm hộ file Y"). Nghi ngờ thì hỏi.
+   Vì owner gõ theo doc, **doc thiếu code = doc không dùng được**. Luật viết doc ở §[Viết tài liệu phase](#viết-tài-liệu-phase)
+   là bắt buộc, không phải gợi ý.
 2. **Server là source of truth.** Client gửi *ý định*, không tự sửa state (HP, vị trí, túi đồ). Client chỉ cập nhật sau khi
    server xác nhận. Không có ngoại lệ, kể cả cho tiện lúc prototype.
 3. **Client không bao giờ nối DB.** Chuỗi bắt buộc: `Client ──TCP──► GameServer ──TCP nội bộ──► DBServer ──► SQLite/MySQL`.
@@ -34,7 +36,7 @@ Unity Client (Assets/Game)
                                       ▼
                             ┌──────────────────┐
                             │   GameServer     │  tick loop, logic, AOI, entity
-                            │  [TcpHandler]    │
+                            │  [TcpHandler]    │  ServerBootstrap → ServerServices
                             └────────┬─────────┘
                                      │ TCP nội bộ (DbCmd)
                                      ▼
@@ -56,9 +58,14 @@ ServerCore                 ── Log + màu console ─────────
 | `Server/Shared/` | Contract dùng chung: `NetCmd`, DTO, codec — **cũng build ra DLL cho Unity** nên chỉ chứa thứ client cần |
 | `Server/ServerCore/` | Hạ tầng chỉ server dùng (`Log`, `AnsiExtensions`). Đối ứng của `com.hungnt.core` bên client |
 | `Server/GameServer/` | Game server .NET 8 |
+| `Server/GameServer/Boot/` | `ServerServices` (sổ tra service) + `ServerBootstrap` (composition root) |
+| `Server/GameServer/Config/` | `ConfigService` (một hàm nạp cho mọi file), `ConfigLimits`, `GameConfigData` |
 | `Server/DBServer/` | DB server .NET 8 |
+| `Config/` | Config **loại A** ở gốc repo — `game.json`, chỉ server đọc. csproj copy sang `Data/Config/` lúc build |
+| `Assets/Game/Resources/Config/` | Bảng **loại B** — `characters.json`, `items.json`… **Cả hai bên đọc**: client thẳng từ Resources, server từ bản csproj copy sang `Data/Config/` |
 | `.claude/docs/` | Tài liệu kiến trúc + roadmap |
 | `.claude/docs/guides/PHASE-*.md` | Tài liệu từng bước owner làm theo |
+| `.claude/skills/phase-doc/` | Skill bắt buộc khi soạn/sửa tài liệu phase |
 
 **Code client không dùng `.asmdef`** — nằm hết trong `Assembly-CSharp`. Assembly do asmdef định nghĩa không
 tham chiếu được `Assembly-CSharp-firstpass`, mà DOTween Pro nằm ở đó dưới dạng `.cs` trần. Đừng đề xuất tạo
@@ -101,14 +108,34 @@ Cùng scheme với vo-lam-genz. Chi tiết + code: [`guides/PHASE-1.md`](.claude
    ```
    Server quét cả assembly nên handler mới tự chạy; **client thì không** — handler client là method instance,
    phải có container tạo ra thì mới tồn tại. Quên dòng này thì lệnh rơi vào hư không mà **không có lỗi biên dịch**.
-7. UI chỉ đọc state **sau khi** server confirm.
+7. **Server — dễ quên thứ nhì:** nếu lệnh cần một service mới, đăng ký nó vào `ServerBootstrap.Build()`.
+   Quên dòng này cũng **không có lỗi biên dịch** — chỉ có `InvalidOperationException` ở gói tin đầu
+   tiên chạm tới nó, tức là sau khi server đã boot sạch.
+8. UI chỉ đọc state **sau khi** server confirm.
 
 Không đụng vào switch/if-else nào cả — dispatch table tự tìm handler qua attribute.
+Khuôn đầy đủ cho một feature dọc (DB → DAL → service → packet → UI): [`FEATURE-TEMPLATE.md`](.claude/docs/FEATURE-TEMPLATE.md).
 
-### DI phía client — quy tắc sống còn
+### DI hai bên — quy tắc sống còn
 
-`GameLifetimeScope.Configure` là chỗ **duy nhất** biết client có những gì. Mỗi khi thêm một class nhận
-inject qua constructor, phải đăng ký nó ở đây, kể cả khi nó chỉ là dependency của một service khác.
+Mỗi bên có **đúng một** composition root, và mỗi service mới tốn một dòng ở đó:
+
+| Bên | Composition root | Sổ tra | Handler lấy service kiểu gì |
+|-----|------------------|--------|------------------------------|
+| Client | `GameLifetimeScope.Configure` | VContainer | `[Inject]` vào constructor / method |
+| Server | `ServerBootstrap.Build` | `ServerServices` (tự viết) | `private static X X => ServerServices.Get<X>();` |
+
+**Server:** handler là hàm `static` nên không nhét constructor injection vào được — đó là lý do duy
+nhất `ServerServices` tồn tại, và nó **chỉ** được dùng ở biên giới ấy. Mọi service khác nhận phụ
+thuộc qua **constructor** và không gọi `Get<T>()` trong thân hàm. Trong handler thì dùng **property
+`=>`** chứ không field: field static khởi tạo trước `ServerBootstrap.Build()` và sẽ giữ null vĩnh viễn.
+
+`ServerServices.Seal()` chạy sau khi đăng ký hết — từ đó sổ chỉ còn đọc, nên nhiều luồng đọc song song
+không cần khoá gì. Đăng ký sau `Seal()` là ném ngay.
+
+**Client:** `GameLifetimeScope.Configure` là chỗ **duy nhất** biết client có những gì. Mỗi khi thêm một
+class nhận inject qua constructor, phải đăng ký nó ở đây, kể cả khi nó chỉ là dependency của một
+service khác.
 
 Thiếu một dòng đăng ký thì lỗi **không** chỉ vào chỗ thiếu, mà đổ dây chuyền:
 
@@ -146,15 +173,61 @@ Chi tiết đầy đủ: [`.claude/docs/CONVENTIONS.md`](.claude/docs/CONVENTION
 
 **Mọi định danh trong code là tiếng Anh.** Tiếng Việt chỉ dùng cho: comment, XML doc, và chuỗi hiển thị cho người chơi.
 
+### Hậu tố theo vai trò — bộ ba của dữ liệu tĩnh
+
+Chốt 2026-09-22. Mọi bảng dữ liệu game design (nhân vật, item, quái, skill…) đi theo **đúng ba kiểu
+này**, cùng tên gốc, không sáng tạo thêm:
+
+| Hậu tố | Vai trò | Ví dụ |
+|--------|---------|-------|
+| `*Config` | **Một dòng** dữ liệu tĩnh — định nghĩa một loại/một lớp. Bất biến trong suốt phiên chạy | `CharacterConfig`, `ItemConfig`, `WorldConfig` |
+| `*TableData` | **Cả file**: `Version` + mảng `*Config` + `RowCount`, implements `IConfigFile`. Bản đối chiếu 1-1 với JSON | `CharacterTableData`, `ItemTableData` |
+| `*ConfigContainer` | Bảng tra lúc chạy: `static` giữ `Dictionary<id, *Config>`, có `Load(*TableData)` + `Get(id)`/`Find(id)` | `CharacterConfigContainer`, `ItemConfigContainer` |
+
+Cả ba nằm ở `Server/Shared/World/<Feature>/` — client cần đọc bảng nên nó thuộc contract.
+`*ConfigContainer.Load` là **cửa duy nhất** ghi vào bảng: mỗi bên gọi sau khi đọc file của mình.
+Một bảng, hai đường vào, một hàm dựng.
+
+**Map là cùng bộ ba, chỉ khác tên vì khác hình dạng file** (một file một map, không phải một bảng
+nhiều dòng): `MapConfig` (dữ liệu một map) → `MapRegistry` / `MapService` (sổ tra lúc chạy) →
+`MapGrid` (dạng để mô phỏng dùng). Nó **không** phải ngoại lệ, và **không** có hàm băm riêng.
+
+**Không viết `Checksum()` trong `*TableData`.** Dấu vân tay tính bằng `ConfigFingerprint.Of(table)` —
+một hàm dùng chung, băm byte đã tuần tự hoá. Băm tay từng trường là hai chục dòng mỗi bảng mới **và**
+một chế độ hỏng câm: thêm trường mà quên thêm vào hàm băm thì vân tay không còn phát hiện được thay
+đổi ở trường đó. Đối chiếu với `Version`: trường đó nằm **trong file** nên thêm sau là một cuộc di cư,
+còn vân tay thì **tính ra từ file** nên thêm lúc nào cũng được.
+
+**Vân tay là một dòng log, không phải phép kiểm trên dây.** Mỗi bên tự quyết định nạp bảng nào:
+server có bảng client không bao giờ đọc (tỉ lệ rơi đồ, AI quái), client sẽ có bảng thuần hiển thị mà
+server không cần, và Phase 18 cho client tải dần từ CDN. Gửi mảng vân tay rồi bắt hai bên khớp là ép
+client ship đúng những bảng server nạp. Thứ chặn được "client chạy dữ liệu cũ" là số phiên bản của
+**cả gói** dữ liệu, kiểm một lần lúc đăng nhập — việc của trình patch, không phải của `EnterWorldResponse`.
+
+Đừng đặt `*Profile`, `*Definition`, `*Data` trần, `*Profiles` (số nhiều) cho ba vai này nữa —
+tên cũ còn sót trong doc phase là lỗi, báo lại.
+
 ### Comment
-- **Summary (`///`) mô tả đúng hiện tại** — chính xác class/hàm làm gì tại thời điểm viết, không hơn.
-  **Cấm nhắc phase trong code** (kiểu "Phase 7 sẽ dùng", "bài của Phase 4"): người đọc code không có bối cảnh
-  roadmap. Kế hoạch tương lai thuộc về tài liệu phase; khi phase sau đổi hành vi thì update summary lúc đó.
-- **Comment dày trong thân hàm** (phong cách vo-lam-genz): mọi câu lệnh/idiom không hiển nhiên với người
-  chưa theo dự án từ đầu đều đáng được giải thích ngay tại chỗ — semaphore `Wait`/`Release`, `Interlocked`,
-  exception filter `when`, vòng drain queue, `ref` param... Nói rõ **nó làm gì và vì sao cần ở đây**.
-  Dòng tự hiển nhiên (gán thuần, `i++`) thì không comment.
-- Không comment kiểu "trước đây… giờ là…" — code phải đọc như thể luôn được viết như vậy.
+
+Chốt 2026-09-23 sau khi soát lại code Phase 12. Bốn luật, và luật thứ ba với thứ tư là hai lỗi hay gặp nhất:
+
+1. **Mô tả đúng hiện tại.** Summary (`///`) nói class/hàm làm gì tại thời điểm viết, không hơn.
+   **Cấm nhắc phase trong code** (kiểu "Phase 7 sẽ dùng", "bài của Phase 4"): người đọc code không có
+   bối cảnh roadmap. Kế hoạch tương lai thuộc về tài liệu phase.
+2. **Giải thích idiom không hiển nhiên ngay tại chỗ** — semaphore `Wait`/`Release`, `Interlocked`,
+   exception filter `when`, vòng drain queue, `ref` param, struct bị copy trong `foreach`. Nói rõ
+   **nó làm gì và vì sao cần ở đây**. Dòng tự hiển nhiên (gán thuần, `i++`) thì không comment.
+3. **Cấm kể lịch sử.** Không "trước đây…", không "bản cũ…", không "cách cũ có hai cái giá…", không
+   "đừng làm như X nữa", không so với phương án đã bị loại. Code phải đọc như thể **lần đầu đã viết
+   đúng như vậy**. Lý do một phương án bị bác bỏ thuộc về tài liệu phase và commit message, không
+   thuộc về file `.cs`.
+4. **Ngắn và đều tay.**
+   - **Ngắn:** summary một tới ba câu; quá ba câu là dấu hiệu nó đang gánh việc của doc. Comment
+     trong thân hàm một tới hai dòng.
+   - **Đều:** trong một class, các thành viên cùng loại thì cùng mức comment — hoặc mọi field có một
+     dòng, hoặc không field nào có. Một class tám field mà chỉ hai field giữa có `///` trông như bị
+     bỏ dở. Ngoại lệ hợp lệ: một thành viên có cái bẫy thật mà các thành viên kia không có; lúc đó
+     comment **cái bẫy**, đừng mô tả lại tên field.
 
 ### Log — không dùng `Debug.Log` / `Console.WriteLine` trần
 
@@ -220,9 +293,34 @@ Muốn xem chi tiết: `git submodule foreach --quiet 'echo "== $name"; git stat
 | [`.claude/docs/ROADMAP.md`](.claude/docs/ROADMAP.md) | **Bản đồ toàn dự án** — 20 phase, mục tiêu & thứ tự |
 | [`.claude/docs/VOLAMGENZ-REFERENCE.md`](.claude/docs/VOLAMGENZ-REFERENCE.md) | Chắt lọc từ vo-lam-genz: bê gì, tránh gì, file nào đọc để hiểu |
 | [`.claude/docs/CONVENTIONS.md`](.claude/docs/CONVENTIONS.md) | Naming, style, quy ước đặt số CMD, layout thư mục |
+| [`.claude/docs/FEATURE-TEMPLATE.md`](.claude/docs/FEATURE-TEMPLATE.md) | **Khuôn chuẩn thêm một feature dọc** — thứ tự 8 tầng, chỗ đăng ký ở cả hai bên |
 | [`.claude/docs/guides/PHASE-N.md`](.claude/docs/guides/) | Hướng dẫn từng bước, có code đầy đủ + CHECKPOINT |
 
 Khi owner hỏi về một hệ thống đã có doc → **đọc doc trước**, đừng quét lại codebase.
+Khi owner hỏi "thêm feature X thì làm gì" → đọc `FEATURE-TEMPLATE.md`.
+
+---
+
+## Viết tài liệu phase
+
+Kích hoạt skill [`phase-doc`](.claude/skills/phase-doc/SKILL.md) mỗi khi soạn hoặc sửa
+`.claude/docs/guides/PHASE-N.md`. Năm luật rút ra sau khi Phase 12–14 viết hỏng (2026-09-22):
+
+1. **Mọi file trong bảng "Danh sách file" phải có code trong doc.** 🆕 = nguyên văn cả file; ✏️ = đủ
+   phần sửa để dán vào được. Soát cuối bằng cách **đếm**: số dòng bảng file = số khối code. Cấm
+   "làm tương tự", cấm "// phần còn lại giữ nguyên", cấm nhắc tên một hàm ở Troubleshooting mà cả
+   doc không có code của nó.
+2. **Tên phải lấy từ code thật bằng `grep`, không từ trí nhớ và không từ doc cũ.** Owner refactor
+   liên tục; doc không tự đổi theo. Trong một doc, một thứ chỉ có một tên — phần "hướng làm" ở trên
+   và "lời giải" ở dưới phải trùng khít class, chữ ký hàm, namespace.
+3. **Code trong doc phải biên dịch được.** Đủ `using`, đủ `namespace`, đúng `CONVENTIONS.md`. Khi
+   cùng lần đó có viết code thật thì **code trước → build pass → chép vào doc**, không viết doc rồi
+   hy vọng code khớp.
+4. **Phần client không bao giờ được thiếu.** Lỗi lặp lại nhiều nhất: tả server rất kỹ rồi dừng. Mỗi
+   phase động tới mạng phải có đủ *bằng code*: DTO, chỗ server gắn dữ liệu, client nhận ở handler
+   nào, đưa đi đâu, và **dòng `builder.Register<...>` trong `GameLifetimeScope`**.
+5. **Thiết kế trước, hướng dẫn sau.** Luôn tự hỏi "thêm cái thứ hai cùng loại tốn bao nhiêu dòng?".
+   Nếu đáp án là "chép lại cả hàm rồi sửa tên" thì sửa thiết kế, đừng hướng dẫn owner chép.
 
 ---
 

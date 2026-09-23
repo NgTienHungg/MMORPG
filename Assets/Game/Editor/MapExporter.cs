@@ -114,7 +114,7 @@ namespace MMORPG.Client.EditorTools
 
             DebugEx.Log($"[MapExporter] Đã ghi {path} — map {map.MapId} \"{map.Name}\", {width}×{height} ô, " +
                         $"origin ({bounds.xMin}, {bounds.yMin}), {spawns.Count} điểm spawn, {portals.Count} cổng, " +
-                        $"prefab \"{prefabKey}\", checksum {map.Checksum():X8}");
+                        $"prefab \"{prefabKey}\"");
             DebugEx.Log("[MapExporter] Nhớ build lại GameServer để file map sang được thư mục output của server.");
         }
 

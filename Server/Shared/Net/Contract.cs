@@ -15,7 +15,7 @@ namespace MMORPG.Shared.Net
     /// Một hằng số mà người ta quên tăng còn tệ hơn không có — nó tạo cảm giác đã được bảo vệ.
     ///
     /// GIỚI HẠN, phải biết: nó bắt đổi HÌNH DẠNG, không bắt đổi HÀNH VI. Sửa công thức trong
-    /// MovementRules.Step thì số này y nguyên. Đọc thêm ở "Để dành" của Phase 12.
+    /// MovementRules.Step thì số này y nguyên.
     /// </summary>
     public static class Contract
     {

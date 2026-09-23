@@ -32,7 +32,7 @@ namespace MMORPG.Shared.World.Map
         {
             Formatting = Formatting.Indented,
 
-            // Trường lạ thì BỎ QUA. Có chủ đích, và ngược với file config gõ tay ở Phase 12 (nơi sẽ
+            // Trường lạ thì BỎ QUA. Có chủ đích, và ngược với file config gõ tay (nơi
             // dùng Error): file này do TOOL sinh nên không có lỗi chính tả để bắt, còn cái ta cần là
             // code hôm nay đọc được file mà phiên bản mai này thêm trường vào.
             MissingMemberHandling = MissingMemberHandling.Ignore,

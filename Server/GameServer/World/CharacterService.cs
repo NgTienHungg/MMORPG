@@ -1,9 +1,12 @@
+using MMORPG.GameServer.Config;
 using MMORPG.GameServer.Db;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Db;
 using MMORPG.Shared.Dto.Character;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.Net;
+using MMORPG.Shared.World.Character;
+using MMORPG.Shared.World.Item;
 
 namespace MMORPG.GameServer.World
 {
@@ -75,7 +78,8 @@ namespace MMORPG.GameServer.World
                 Y = entity.Y,
                 ServerTimeMs = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(),
 
-                // Bộ số của PHIÊN này. Client dự đoán bằng đúng bộ server đang dùng cho entity của nó.
+                // Bộ số của PHIÊN này, và là dữ liệu tĩnh duy nhất đi trong gói: client không có
+                // file game.json nên không có cách nào tự biết mấy con số này.
                 World = _config.World,
             };
         }

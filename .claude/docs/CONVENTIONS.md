@@ -75,16 +75,85 @@ Biến local cũng theo tinh thần đó — và tên phải nói đúng **nội
 | `*Repository` | Truy cập DB | `AccountRepository` |
 | `*Request` / `*Response` | DTO đi qua mạng | `LoginRequest`, `LoginResponse` |
 | `*Entity` | Object sống trong world server | `PlayerEntity`, `MonsterEntity` |
-| `*File` / `*FileData` | Đọc-ghi một file dữ liệu / hình dạng của chính file đó | `MapFile` + `MapFileData` |
+| `*Parser` | Đọc/ghi một định dạng file, không giữ state | `MapGridParser` |
+| `*Config` | **Một đơn vị** dữ liệu tĩnh — một dòng của bảng, hoặc cả một map | `CharacterConfig`, `ItemConfig`, `MapConfig` |
+| `*TableData` | **Cả file** bảng dữ liệu: `Version` + mảng `*Config` + `RowCount` | `CharacterTableData`, `ItemTableData` |
+| `*ConfigContainer` | Bảng tra lúc chạy cho một loại `*Config` | `CharacterConfigContainer`, `ItemConfigContainer` |
+| `*Registry` | Sổ tra các object **có hành vi**, không phải dữ liệu tĩnh | `MapRegistry`, `SessionRegistry` |
 
-**Về cặp `*File` / `*FileData`** (chốt ở Phase 10): `*FileData` là bản đối chiếu 1-1 với JSON — property
-có setter, cho phép null, chỉ `*File` được đụng vào. Thứ **chạy trong game** thì là một kiểu khác, bất
-biến, tên theo vai của nó (`MapGrid`). Cùng mẫu với `CharacterRow` (hàng DB) ≠ `PlayerEntity` (world):
-hình dạng của **chỗ dữ liệu nằm** không bao giờ là hình dạng của **thứ chạy**.
+**Hình dạng chỗ dữ liệu NẰM không bao giờ là hình dạng thứ CHẠY** (chốt ở Phase 10). Bản đối chiếu
+1-1 với file thì property có setter, cho phép null, và chỉ hàm parse được đụng vào; thứ chạy trong
+game thì bất biến và mang tên theo vai của nó. `MapConfig` (file) ≠ `MapGrid` (chạy) — cùng mẫu với
+`CharacterRow` (hàng DB) ≠ `PlayerEntity` (world).
 
-Không đặt `*Definition` (dễ hiểu nhầm là nơi khai báo hằng) và không đặt `*Config` cho file **do máy
-sinh** — `*Config` để dành cho bảng **người gõ tay** ở Phase 12, thứ có luật đọc khác hẳn (trường lạ là
-lỗi, chứ không phải bỏ qua).
+Không đặt `*Definition` (dễ hiểu nhầm là nơi khai báo hằng), và không đặt `*Data` trần — hậu tố
+`*Data` chỉ đi kèm `*Table`.
+
+> **`MapConfig` KHÔNG phải ngoại lệ** (soát lại 2026-09-22 — bản trước của file này gọi nó là ngoại
+> lệ và đề nghị đổi thành `MapFileData`; sai). Nó là dữ liệu tĩnh của MỘT map, đúng vai `*Config`
+> như `CharacterConfig` là dữ liệu tĩnh của MỘT lớp nhân vật. File do tool export sinh ra hay do
+> người gõ tay không đổi VAI của kiểu — nó chỉ đổi độ chặt lúc parse (map bỏ qua trường lạ vì tool
+> còn ghi thêm; bảng người gõ thì trường lạ là lỗi chính tả). Ba vai của map:
+> `MapConfig` → `MapRegistry` (server) / `MapService` (client) → `MapGrid`. Và như mọi config khác,
+> map **không** có hàm băm riêng.
+
+### Bộ ba `*Config` / `*TableData` / `*ConfigContainer`
+
+Chốt 2026-09-22 khi làm bảng item. Mọi bảng dữ liệu game design — nhân vật, item, quái, skill, drop —
+đi theo **đúng ba kiểu này, cùng tên gốc**, đặt ở `Server/Shared/World/<Feature>/`:
+
+```
+Server/Shared/World/Item/
+├── ItemConfig.cs             một DÒNG: [MemoryPackable], property có setter
+├── ItemTableData.cs          cả FILE: Version + ItemConfig[] + RowCount, : IConfigFile
+└── ItemConfigContainer.cs    bảng TRA lúc chạy: static, Load(ItemTableData) + Find(id)
+```
+
+Vì sao đúng ba kiểu chứ không hai (gộp table vào container) hay bốn (thêm kiểu "file" riêng):
+
+| Kiểu | Tồn tại vì | Nếu bỏ đi |
+|---|---|---|
+| `*Config` | là thứ code gọi cầm trên tay (`config.MaxStack`) | phải truyền cả bảng + id đi khắp nơi |
+| `*TableData` | là hình dạng của FILE, và là thứ `ConfigFingerprint` băm | không có gì để parse JSON vào, và không có gì để băm |
+| `*ConfigContainer` | là chỗ tra `id → config` mà **không cần inject** | mọi hàm dùng item phải nhận thêm một tham số bảng |
+
+**Cả hai bên đều nạp từ file của mình** (chốt 2026-09-22, sau khi soát lại cách MMO thật làm):
+client đọc `Assets/Game/Resources/Config/`, server đọc bản copy trong `Data/Config/` do csproj chép
+sang. Bảng KHÔNG đi trên dây, và `EnterWorldResponse` KHÔNG mang danh sách vân tay để so: mỗi bên
+tự quyết định nạp bảng nào.
+
+> Vì sao không gửi cả bảng cho gọn: gói login phình theo số bảng (Phase 15 đã là năm bảng); client
+> không hiển thị được tên/icon item **trước khi vào world**; và dữ liệu tĩnh đáng đi đường CDN
+> (Phase 18) chứ không đi qua socket game server. Đó cũng là cách WoW, Lineage và mọi MMO mobile
+> làm: client ship bản của nó, server ship bản của nó, phiên bản kiểm ở trình patch.
+>
+> Vì sao cũng **không** gửi danh sách vân tay để so (bản trước của file này bảo có — sai): server
+> nạp những bảng client không bao giờ đọc tới (tỉ lệ rơi đồ, AI quái), client nạp những bảng server
+> không cần (thoại, mô tả kỹ năng). Bắt hai danh sách khớp nhau là ép client ship đúng tập bảng của
+> server, và chặn luôn đường tải dần từ CDN. Vân tay vẫn tính — nhưng nó **in ra log ở cả hai bên**
+> cho người đối chiếu, chứ không đi trên dây.
+>
+> Bệnh của vo-lam-genz là hai bản mà không ai kiểm. Thứ kiểm được nó là **một số phiên bản cho cả
+> gói dữ liệu**, kiểm một lần lúc đăng nhập — bài của Phase 18, cùng lúc với trình patch.
+
+**Không viết `Checksum()` trong `*TableData`.** Dùng `ConfigFingerprint.Of(table)` — một hàm dùng
+chung, băm byte đã tuần tự hoá. Băm tay từng trường là hai chục dòng mỗi bảng mới **và** một chế độ
+hỏng câm: thêm trường mà quên thêm vào hàm băm thì vân tay không còn phát hiện được thay đổi ở
+trường đó.
+
+Bốn luật đi kèm, vi phạm cái nào cũng thành bug câm:
+
+1. **`Load` là cửa duy nhất ghi vào bảng.** Mỗi bên gọi sau khi đọc file của mình. Một bảng, hai
+   đường vào, một hàm dựng.
+2. **`Load` dựng nguyên bảng mới rồi mới gán reference**, không sửa tại chỗ — luồng khác hoặc thấy
+   trọn bảng cũ, hoặc trọn bảng mới.
+3. **Phép kiểm miền giá trị chỉ chạy ở server** (`ConfigService.Validate*`). Nếu client cũng kẹp thì
+   một file có `MoveSpeed = 999` cho ra hai bên cùng chạy 5 — và cái file hỏng ấy không bao giờ bị
+   phát hiện. Server kẹp, client không, hai dòng log vân tay lệch nhau, người ta đi sửa file.
+4. **Hai bên băm ở CÙNG một thời điểm trong quy trình: sau `load()`.** Đây là ràng buộc thật, không
+   phải sở thích — `ActionData` là struct toàn kiểu unmanaged nên MemoryPack chép nguyên khối, kể cả
+   những trường `Prepare()` vừa điền. Băm ở hai thời điểm khác nhau là làm chính phép phát hiện lệch
+   nói dối. Có bài test ghim việc này: `ConfigFingerprintTests`.
 
 ## 3. File & thư mục
 

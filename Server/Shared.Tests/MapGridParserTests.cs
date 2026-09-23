@@ -1,4 +1,3 @@
-using MMORPG.Shared.World;
 using MMORPG.Shared.World.Map;
 
 namespace MMORPG.Shared.Tests
@@ -33,28 +32,34 @@ namespace MMORPG.Shared.Tests
                 width: 4, height: 3, spawns, portals, cells);
         }
 
+        /// <summary>
+        /// Hai lưới có cùng hình dạng không: mọi con số của map, cộng từng ô một. So từng ô để bài
+        /// test đỏ chỉ ra được Ô NÀO lệch.
+        /// </summary>
+        private static void AssertSameShape(MapGrid expected, MapGrid actual)
+        {
+            Assert.Equal(expected.MapId, actual.MapId);
+            Assert.Equal(expected.OriginX, actual.OriginX);
+            Assert.Equal(expected.OriginY, actual.OriginY);
+            Assert.Equal(expected.Width, actual.Width);
+            Assert.Equal(expected.Height, actual.Height);
+            Assert.Equal(expected.PrefabKey, actual.PrefabKey);
+            Assert.Equal(expected.DefaultSpawn.X, actual.DefaultSpawn.X);
+
+            for (int cy = expected.OriginY; cy < expected.OriginY + expected.Height; cy++)
+            {
+                for (int cx = expected.OriginX; cx < expected.OriginX + expected.Width; cx++)
+                    Assert.Equal(expected.At(cx, cy), actual.At(cx, cy));
+            }
+        }
+
         [Fact]
         public void Write_then_parse_gives_back_the_same_grid()
         {
             MapGrid original = BuildSample();
             MapGrid parsed = MapGridParser.Parse(MapGridParser.Write(original));
 
-            Assert.Equal(original.MapId, parsed.MapId);
-            Assert.Equal(original.OriginX, parsed.OriginX);
-            Assert.Equal(original.OriginY, parsed.OriginY);
-            Assert.Equal(original.Width, parsed.Width);
-            Assert.Equal(original.Height, parsed.Height);
-            Assert.Equal(original.PrefabKey, parsed.PrefabKey);
-            Assert.Equal(original.DefaultSpawn.X, parsed.DefaultSpawn.X);
-
-            for (int cy = original.OriginY; cy < original.OriginY + original.Height; cy++)
-            {
-                for (int cx = original.OriginX; cx < original.OriginX + original.Width; cx++)
-                    Assert.Equal(original.At(cx, cy), parsed.At(cx, cy));
-            }
-
-            // Và phép so rẻ nhất — chính là phép hai đầu dây sẽ dùng để tự kiểm lúc chạy.
-            Assert.Equal(original.Checksum(), parsed.Checksum());
+            AssertSameShape(original, parsed);
         }
 
         /// <summary>
@@ -113,7 +118,7 @@ namespace MMORPG.Shared.Tests
 
             MapGrid parsed = MapGridParser.Parse(json);
 
-            Assert.Equal(BuildSample().Checksum(), parsed.Checksum());
+            AssertSameShape(BuildSample(), parsed);
         }
 
         /// <summary>

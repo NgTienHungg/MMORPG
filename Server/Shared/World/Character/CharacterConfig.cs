@@ -4,8 +4,8 @@ using MemoryPack;
 namespace MMORPG.Shared.World.Character
 {
     /// <summary>
-    /// Bộ số của một lớp nhân vật. Ba vai, một hình dạng: dòng trong characters.json, phần tử của gói
-    /// EnterWorld, và bộ số MovementRules.Step đọc.
+    /// Bộ số của một lớp nhân vật: vừa là một dòng trong <c>characters.json</c>, vừa là bộ số
+    /// <c>MovementRules.Step</c> đọc mỗi tick.
     ///
     /// Property có setter là cái giá của việc tuần tự hoá được — kiểu bất biến thì không bộ tuần tự
     /// hoá nào dựng được nó. Bù lại bằng kỷ luật, không bằng trình biên dịch: CHỈ
@@ -15,9 +15,10 @@ namespace MMORPG.Shared.World.Character
     [MemoryPackable]
     public sealed partial class CharacterConfig
     {
+        /// <summary>Khoá của bảng. Nhân vật trong DB trỏ về một lớp bằng số này.</summary>
         public int ClassId { get; set; }
 
-        /// <summary>Tên để đọc log và sửa file cho dễ. Mô phỏng không dùng, nên nó cũng không vào Checksum.</summary>
+        /// <summary>Tên để đọc log và sửa file cho dễ. Mô phỏng không dùng tới.</summary>
         public string Name { get; set; } = string.Empty;
 
         /// <summary>Tốc độ chạy ngang, world unit/giây.</summary>
@@ -38,15 +39,11 @@ namespace MMORPG.Shared.World.Character
         /// <summary>Mảng chứ không phải object có khoá cố định: thêm một hành động mới là thêm phần tử.</summary>
         public ActionData[] Actions { get; set; } = Array.Empty<ActionData>();
 
-        /// <summary>
-        /// Quy giây ra tick cho mọi hành động. Gọi từ <see cref="CharacterConfigContainer.Load"/>, tức là
-        /// đúng một chỗ ở mỗi bên — cùng cơ chế với <see cref="WorldRules.Prepare"/>.
-        /// </summary>
+        /// <summary>Quy giây ra tick cho mọi hành động. Gọi từ <see cref="CharacterConfigContainer.Load"/>, tức đúng một chỗ ở mỗi bên.</summary>
         public void Prepare()
         {
-            // for chứ không foreach: ActionData là struct, foreach cho ra BẢN COPY và Prepare() sẽ ghi
-            // vào bản copy ấy rồi vứt đi. Không lỗi, không cảnh báo, chỉ là mọi thời lượng bằng 0 —
-            // đúng mặt trái của tính chất "gán là copy" đã cứu vòng replay ở Phase 8.
+            // for chứ không foreach: ActionData là struct, nên foreach cho ra BẢN COPY và Prepare()
+            // ghi vào bản copy ấy rồi vứt đi. Không lỗi, không cảnh báo, chỉ là mọi thời lượng bằng 0.
             for (int i = 0; i < Actions.Length; i++)
                 Actions[i].Prepare();
         }

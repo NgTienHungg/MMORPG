@@ -1,5 +1,7 @@
 using MMORPG.GameServer.Auth;
+using MMORPG.GameServer.Boot;
 using MMORPG.GameServer.Net;
+using MMORPG.GameServer.World;
 using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Net;
 
@@ -11,10 +13,14 @@ namespace MMORPG.GameServer.Handlers
     /// </summary>
     public static class AuthHandler
     {
-        /// <summary>Gán một lần trong <c>Program.cs</c>.</summary>
-        public static AuthService AuthService { get; set; }
+        // Handler là hàm static nên không có constructor để nhận inject — lấy service từ sổ chung.
+        // Property chứ không field: tra lúc DÙNG, không lúc class được nạp. Field static khởi tạo
+        // sớm hơn ServerBootstrap.Build() một nhịp và sẽ giữ null vĩnh viễn.
+        private static AuthService AuthService => ServerServices.Get<AuthService>();
 
-        [TcpHandler(NetCmd.Register)]
+        // MinState = Verified: chưa kiểm phiên bản thì chưa được gõ cửa nào khác. Phép chặn nằm ở
+        // dispatcher, không nằm ở thiện chí của client.
+        [TcpHandler(NetCmd.Register, MinState = SessionState.Verified)]
         public static async Task<NetResult> OnRegister(NetRequest req)
         {
             if (req.Session.State >= SessionState.Authenticated)
@@ -23,7 +29,7 @@ namespace MMORPG.GameServer.Handlers
             return NetResult.Ok(await AuthService.RegisterAsync(req.Session, req.GetData<RegisterRequest>()));
         }
 
-        [TcpHandler(NetCmd.Login)]
+        [TcpHandler(NetCmd.Login, MinState = SessionState.Verified)]
         public static async Task<NetResult> OnLogin(NetRequest req)
         {
             if (req.Session.State >= SessionState.Authenticated)
@@ -36,7 +42,11 @@ namespace MMORPG.GameServer.Handlers
         public static async Task<NetResult> OnLogout(NetRequest req)
         {
             // Logout khi đang trong world: rời world trước, cùng một đường dọn dẹp với mất kết nối.
-            await CharacterHandler.CharacterService.LeaveWorldAsync(req.Session);
+            // Hỏi sổ chung chứ không gọi sang CharacterHandler: handler nói chuyện với SERVICE, không
+            // nói chuyện với handler khác — nếu không thì dispatch table có thêm một đồ thị phụ thuộc
+            // thứ hai mà không ai vẽ ra.
+            await ServerServices.Get<CharacterService>().LeaveWorldAsync(req.Session);
+
             return NetResult.Ok(AuthService.Logout(req.Session));
         }
     }

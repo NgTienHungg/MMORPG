@@ -93,7 +93,7 @@ namespace MMORPG.Shared.World.Movement
                 state.Crouching = !CanStandUp(map, config, state);
             }
 
-            // 2. Vận tốc ngang + hướng mặt (như Phase 9).
+            // 2. Vận tốc ngang + hướng mặt.
             if (locked || state.Crouching)
             {
                 state.VelX = 0f;
@@ -114,7 +114,7 @@ namespace MMORPG.Shared.World.Movement
             if (state.VelY < -world.MaxFallSpeed)
                 state.VelY = -world.MaxFallSpeed;
 
-            // 4a. Hai bộ đếm tha thứ (như Phase 9).
+            // 4a. Hai bộ đếm tha thứ.
             if (state.TicksSinceGrounded < EXPIRED)
                 state.TicksSinceGrounded++;
 
@@ -134,7 +134,7 @@ namespace MMORPG.Shared.World.Movement
                 state.TicksSinceGrounded = EXPIRED;
                 state.Grounded = false;
             }
-            // 4c. Nhảy (như Phase 9).
+            // 4c. Nhảy.
             else if (!locked &&
                      state.TicksSinceJumpRequest <= world.JumpBufferTicks &&
                      state.TicksSinceGrounded <= world.CoyoteTicks)
@@ -144,7 +144,7 @@ namespace MMORPG.Shared.World.Movement
                 state.TicksSinceGrounded = EXPIRED;
             }
 
-            // 5. Xin hành động (như Phase 9).
+            // 5. Xin hành động.
             ActionData attack = config.GetAction(ActionState.Attack);
 
             if (intent.Action == ActionRequest.Attack &&

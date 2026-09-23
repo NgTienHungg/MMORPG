@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using HungNT;
+using MMORPG.Client.Config;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto.Character;
 using MMORPG.Shared.Dto.World;
@@ -25,17 +26,20 @@ namespace MMORPG.Client.World
         private WorldNetHandler _worldNetHandler;
         private LocalPlayer _localPlayer;
         private MapService _mapService;
+        private ConfigService _configService;
 
         private GameObject _localPlayerObject;
         private readonly Dictionary<int, RemotePlayerView> _remotes = new();
 
         [Inject]
-        public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler, LocalPlayer localPlayer, MapService mapService)
+        public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler, LocalPlayer localPlayer,
+            MapService mapService, Config.ConfigService configService)
         {
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
             _localPlayer = localPlayer;
             _mapService = mapService;
+            _configService = configService;
         }
 
         private void Start()
@@ -62,17 +66,23 @@ namespace MMORPG.Client.World
             if (_localPlayerObject != null)
                 DespawnLocalPlayer();
 
-            _localPlayerObject = Instantiate(_playerPrefab, new Vector3(response.X, response.Y), Quaternion.identity, _entityRoot);
-            _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
-
             // Nạp LUẬT trước, dựng HÌNH sau, rồi mới Init motor: motor cần lưới va chạm ngay từ tick
             // dự đoán đầu tiên.
             MapGrid map = _mapService.Load(response.MapId);
+
             _mapView.Show(map);
 
+            _localPlayerObject = Instantiate(_playerPrefab, new Vector3(response.X, response.Y), Quaternion.identity, _entityRoot);
+            _localPlayerObject.name = $"Player_{response.EntityId}_{response.Name}";
+
             // Prefab sinh lúc runtime — VContainer không tự inject. Đưa phụ thuộc vào tay.
+            //
+            // Bảng tra được CHÍNH Ở ĐÂY chứ không truyền CharacterConfig từ ngoài vào: container đã
+            // nạp xong ở WorldPresenter một nhịp trước, và tra tại chỗ dùng thì không có đường nào để
+            // một chỗ gọi khác đưa vào bộ số của lớp nhân vật khác.
             var motor = _localPlayerObject.GetComponent<PlayerMotor>();
-            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y), response.ClassId, map);
+            motor.Init(_worldApi, _worldNetHandler, new Vector2(response.X, response.Y),
+                CharacterConfigContainer.Get(response.ClassId), _configService.World, map);
 
             _cameraFollow.SetTarget(_localPlayerObject.transform);
 
@@ -110,8 +120,7 @@ namespace MMORPG.Client.World
 
             // Bảng số tra từ ClassId của NGƯỜI KIA, không phải của mình: hai lớp nhân vật có thời
             // lượng hành động khác nhau, và người xem phải co clip theo bảng của người bị xem.
-            //todo: fix tam
-            view.Init(new CharacterConfig() /*CharacterConfigContainer.Get(notice.ClassId)*/);
+            view.Init(CharacterConfigContainer.Get(notice.ClassId));
             view.PushState(new Vector2(notice.X, notice.Y), notice.FacingLeft, notice.Crouching, notice.Action);
 
             _remotes[notice.EntityId] = view;
@@ -158,6 +167,7 @@ namespace MMORPG.Client.World
 
             // Cùng ba dòng như lúc vào world — nạp LUẬT, dựng HÌNH, rồi mới đặt lại motor.
             MapGrid map = _mapService.Load(notice.MapId);
+
             _mapView.Show(map);
 
             _localPlayerObject.GetComponent<PlayerMotor>().SetMap(map, notice.State);

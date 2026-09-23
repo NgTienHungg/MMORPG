@@ -9,8 +9,8 @@ namespace MMORPG.Client.World
     /// Nạp hình dạng map từ file đã export. Client đọc ĐÚNG file server đọc — đó là toàn bộ lý do nó
     /// tồn tại, và cũng là lý do ở đây không có tí logic nào về hình dạng map.
     ///
-    /// Resources là cách rẻ nhất cho hôm nay. Phase 18 chuyển nó sang Addressables/CDN cùng các bảng dữ
-    /// liệu khác; lúc đó chỉ hàm Load này đổi, chỗ gọi giữ nguyên.
+    /// Resources là cách rẻ nhất cho hôm nay. Ngày cần tải từ xa thì chỉ hàm Load này đổi, chỗ gọi
+    /// giữ nguyên.
     /// </summary>
     public sealed class MapService
     {
@@ -43,10 +43,10 @@ namespace MMORPG.Client.World
 
             Current = MapGridParser.Parse(asset.text);
 
-            // In checksum ra để đối chiếu với dòng server in lúc khởi động. Hai số khác nhau nghĩa là
-            // hai bên đang chạy hai map khác nhau — biết ngay ở đây, thay vì đoán qua triệu chứng.
+            // Cùng bộ số mà MapRegistry in bên server: hai dòng log khác nhau nghĩa là hai bên đang
+            // chạy hai file map khác nhau.
             this.Log($"Map {Current.Name} #{Current.MapId} — {Current.Width}×{Current.Height} ô, " +
-                     $"checksum {Current.Checksum():X8}");
+                     $"origin ({Current.OriginX}, {Current.OriginY})");
 
             return Current;
         }

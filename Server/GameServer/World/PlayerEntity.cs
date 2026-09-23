@@ -79,7 +79,7 @@ namespace MMORPG.GameServer.World
         /// Đã ra khỏi mọi cổng chưa — điều kiện để lần bước vào tới được tính.
         ///
         /// CẠNH chứ không phải MỨC. Không có cờ này thì điểm đến nằm trong cổng chiều ngược lại là hai
-        /// map ném người chơi qua lại 20 lần mỗi giây. Cùng phân biệt với nút nhảy ở Phase 8.
+        /// map ném người chơi qua lại 20 lần mỗi giây. Cùng phân biệt CẠNH/MỨC như nút nhảy.
         ///
         /// KHÔNG nằm trong MoveState, khác DropThroughTicks: client không mô phỏng lại việc chuyển map,
         /// nên đây không phải một phần của contract.
@@ -200,7 +200,7 @@ namespace MMORPG.GameServer.World
         {
             // State là property trả về struct nên "State.Action = ..." không biên dịch được: nó sẽ là
             // phép sửa vào một bản copy tạm rồi vứt đi. Copy ra biến, sửa, gán lại — mặt trái của
-            // đúng cái tính chất "gán là copy" đã cứu vòng replay ở Phase 8.
+            // đúng cái tính chất "gán là copy" mà vòng replay dựa vào.
             MoveState state = State;
 
             if (!CharacterStates.CanEnter(state.Action, state.ActionTicksLeft, action))

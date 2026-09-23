@@ -28,7 +28,8 @@ namespace MMORPG.Shared.World
 
         /// <summary>Bỏ qua va chạm với bệ một chiều bao lâu sau khi bấm ngồi + nhảy.</summary>
         public float DropThroughSeconds { get; set; } = 0.3f;
-
+        /// <summary>Bản tick của coyote / jump buffer / drop-through — tính lại mỗi lần đọc, đủ rẻ vì mỗi tick chỉ đọc vài lần.</summary>
+        /// <summary>Bản tick của ba giá trị trên — tính lại mỗi lần đọc, đủ rẻ vì mỗi tick chỉ đọc vài lần.</summary>
         public int CoyoteTicks => MovementRules.ToTicks(CoyoteSeconds);
         public int JumpBufferTicks => MovementRules.ToTicks(JumpBufferSeconds);
         public int DropThroughTicks => MovementRules.ToTicks(DropThroughSeconds);

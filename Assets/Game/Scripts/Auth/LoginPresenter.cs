@@ -4,7 +4,9 @@ using Cysharp.Threading.Tasks;
 using HungNT;
 using MMORPG.Client.Network;
 using MMORPG.Client.Network.Handlers;
+using MMORPG.Shared.Dto;
 using MMORPG.Shared.Dto.Auth;
+using MMORPG.Shared.Net;
 using Sirenix.OdinInspector;
 using UnityEngine;
 using VContainer;
@@ -23,16 +25,27 @@ namespace MMORPG.Client.Auth
         private NetService _netService;
         private AuthApi _authApi;
         private AuthNetHandler _authNetHandler;
+        private SystemNetHandler _systemNetHandler;
         private NetworkSettings _networkSettings;
         private SavedLoginStore _savedLoginStore;
         private CancellationTokenSource _responseTimeout;
 
+        /// <summary>
+        /// Kết quả kiểm contract của lần nối hiện tại. null = chưa hỏi hoặc chưa về.
+        ///
+        /// Đặt ở đây chứ không ở NetService: nó là trạng thái của một LẦN NỐI, và màn hình login là
+        /// thứ duy nhất phải phản ứng với nó. Ngày có màn hình khác cần biết thì đẩy xuống NetService.
+        /// </summary>
+        private bool? _contractOk;
+
         [Inject]
-        public void Construct(NetService netService, AuthApi authApi, AuthNetHandler authNetHandler, NetworkSettings networkSettings, SavedLoginStore savedLoginStore)
+        public void Construct(NetService netService, AuthApi authApi, AuthNetHandler authNetHandler,
+            SystemNetHandler systemNetHandler, NetworkSettings networkSettings, SavedLoginStore savedLoginStore)
         {
             _netService = netService;
             _authApi = authApi;
             _authNetHandler = authNetHandler;
+            _systemNetHandler = systemNetHandler;
             _networkSettings = networkSettings;
             _savedLoginStore = savedLoginStore;
         }
@@ -45,6 +58,7 @@ namespace MMORPG.Client.Auth
             _authNetHandler.OnLoginResult += OnAuthResult;
             _authNetHandler.OnRegisterResult += OnAuthResult;
             _authNetHandler.OnKicked += OnKicked;
+            _systemNetHandler.OnVersionCheck += OnVersionCheck;
         }
 
         /// <summary>
@@ -76,6 +90,7 @@ namespace MMORPG.Client.Auth
             _authNetHandler.OnLoginResult -= OnAuthResult;
             _authNetHandler.OnRegisterResult -= OnAuthResult;
             _authNetHandler.OnKicked -= OnKicked;
+            _systemNetHandler.OnVersionCheck -= OnVersionCheck;
         }
 
         private void OnClickLogin()
@@ -99,6 +114,15 @@ namespace MMORPG.Client.Auth
             {
                 this.LogWarning($"Không kết nối được {$"{_networkSettings.Host}:{_networkSettings.Port}".Color("orange")}");
                 _loginUi.ShowMessage("Không kết nối được máy chủ.", isError: true);
+                _loginUi.SetInteractable(true);
+                return;
+            }
+
+            // Kiểm phiên bản TRƯỚC khi gửi bất cứ lệnh nào khác. Server đặt Register/Login ở
+            // MinState = Verified, nên bỏ qua bước này là mọi lệnh bị từ chối bằng NotAuthenticated —
+            // một thông điệp chỉ sai hướng hoàn toàn.
+            if (!await EnsureContractAsync())
+            {
                 _loginUi.SetInteractable(true);
                 return;
             }
@@ -138,6 +162,51 @@ namespace MMORPG.Client.Auth
             // Ẩn UI là hết việc của panel này — bước vào world do phần world đảm nhiệm
             // khi nghe cùng sự kiện đăng nhập thành công.
             _loginUi.SetVisible(false);
+        }
+
+        /// <summary>
+        /// Gửi <c>VersionCheck</c> nếu chưa hỏi lần nào cho kết nối này, rồi chờ kết quả.
+        ///
+        /// Chờ bằng cách đợi <see cref="_contractOk"/> đổi khỏi null thay vì bằng một TaskCompletionSource:
+        /// handler chạy ở main thread (NetDispatcher bảo đảm), nên vòng UniTask.WaitUntil ở main thread
+        /// nhìn thấy nó ngay khi gói về, và không có chuyện hai luồng cùng đụng một biến.
+        /// </summary>
+        private async UniTask<bool> EnsureContractAsync()
+        {
+            if (_contractOk == true)
+                return true;
+
+            if (_contractOk == null)
+            {
+                _loginUi.ShowMessage("Đang kiểm phiên bản...", isError: false);
+                _netService.Send(NetCmd.VersionCheck, new VersionCheckRequest { ContractHash = Contract.Hash });
+
+                bool timedOut = await UniTask
+                    .WaitUntil(() => _contractOk != null)
+                    .Timeout(TimeSpan.FromSeconds(RESPONSE_TIMEOUT_SECONDS))
+                    .SuppressCancellationThrow();
+
+                if (timedOut)
+                {
+                    _loginUi.ShowMessage("Máy chủ không phản hồi. Thử lại sau giây lát.", isError: true);
+                    return false;
+                }
+            }
+
+            if (_contractOk == false)
+            {
+                // Không cho gõ tiếp: mọi lệnh sau đây đều sẽ bị server từ chối, và để người chơi thử
+                // đi thử lại một việc không bao giờ thành công là tệ hơn một thông báo dứt khoát.
+                _loginUi.ShowMessage("Phiên bản game không khớp máy chủ. Cập nhật lại bản mới.", isError: true);
+                return false;
+            }
+
+            return true;
+        }
+
+        private void OnVersionCheck(VersionCheckResponse response)
+        {
+            _contractOk = response.Ok;
         }
 
         private void OnKicked(KickedNotice notice)

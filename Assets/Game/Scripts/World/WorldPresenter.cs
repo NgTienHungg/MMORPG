@@ -1,4 +1,5 @@
 using HungNT;
+using MMORPG.Client.Config;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto.Auth;
 using MMORPG.Shared.Dto.Character;
@@ -8,7 +9,7 @@ using VContainer;
 namespace MMORPG.Client.World
 {
     /// <summary>
-    /// Nối auth với world: đăng nhập xong tự gửi EnterWorld, nhận response thì spawn.
+    /// Nối auth với world: đăng nhập xong tự gửi EnterWorld, nhận response thì nạp config rồi spawn.
     /// Không có UI riêng — phase này client vào thẳng game.
     /// </summary>
     public sealed class WorldPresenter : MonoBehaviour
@@ -19,15 +20,17 @@ namespace MMORPG.Client.World
         private WorldNetHandler _worldNetHandler;
         private AuthNetHandler _authNetHandler;
         private LocalPlayer _localPlayer;
+        private ConfigService _configService;
 
         [Inject]
         public void Construct(WorldApi worldApi, WorldNetHandler worldNetHandler,
-            AuthNetHandler authNetHandler, LocalPlayer localPlayer)
+            AuthNetHandler authNetHandler, LocalPlayer localPlayer, ConfigService configService)
         {
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
             _authNetHandler = authNetHandler;
             _localPlayer = localPlayer;
+            _configService = configService;
         }
 
         private void Start()
@@ -65,8 +68,12 @@ namespace MMORPG.Client.World
                 return;
             }
 
-            //todo: luu tam vao day de dung trong Step()
-            WorldApi.Config = response.World;
+            // Hai lý do: (1) WorldSpawner gọi PlayerMotor.Init, mà Init tra CharacterConfigContainer
+            // ngay dòng đầu — bảng hỏng thì container ném và triệu chứng là "vào world xong không
+            // có nhân vật nào"; (2) Apply trả false khi bảng lệch server, và lúc đó KHÔNG được vào
+            // world: chơi bằng bộ số khác server là rubber-band không có tên.
+            if (!_configService.Apply(response))
+                return;
 
             _localPlayer.Apply(response);
             _worldSpawner.SpawnLocalPlayer(response);
@@ -76,12 +83,14 @@ namespace MMORPG.Client.World
         {
             _worldSpawner.DespawnLocalPlayer();
             _localPlayer.Clear();
+            _configService.Clear();
         }
 
         private void OnKicked(KickedNotice notice)
         {
             _worldSpawner.DespawnLocalPlayer();
             _localPlayer.Clear();
+            _configService.Clear();
         }
     }
 }

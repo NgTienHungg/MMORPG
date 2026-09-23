@@ -6,13 +6,14 @@ using Newtonsoft.Json;
 namespace MMORPG.Shared.World.Character
 {
     /// <summary>
-    /// Các con số của MỘT hành động. Thay cho ActionDefinition của Phase 9 — cùng nội dung, khác ở chỗ
-    /// nó đọc được từ file và đi được trên dây.
+    /// Các con số của MỘT hành động, đọc từ file và đi được trên dây.
     ///
-    /// Vẫn là STRUCT, và đó không phải chuyện phong cách: <c>default</c> của nó là "0 tick, không khoá
-    /// thân", nên <see cref="Character.CharacterConfig.GetAction"/> trả về được một giá trị hợp lệ cho hành động
-    /// không có trong bảng mà chỗ gọi không phải kiểm null. Đổi sang class là mọi chỗ gọi mọc thêm một
-    /// phép kiểm, và một trong số đó sẽ bị quên.
+    /// Là struct có chủ đích: <c>default</c> của nó là "0 tick, không khoá thân", nên
+    /// <see cref="CharacterConfig.GetAction"/> trả về được một giá trị hợp lệ cho hành động không có
+    /// trong bảng mà chỗ gọi không phải kiểm null.
+    ///
+    /// Toàn kiểu unmanaged nên MemoryPack chép nguyên khối: MỌI trường đều đi trên dây và vào vân
+    /// tay, kể cả hai trường tick do <see cref="Prepare"/> điền.
     /// </summary>
     [MemoryPackable]
     public partial struct ActionData
@@ -20,21 +21,22 @@ namespace MMORPG.Shared.World.Character
         /// <summary>Ghi bằng TÊN enum trong file ("Attack"), không phải số — người sửa file không phải tra bảng.</summary>
         public ActionState Action;
 
+        /// <summary>Thời lượng hành động, bằng đơn vị người thiết kế dùng.</summary>
         public float DurationSeconds;
 
+        /// <summary>Thời gian hồi trước khi dùng lại được.</summary>
         public float CooldownSeconds;
 
-        /// <summary>
-        /// Trong lúc hành động này diễn ra thì thân thể có mất quyền điều khiển không. Là dữ liệu chứ
-        /// không phải một nhánh switch: thêm chiêu "đứng yên đọc chú" chỉ là thêm một ô true.
-        /// </summary>
+        /// <summary>Trong lúc hành động diễn ra thì thân thể có mất quyền điều khiển không.</summary>
         public bool LocksMovement;
 
-        // Dẫn xuất — xem ghi chú ở WorldRules, cùng lý do và cùng cặp thuộc tính bỏ qua.
-        [MemoryPackIgnore] [JsonIgnore] public int DurationTicks;
+        /// <summary>Bản tick của <see cref="DurationSeconds"/> — thứ mô phỏng thật sự đọc.</summary>
+        public int DurationTicks;
 
-        [MemoryPackIgnore] [JsonIgnore] public int CooldownTicks;
+        /// <summary>Bản tick của <see cref="CooldownSeconds"/>.</summary>
+        public int CooldownTicks;
 
+        /// <summary>Quy giây ra tick. Gọi một lần lúc nạp bảng, không gọi trong vòng tick.</summary>
         public void Prepare()
         {
             DurationTicks = MovementRules.ToTicks(DurationSeconds);
@@ -43,46 +45,19 @@ namespace MMORPG.Shared.World.Character
     }
 
     /// <summary>
-    /// Cả bảng. Vừa là bản đối chiếu với characters.json, vừa là thứ đi trong EnterWorldResponse —
-    /// bảng này nhỏ nên chọn chế độ "gửi cả dữ liệu", và ở chế độ đó thì lệch là chuyện không xảy ra
-    /// được. Checksum vẫn có: nó là một dòng log để so hai server, và là chỗ nối cho Phase 18.
+    /// Cả bảng nhân vật, bản đối chiếu 1-1 với <c>characters.json</c>. Không đi trên dây: mỗi bên
+    /// đọc file của chính nó, và vân tay chỉ để in ra log (<see cref="ConfigFingerprint"/>).
     /// </summary>
     [MemoryPackable]
-    public sealed partial class CharacterTableData
+    public sealed partial class CharacterTableData : IConfigFile
     {
+        /// <summary>Phiên bản schema, nằm trong file.</summary>
         public int Version { get; set; } = 1;
 
-        public Character.CharacterConfig[] Classes { get; set; } = Array.Empty<Character.CharacterConfig>();
+        /// <summary>Mỗi phần tử là một lớp nhân vật.</summary>
+        public CharacterConfig[] Classes { get; set; } = Array.Empty<CharacterConfig>();
 
-        /// <summary>
-        /// Dấu vân tay của NỘI DUNG bảng. Không băm Name: nó chỉ để người đọc file dễ chịu, đổi nó
-        /// không đổi một hành vi nào — mà dấu vân tay phải trả lời "hai bên có chạy cùng luật không".
-        /// </summary>
-        public uint Checksum()
-        {
-            uint hash = Fnv1a.START;
-
-            hash = Fnv1a.Mix(hash, Version);
-
-            foreach (Character.CharacterConfig profile in Classes)
-            {
-                hash = Fnv1a.Mix(hash, profile.ClassId);
-                hash = Fnv1a.Mix(hash, profile.MoveSpeed);
-                hash = Fnv1a.Mix(hash, profile.JumpSpeed);
-                hash = Fnv1a.Mix(hash, profile.BodyHalfWidth);
-                hash = Fnv1a.Mix(hash, profile.BodyHeight);
-                hash = Fnv1a.Mix(hash, profile.BodyHeightCrouch);
-
-                foreach (ActionData action in profile.Actions)
-                {
-                    hash = Fnv1a.Mix(hash, (int)action.Action);
-                    hash = Fnv1a.Mix(hash, action.DurationSeconds);
-                    hash = Fnv1a.Mix(hash, action.CooldownSeconds);
-                    hash = Fnv1a.Mix(hash, action.LocksMovement ? 1 : 0);
-                }
-            }
-
-            return hash;
-        }
+        /// <summary>Đếm ra từ <see cref="Classes"/>, nên không tuần tự hoá ở cả hai bộ.</summary>
+        [MemoryPackIgnore] [JsonIgnore] public int RowCount => Classes.Length;
     }
 }

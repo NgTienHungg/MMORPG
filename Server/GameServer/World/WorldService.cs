@@ -1,9 +1,9 @@
 using System.Collections.Concurrent;
+using MMORPG.GameServer.Config;
 using MMORPG.ServerCore;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.Dto.World;
 using MMORPG.Shared.Net;
-using MMORPG.Shared.World;
 using MMORPG.Shared.World.Character;
 using MMORPG.Shared.World.Map;
 
@@ -52,12 +52,12 @@ namespace MMORPG.GameServer.World
             _maps = maps;
             _config = config;
 
-            // Chốt MỘT LẦN lúc dựng, không đọc config.Current mỗi tick. Cùng lý do với WorldRules
+            // Chốt MỘT LẦN lúc dựng, không đọc config.Current mỗi tick. Cùng lý do với WorldConfig
             // trong PlayerEntity — nhưng ở đây còn thêm một lý do nữa: đổi bán kính giữa chừng làm
             // tập Visible của mọi người lệch với tập đã gửi, và một loạt EntityDespawn giả sinh ra.
             _aoiRadiusX = config.Current.Server.AoiRadiusX;
 
-            // Cột rộng BẰNG ĐÚNG bán kính (Phase 11). Tính từ bán kính chứ không cho nó một dòng
+            // Cột rộng BẰNG ĐÚNG bán kính. Tính từ bán kính chứ không cho nó một dòng
             // config riêng: hai con số rời nhau là hai con số sẽ lệch nhau.
             _aoiColumnWidth = _aoiRadiusX;
         }
@@ -243,8 +243,8 @@ namespace MMORPG.GameServer.World
                         continue;
 
                     // Phép lọc thật. Cùng một ngưỡng cho cả chiều vào lẫn chiều ra, nên người đứng
-                    // đúng mốc 24 unit sẽ nhấp nháy hiện/biến — xem ghi chú hysteresis ở cuối tài
-                    // liệu Phase 11. Chấp nhận được vì mốc ấy nằm ngoài khung hình.
+                    // đúng mốc 24 unit sẽ nhấp nháy hiện/biến; chưa có hysteresis nào chặn.
+                    // Chấp nhận được vì mốc ấy nằm ngoài khung hình.
                     if (MathF.Abs(entity.State.X - viewerX) > _aoiRadiusX)
                         continue;
 
@@ -254,7 +254,7 @@ namespace MMORPG.GameServer.World
             }
         }
 
-        /// <summary>Snapshot dựng từ tập vừa gom — không còn duyệt toàn bộ world như Phase 7.</summary>
+        /// <summary>Snapshot dựng từ tập vừa gom, không duyệt toàn bộ world.</summary>
         private WorldSnapshotNotice BuildSnapshot()
         {
             var states = new EntityState[_visibleNow.Count];
@@ -334,7 +334,7 @@ namespace MMORPG.GameServer.World
 
         /// <summary>
         /// Một lệnh đổi trạng thái đến từ NGOÀI luồng tick. Hiện chỉ có nút thử trên console phát ra;
-        /// từ Phase 14 thì sát thương của quái và của người chơi khác cũng đi đường này.
+        /// sát thương của quái và của người chơi khác sau này cũng sẽ đi đường này.
         /// </summary>
         private readonly struct ForcedActionCommand
         {

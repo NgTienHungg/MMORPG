@@ -1,6 +1,7 @@
 using System.Collections.Generic;
 using MMORPG.Client.Network.Handlers;
 using MMORPG.Shared.Dto.World;
+using MMORPG.Shared.World;
 using MMORPG.Shared.World.Character;
 using MMORPG.Shared.World.Map;
 using MMORPG.Shared.World.Movement;
@@ -23,11 +24,16 @@ namespace MMORPG.Client.World
         /// <summary>Lệch hơn mức này thì kéo mượt là dối người chơi — cắt thẳng về vị trí đúng.</summary>
         private const float SNAP_DISTANCE = 2f;
 
+        /// <summary>Tầng HÌNH: nhận trạng thái đã mô phỏng xong rồi chọn clip. Không quyết định gì.</summary>
         [SerializeField] private CharacterAnimator _characterAnimator;
 
+        /// <summary>Bảng phím, dựng trong Awake và huỷ trong OnDestroy.</summary>
         private InputSystem_Actions _inputActions;
 
+        /// <summary>Chiều GỬI: mọi ý định đi lên server qua đây.</summary>
         private WorldApi _worldApi;
+
+        /// <summary>Chiều NHẬN: kết quả server trả về cho từng tick đã gửi.</summary>
         private WorldNetHandler _worldNetHandler;
 
         /// <summary>
@@ -37,13 +43,25 @@ namespace MMORPG.Client.World
         private CharacterConfig _characterConfig;
 
         /// <summary>
+        /// Luật thế giới của PHIÊN này, chốt lúc Init. Giữ reference thay vì đọc ConfigService mỗi
+        /// tick: server cũng chốt một bản cho entity lúc spawn, nên hai bên phải đóng băng ở cùng một
+        /// thời điểm thì replay mới ra cùng kết quả.
+        /// </summary>
+        private WorldConfig _worldConfig;
+
+        /// <summary>
         /// Lưới va chạm client dự đoán bằng. PHẢI là đúng lưới server đang chạy — hai bên đọc cùng
         /// một file nên chuyện đó được bảo đảm bằng cơ chế, không bằng trí nhớ.
         /// </summary>
         private MapGrid _map;
 
+        /// <summary>Input đã gửi mà chưa có xác nhận — nguyên liệu để replay khi server trả về.</summary>
         private readonly List<PendingInput> _pending = new();
+
+        /// <summary>Số thứ tự của tick gửi đi tiếp theo. Server trả lại chính số này để khớp cặp.</summary>
         private int _nextSeq;
+
+        /// <summary>Thời gian dồn lại giữa hai tick, để Update ở tần số bất kỳ vẫn Step đúng 20Hz.</summary>
         private float _accumulator;
 
         /// <summary>
@@ -52,7 +70,7 @@ namespace MMORPG.Client.World
         /// </summary>
         private bool _jumpLatched;
 
-        // Trạng thái MÔ PHỎNG (nhảy bậc 20Hz) tách khỏi vị trí HIỂN THỊ (transform, mượt theo frame).
+        /// <summary>Trạng thái MÔ PHỎNG (nhảy bậc 20Hz), tách khỏi vị trí HIỂN THỊ mượt theo frame.</summary>
         private MoveState _simState;
 
         /// <summary>Trạng thái ở tick TRƯỚC — đầu trái của đoạn nội suy đang vẽ.</summary>
@@ -83,13 +101,19 @@ namespace MMORPG.Client.World
             _inputActions.Player.Enable();
         }
 
-        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos, int classId, MapGrid map)
+        /// <summary>
+        /// Nhận CharacterConfig và WorldConfig đã tra sẵn thay vì tự đi tra: WorldSpawner mới là chỗ
+        /// biết gói EnterWorld nói gì, và nó tra một lần rồi đưa xuống. Nhận cả hai bộ số cùng lúc
+        /// cũng làm hiển nhiên một điều kiện dễ quên — cả hai phải đến từ CÙNG một gói EnterWorld.
+        /// </summary>
+        public void Init(WorldApi worldApi, WorldNetHandler worldNetHandler, Vector2 spawnPos,
+            CharacterConfig characterConfig, WorldConfig worldConfig, MapGrid map)
         {
             _worldApi = worldApi;
             _worldNetHandler = worldNetHandler;
 
-            //todo: fix tạm
-            _characterConfig = new CharacterConfig(); // CharacterConfigContainer.Get(classId);
+            _characterConfig = characterConfig;
+            _worldConfig = worldConfig;
             _map = map;
 
             _simState = MoveState.AtRest(spawnPos.x, spawnPos.y);
@@ -181,7 +205,7 @@ namespace MMORPG.Client.World
             _jumpLatched = false;
             _attackLatched = false;
 
-            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, WorldApi.Config, _characterConfig, _map);
+            _simState = MovementRules.Step(_simState, intent, MovementRules.TICK_DT, _worldConfig, _characterConfig, _map);
 
             _pending.Add(new PendingInput(seq, intent));
             _worldApi.Move(seq, intent);
@@ -217,8 +241,7 @@ namespace MMORPG.Client.World
                 // Vòng replay PHẢI dùng đúng map của bước dự đoán. Đây là chỗ dễ quên nhất trong cả
                 // phase, và triệu chứng của việc quên không phải "sai vị trí" mà là RUNG ở sát tường:
                 // dự đoán chặn, replay cho qua, mỗi gói MoveState là một lần đổi ý.
-                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT,
-                    WorldApi.Config, _characterConfig, _map);
+                state = MovementRules.Step(state, pending.Intent, MovementRules.TICK_DT, _worldConfig, _characterConfig, _map);
             }
 
             _prevSimState = previous;

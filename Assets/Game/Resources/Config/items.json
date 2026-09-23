@@ -1,0 +1,21 @@
+{
+  "Version": 1,
+  "Items": [
+    {
+      "TemplateId": 1,
+      "Name": "Bình máu nhỏ",
+      "Description": "Hồi 50 sinh lực.",
+      "IconKey": "Items/potion_small",
+      "Kind": "Consumable",
+      "MaxStack": 20
+    },
+    {
+      "TemplateId": 100,
+      "Name": "Kiếm gỗ",
+      "Description": "Vũ khí tập luyện.",
+      "IconKey": "Items/sword_wood",
+      "Kind": "Equipment",
+      "MaxStack": 1
+    }
+  ]
+}

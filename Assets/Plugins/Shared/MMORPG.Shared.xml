@@ -125,6 +125,14 @@
             <summary>Chuỗi tiếng Việt hiển thị thẳng cho người chơi.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.Character.EnterWorldResponse">
+             <summary>
+             Gói mở màn của một phiên chơi: chỉ mang những gì RIÊNG của phiên vừa mở.
+            
+             Nó không chở dữ liệu tĩnh nào — bảng nhân vật, bảng item, lưới map đều ship cùng bản build
+             của client, và server đọc bản copy của mình. Ngoại lệ duy nhất là <see cref="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.World"/>: người
+             vận hành chỉnh trọng lực giữa hai lần restart server mà không patch client, nên client không
+             thể có sẵn mấy con số ấy.
+             </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
@@ -143,11 +151,41 @@
             </code>
             </remarks>
         </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.Success">
+            <summary>Sai thì mọi trường dưới đây vô nghĩa, chỉ đọc <see cref="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.Error"/>.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.Error">
+            <summary>Lý do từ chối. <c>None</c> khi thành công.</summary>
+        </member>
         <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.EntityId">
             <summary>Id runtime trong world. Chỉ có nghĩa tới khi rời world.</summary>
         </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.CharacterId">
+            <summary>Id trong DB — sống qua mọi lần vào ra world.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.Name">
+            <summary>Tên nhân vật.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.ClassId">
+            <summary>Lớp nhân vật, khoá tra vào bảng nhân vật.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.Level">
+            <summary>Cấp hiện tại.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.MapId">
+            <summary>Map đang đứng, khoá tra vào sổ map.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.X">
+            <summary>Toạ độ world lúc vào, trục ngang.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.Y">
+            <summary>Toạ độ world lúc vào, trục dọc.</summary>
+        </member>
         <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.ServerTimeMs">
             <summary>Mốc thời gian server (Unix ms) tại thời điểm vào world.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.World">
+            <summary>Luật thế giới đang chạy trên server. Null khi <see cref="P:MMORPG.Shared.Dto.Character.EnterWorldResponse.Success"/> sai.</summary>
         </member>
         <member name="T:MMORPG.Shared.Dto.Db.AccountGetRequest">
             <remarks>
@@ -561,7 +599,7 @@
              Một hằng số mà người ta quên tăng còn tệ hơn không có — nó tạo cảm giác đã được bảo vệ.
             
              GIỚI HẠN, phải biết: nó bắt đổi HÌNH DẠNG, không bắt đổi HÀNH VI. Sửa công thức trong
-             MovementRules.Step thì số này y nguyên. Đọc thêm ở "Để dành" của Phase 12.
+             MovementRules.Step thì số này y nguyên.
              </summary>
         </member>
         <member name="P:MMORPG.Shared.Net.Contract.Hash">
@@ -809,8 +847,8 @@
         </member>
         <member name="T:MMORPG.Shared.World.Character.CharacterConfig">
              <summary>
-             Bộ số của một lớp nhân vật. Ba vai, một hình dạng: dòng trong characters.json, phần tử của gói
-             EnterWorld, và bộ số MovementRules.Step đọc.
+             Bộ số của một lớp nhân vật: vừa là một dòng trong <c>characters.json</c>, vừa là bộ số
+             <c>MovementRules.Step</c> đọc mỗi tick.
             
              Property có setter là cái giá của việc tuần tự hoá được — kiểu bất biến thì không bộ tuần tự
              hoá nào dựng được nó. Bù lại bằng kỷ luật, không bằng trình biên dịch: CHỈ
@@ -831,8 +869,11 @@
             </code>
             </remarks>
         </member>
+        <member name="P:MMORPG.Shared.World.Character.CharacterConfig.ClassId">
+            <summary>Khoá của bảng. Nhân vật trong DB trỏ về một lớp bằng số này.</summary>
+        </member>
         <member name="P:MMORPG.Shared.World.Character.CharacterConfig.Name">
-            <summary>Tên để đọc log và sửa file cho dễ. Mô phỏng không dùng, nên nó cũng không vào Checksum.</summary>
+            <summary>Tên để đọc log và sửa file cho dễ. Mô phỏng không dùng tới.</summary>
         </member>
         <member name="P:MMORPG.Shared.World.Character.CharacterConfig.MoveSpeed">
             <summary>Tốc độ chạy ngang, world unit/giây.</summary>
@@ -853,10 +894,7 @@
             <summary>Mảng chứ không phải object có khoá cố định: thêm một hành động mới là thêm phần tử.</summary>
         </member>
         <member name="M:MMORPG.Shared.World.Character.CharacterConfig.Prepare">
-            <summary>
-            Quy giây ra tick cho mọi hành động. Gọi từ <see cref="M:MMORPG.Shared.World.Character.CharacterConfigContainer.Load(MMORPG.Shared.World.Character.CharacterTableData)"/>, tức là
-            đúng một chỗ ở mỗi bên — cùng cơ chế với <see cref="!:WorldRules.Prepare"/>.
-            </summary>
+            <summary>Quy giây ra tick cho mọi hành động. Gọi từ <see cref="M:MMORPG.Shared.World.Character.CharacterConfigContainer.Load(MMORPG.Shared.World.Character.CharacterTableData)"/>, tức đúng một chỗ ở mỗi bên.</summary>
         </member>
         <member name="M:MMORPG.Shared.World.Character.CharacterConfig.GetAction(MMORPG.Shared.World.Character.ActionState)">
              <summary>
@@ -869,25 +907,34 @@
         </member>
         <member name="T:MMORPG.Shared.World.Character.CharacterConfigContainer">
              <summary>
-             Bảng tra profile theo lớp nhân vật. Bảng TĨNH nhưng NẠP ĐƯỢC: server nạp từ file lúc boot,
-             client nạp từ gói EnterWorld. Một bảng, hai đường vào, một hàm dựng — nên hai bên không có cửa
-             nào cầm hai bộ số khác nhau.
+             Bảng tra config theo lớp nhân vật: tĩnh nhưng NẠP ĐƯỢC, và mỗi bên nạp từ file của chính mình
+             — server đọc <c>Data/Config/characters.json</c>, client đọc
+             <c>Resources/Config/characters.json</c>, hai file sinh từ một nguồn trong repo.
             
-             Chỉ được thay bảng GIỮA HAI PHIÊN chơi. Entity đang sống giữ reference tới CharacterProfile cũ
-             (PlayerEntity._profile), nên thay bảng giữa chừng không kéo được người đang online sang bộ mới —
-             và đó là hành vi đúng, không phải thiếu sót.
+             Chỉ được thay bảng GIỮA HAI PHIÊN chơi. Entity đang sống giữ reference tới CharacterConfig cũ
+             (<c>PlayerEntity._config</c>), nên thay bảng giữa chừng không kéo người đang online sang bộ
+             mới — và đó là hành vi đúng, không phải thiếu sót.
              </summary>
         </member>
-        <member name="P:MMORPG.Shared.World.Character.CharacterConfigContainer.Checksum">
-            <summary>Checksum của bảng đang nạp — để in log và để so hai đầu dây.</summary>
+        <member name="F:MMORPG.Shared.World.Character.CharacterConfigContainer.DRAGON_WARRIOR">
+            <summary>Lớp mặc định, chỗ lùi về khi một ClassId lạ lọt vào từ DB.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.Character.CharacterConfigContainer._byClassId">
+            <summary>Bảng đang chạy. Chỉ <see cref="M:MMORPG.Shared.World.Character.CharacterConfigContainer.Load(MMORPG.Shared.World.Character.CharacterTableData)"/> được gán vào nó.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Character.CharacterConfigContainer.Count">
+            <summary>Số lớp trong bảng đang chạy.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.Character.CharacterConfigContainer.Get(System.Int32)">
+            <summary>Config của một lớp. ClassId lạ thì lùi về <see cref="F:MMORPG.Shared.World.Character.CharacterConfigContainer.DRAGON_WARRIOR"/>.</summary>
         </member>
         <member name="M:MMORPG.Shared.World.Character.CharacterConfigContainer.Load(MMORPG.Shared.World.Character.CharacterTableData)">
              <summary>
-             Thay cả bảng bằng dữ liệu vừa đọc (server) hoặc vừa nhận (client). Dựng NGUYÊN bảng mới rồi
-             mới gán — xem câu 4 phần tự kiểm tra.
+             Thay cả bảng bằng dữ liệu vừa đọc từ file.
             
-             Đây cũng là chỗ DUY NHẤT gọi Prepare(), nên không có đường nào để một profile lọt vào bảng
-             mà chưa quy ra tick.
+             Dựng NGUYÊN bảng mới rồi mới gán: nửa chừng mà ném thì bảng cũ còn nguyên, và luồng khác
+             đọc song song hoặc thấy trọn bảng cũ hoặc trọn bảng mới. Đây cũng là chỗ duy nhất gọi
+             <c>Prepare()</c>, nên không có đường nào để một config lọt vào bảng mà chưa quy ra tick.
              </summary>
         </member>
         <member name="T:MMORPG.Shared.World.Character.LocomotionState">
@@ -933,13 +980,14 @@
         </member>
         <member name="T:MMORPG.Shared.World.Character.ActionData">
              <summary>
-             Các con số của MỘT hành động. Thay cho ActionDefinition của Phase 9 — cùng nội dung, khác ở chỗ
-             nó đọc được từ file và đi được trên dây.
+             Các con số của MỘT hành động, đọc từ file và đi được trên dây.
             
-             Vẫn là STRUCT, và đó không phải chuyện phong cách: <c>default</c> của nó là "0 tick, không khoá
-             thân", nên <see cref="M:MMORPG.Shared.World.Character.CharacterConfig.GetAction(MMORPG.Shared.World.Character.ActionState)"/> trả về được một giá trị hợp lệ cho hành động
-             không có trong bảng mà chỗ gọi không phải kiểm null. Đổi sang class là mọi chỗ gọi mọc thêm một
-             phép kiểm, và một trong số đó sẽ bị quên.
+             Là struct có chủ đích: <c>default</c> của nó là "0 tick, không khoá thân", nên
+             <see cref="M:MMORPG.Shared.World.Character.CharacterConfig.GetAction(MMORPG.Shared.World.Character.ActionState)"/> trả về được một giá trị hợp lệ cho hành động không có
+             trong bảng mà chỗ gọi không phải kiểm null.
+            
+             Toàn kiểu unmanaged nên MemoryPack chép nguyên khối: MỌI trường đều đi trên dây và vào vân
+             tay, kể cả hai trường tick do <see cref="M:MMORPG.Shared.World.Character.ActionData.Prepare"/> điền.
              </summary>
             <remarks>
             MemoryPack GenerateType: unmanaged<br/>
@@ -948,23 +996,36 @@
             <b>float</b> DurationSeconds<br/>
             <b>float</b> CooldownSeconds<br/>
             <b>bool</b> LocksMovement<br/>
+            <b>int</b> DurationTicks<br/>
+            <b>int</b> CooldownTicks<br/>
             </code>
             </remarks>
         </member>
         <member name="F:MMORPG.Shared.World.Character.ActionData.Action">
             <summary>Ghi bằng TÊN enum trong file ("Attack"), không phải số — người sửa file không phải tra bảng.</summary>
         </member>
+        <member name="F:MMORPG.Shared.World.Character.ActionData.DurationSeconds">
+            <summary>Thời lượng hành động, bằng đơn vị người thiết kế dùng.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.Character.ActionData.CooldownSeconds">
+            <summary>Thời gian hồi trước khi dùng lại được.</summary>
+        </member>
         <member name="F:MMORPG.Shared.World.Character.ActionData.LocksMovement">
-            <summary>
-            Trong lúc hành động này diễn ra thì thân thể có mất quyền điều khiển không. Là dữ liệu chứ
-            không phải một nhánh switch: thêm chiêu "đứng yên đọc chú" chỉ là thêm một ô true.
-            </summary>
+            <summary>Trong lúc hành động diễn ra thì thân thể có mất quyền điều khiển không.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.Character.ActionData.DurationTicks">
+            <summary>Bản tick của <see cref="F:MMORPG.Shared.World.Character.ActionData.DurationSeconds"/> — thứ mô phỏng thật sự đọc.</summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.Character.ActionData.CooldownTicks">
+            <summary>Bản tick của <see cref="F:MMORPG.Shared.World.Character.ActionData.CooldownSeconds"/>.</summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.Character.ActionData.Prepare">
+            <summary>Quy giây ra tick. Gọi một lần lúc nạp bảng, không gọi trong vòng tick.</summary>
         </member>
         <member name="T:MMORPG.Shared.World.Character.CharacterTableData">
             <summary>
-            Cả bảng. Vừa là bản đối chiếu với characters.json, vừa là thứ đi trong EnterWorldResponse —
-            bảng này nhỏ nên chọn chế độ "gửi cả dữ liệu", và ở chế độ đó thì lệch là chuyện không xảy ra
-            được. Checksum vẫn có: nó là một dòng log để so hai server, và là chỗ nối cho Phase 18.
+            Cả bảng nhân vật, bản đối chiếu 1-1 với <c>characters.json</c>. Không đi trên dây: mỗi bên
+            đọc file của chính nó, và vân tay chỉ để in ra log (<see cref="T:MMORPG.Shared.World.ConfigFingerprint"/>).
             </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
@@ -974,11 +1035,50 @@
             </code>
             </remarks>
         </member>
-        <member name="M:MMORPG.Shared.World.Character.CharacterTableData.Checksum">
-            <summary>
-            Dấu vân tay của NỘI DUNG bảng. Không băm Name: nó chỉ để người đọc file dễ chịu, đổi nó
-            không đổi một hành vi nào — mà dấu vân tay phải trả lời "hai bên có chạy cùng luật không".
-            </summary>
+        <member name="P:MMORPG.Shared.World.Character.CharacterTableData.Version">
+            <summary>Phiên bản schema, nằm trong file.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Character.CharacterTableData.Classes">
+            <summary>Mỗi phần tử là một lớp nhân vật.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Character.CharacterTableData.RowCount">
+            <summary>Đếm ra từ <see cref="P:MMORPG.Shared.World.Character.CharacterTableData.Classes"/>, nên không tuần tự hoá ở cả hai bộ.</summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.ConfigFiles">
+             <summary>
+             Tên những file config mà cả hai bên cùng đọc — client từ <c>Assets/Game/Resources/Config/</c>,
+             server từ bản copy trong <c>Data/Config/</c>. Chung một hằng để hai bên không lệch chuỗi sau
+             lần đổi tên file đầu tiên.
+            
+             File chỉ một bên đọc thì hằng tên của nó nằm private ở bên đó — <c>game.json</c> là ví dụ.
+             Không có đuôi <c>.json</c>: server tự thêm, còn <c>Resources.Load</c> luôn bỏ phần đuôi.
+             </summary>
+        </member>
+        <member name="T:MMORPG.Shared.World.ConfigFingerprint">
+             <summary>
+             Dấu vân tay của một file config, băm từ byte đã tuần tự hoá. Một hàm cho mọi file.
+            
+             Mỗi bên in vân tay của file mình vừa nạp ra log; đặt hai dòng cạnh nhau là biết hai bên có
+             đang cầm cùng một bộ dữ liệu không. Không có phép so tự động nào trên dây — mỗi bên tự quyết
+             định nạp file nào, nên hai danh sách không bao giờ bằng nhau.
+             </summary>
+        </member>
+        <member name="M:MMORPG.Shared.World.ConfigFingerprint.Of``1(``0)">
+             <summary>
+             Băm byte chứ không băm text thô của file: <c>core.autocrlf</c> làm cùng một nội dung ra
+             CRLF trên Windows và LF trên Linux, còn byte tuần tự hoá thì không có ký tự xuống dòng.
+             Hai bản build của Shared sinh cùng dãy byte — cả giao thức đã dựa vào điều đó từ khung
+             gói tin đầu tiên.
+            
+             Gọi SAU khi nạp xong (sau <c>Prepare()</c>, sau khi server kẹp miền giá trị), và cả hai
+             bên gọi ở cùng chỗ ấy; lệch thời điểm là hai số lệch nhau vì một lý do không liên quan
+             tới nội dung file.
+             </summary>
+             <remarks>
+             Ràng buộc <c>IMemoryPackable</c> giống <see cref="M:MMORPG.Shared.Net.NetPayload.Serialize``1(``0)"/>: nó bắt
+             lúc biên dịch việc quên <c>[MemoryPackable]</c> trên một bảng mới. File chỉ đi qua
+             Newtonsoft — file map — thì không in vân tay, và cũng không có hàm băm riêng.
+             </remarks>
         </member>
         <member name="T:MMORPG.Shared.World.Fnv1a">
              <summary>
@@ -989,14 +1089,31 @@
              cho cùng kết quả trên CoreCLR lẫn Mono/IL2CPP.
              </summary>
         </member>
+        <member name="M:MMORPG.Shared.World.Fnv1a.Mix(System.UInt32,System.ReadOnlySpan{System.Byte})">
+            <summary>
+            Nuốt cả một dãy byte. Đây là lối vào mà <see cref="T:MMORPG.Shared.World.ConfigFingerprint"/> dùng — băm thẳng
+            byte đã tuần tự hoá thay vì liệt kê từng trường bằng tay.
+            </summary>
+        </member>
         <member name="M:MMORPG.Shared.World.Fnv1a.Mix(System.UInt32,System.Int32)">
             <summary>Nuốt từng byte một. Cộng thẳng cả int vào thì hai bảng hoán vị vài ô vẫn ra cùng số.</summary>
         </member>
-        <member name="M:MMORPG.Shared.World.Fnv1a.Mix(System.UInt32,System.Single)">
+        <member name="T:MMORPG.Shared.World.IConfigFile">
+             <summary>
+             Hình dạng chung của mọi file config, đủ để một hàm nạp duy nhất làm việc được với tất cả:
+             bảng nhân vật, bảng item, và bộ tham số vận hành của server.
+            
+             Interface dừng ở hai thành viên này — thêm nữa là ép mọi file tương lai mang thứ mà chỉ một
+             file dùng. Dấu vân tay không nằm ở đây vì nó TÍNH RA từ file: xem <see cref="T:MMORPG.Shared.World.ConfigFingerprint"/>.
+             </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.IConfigFile.Version">
+            <summary>Phiên bản schema của file. Có từ ngày đầu — thêm sau khi đã có người chơi là một cuộc di cư.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.IConfigFile.RowCount">
             <summary>
-            Băm BIT của float, không băm chuỗi in ra. 0.1f in ra mấy chữ số là chuyện của ToString và
-            của culture; bit thì giống nhau ở mọi nền tảng — mà cái ta cần so là giá trị, không phải
-            cách viết nó.
+            Số mục dữ liệu trong file: hàm nạp dùng nó để phát hiện file parse được nhưng rỗng, và để
+            in log. File không phải bảng thì trả hằng 1 — nó không rỗng được.
             </summary>
         </member>
         <member name="T:MMORPG.Shared.World.Item.ItemConfig">
@@ -1016,31 +1133,49 @@
             </code>
             </remarks>
         </member>
+        <member name="P:MMORPG.Shared.World.Item.ItemConfig.TemplateId">
+            <summary>Khoá của bảng. Một món đồ trong túi trỏ về đây bằng số này.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Item.ItemConfig.Name">
+            <summary>Tên hiển thị cho người chơi.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Item.ItemConfig.Description">
+            <summary>Mô tả hiển thị cho người chơi.</summary>
+        </member>
         <member name="P:MMORPG.Shared.World.Item.ItemConfig.IconKey">
             <summary>
             Khoá tài nguyên của icon — THUẦN client, server không đọc dòng này bao giờ. Vẫn để chung
-            bảng: tách ra là có hai bảng phải khớp nhau theo TemplateId, tức dựng lại đúng cái bệnh
-            mà Phase 12 vừa chữa.
+            bảng vì tách ra là có hai bảng phải khớp nhau theo <see cref="P:MMORPG.Shared.World.Item.ItemConfig.TemplateId"/>.
             </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Item.ItemConfig.Kind">
+            <summary>Quyết định món đồ dùng được hay chỉ để bán, và nằm ở nhóm nào trong túi.</summary>
         </member>
         <member name="P:MMORPG.Shared.World.Item.ItemConfig.MaxStack">
             <summary>Tối đa bao nhiêu cái trong một ô. 1 nghĩa là không xếp chồng.</summary>
         </member>
         <member name="T:MMORPG.Shared.World.Item.ItemConfigContainer">
             <summary>
-            Bảng tra template theo id. Cùng khuôn với CharacterProfiles ở Phase 12: bảng tĩnh NẠP ĐƯỢC,
-            server nạp từ file, client nạp từ gói EnterWorld, một hàm dựng cho cả hai.
+            Bảng tra template item theo id. Cùng khuôn với <see cref="T:MMORPG.Shared.World.Character.CharacterConfigContainer"/>:
+            bảng tĩnh NẠP ĐƯỢC, và cả hai bên đều nạp từ file của chính mình.
             </summary>
+        </member>
+        <member name="F:MMORPG.Shared.World.Item.ItemConfigContainer._byId">
+            <summary>Bảng đang chạy. Chỉ <see cref="M:MMORPG.Shared.World.Item.ItemConfigContainer.Load(MMORPG.Shared.World.Item.ItemTableData)"/> được gán vào nó.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Item.ItemConfigContainer.Count">
+            <summary>Số loại đồ trong bảng đang chạy.</summary>
         </member>
         <member name="M:MMORPG.Shared.World.Item.ItemConfigContainer.Find(System.Int32)">
             <summary>
-            Template của một id, hoặc null. Trả null chứ không ném: một id lạ đến từ DB (đồ của bảng
-            cũ, item bị gỡ khỏi bảng) là chuyện sẽ xảy ra, và cách xử lý đúng là bỏ qua món đồ đó chứ
-            không phải chặn người chơi vào game.
+            Template của một id, hoặc null. Trả null chứ không ném vì nguồn của id khác
+            <c>CharacterConfigContainer.Get</c>: templateId đến từ DB và có thể là đồ của một bảng cũ
+            hoặc item đã bị gỡ. Cách xử lý đúng cho một dòng như vậy là bỏ qua món đồ đó, không phải
+            chặn người chơi vào game.
             </summary>
         </member>
         <member name="M:MMORPG.Shared.World.Item.ItemConfigContainer.Load(MMORPG.Shared.World.Item.ItemTableData)">
-            <summary>Thay cả bảng. Dựng nguyên bảng mới rồi mới gán — xem Phase 12 câu 4.</summary>
+            <summary>Thay cả bảng. Dựng nguyên bảng mới rồi mới gán — cùng lý do như bảng nhân vật.</summary>
         </member>
         <member name="T:MMORPG.Shared.World.Item.ItemKind">
             <summary>
@@ -1055,9 +1190,13 @@
             <summary>Dùng một lần, giảm số lượng.</summary>
         </member>
         <member name="F:MMORPG.Shared.World.Item.ItemKind.Equipment">
-            <summary>Mặc được. Phase 13 chưa mặc được gì — đó là việc của Phase 14.</summary>
+            <summary>Mặc được. Chưa có hệ thống trang bị, nên giá trị này mới chỉ để phân nhóm.</summary>
         </member>
         <member name="T:MMORPG.Shared.World.Item.ItemTableData">
+            <summary>
+            Cả bảng item, bản đối chiếu 1-1 với <c>items.json</c>. Không đi trên dây: mỗi bên đọc file
+            của chính nó, và vân tay chỉ để in ra log (<see cref="T:MMORPG.Shared.World.ConfigFingerprint"/>).
+            </summary>
             <remarks>
             MemoryPack GenerateType: Object<br/>
             <code>
@@ -1066,11 +1205,14 @@
             </code>
             </remarks>
         </member>
-        <member name="M:MMORPG.Shared.World.Item.ItemTableData.Checksum">
-            <summary>
-            Chỉ băm thứ ĐỔI HÀNH VI. Sửa Description cho hay hơn mà bắt cả hai bên báo lệch phiên bản
-            là dạy người ta bỏ qua cảnh báo — và một cảnh báo bị bỏ qua thì không còn là cảnh báo.
-            </summary>
+        <member name="P:MMORPG.Shared.World.Item.ItemTableData.Version">
+            <summary>Phiên bản schema, nằm trong file.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Item.ItemTableData.Items">
+            <summary>Mỗi phần tử là một loại đồ.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Item.ItemTableData.RowCount">
+            <summary>Đếm ra từ <see cref="P:MMORPG.Shared.World.Item.ItemTableData.Items"/>, nên không tuần tự hoá ở cả hai bộ.</summary>
         </member>
         <member name="T:MMORPG.Shared.World.Map.MapConfig">
              <summary>
@@ -1079,7 +1221,7 @@
             
              Tách hai kiểu vì hai vai khác nhau: trường nào có trong file là chuyện của ĐỊNH DẠNG, còn tra
              một ô nhanh cỡ nào là chuyện của MÔ PHỎNG. Gộp lại thì mỗi lần đổi định dạng là đụng vào thứ
-             chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (DB) ≠ PlayerEntity (world) ở Phase 5.
+             chạy 20 lần mỗi giây. Cùng mẫu với CharacterRow (hàng DB) ≠ PlayerEntity (world).
             
              Tên trường trong file LẤY THẲNG tên property, không có [JsonProperty] nào. Đổi lại sự gọn gàng
              ấy: tên property ở đây LÀ định dạng file, nên đổi tên một property là đổi định dạng — phải tăng
@@ -1087,13 +1229,31 @@
              bình thường trong IDE.
              </summary>
         </member>
+        <member name="P:MMORPG.Shared.World.Map.MapConfig.Version">
+            <summary>Phiên bản ĐỊNH DẠNG file, đối chiếu với <see cref="F:MMORPG.Shared.World.Map.MapGridParser.FORMAT_VERSION"/>.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.MapConfig.Id">
+            <summary>Id của map, khoá tra trong sổ map ở mỗi bên.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.MapConfig.Name">
+            <summary>Tên để đọc log cho dễ.</summary>
+        </member>
         <member name="P:MMORPG.Shared.World.Map.MapConfig.PrefabKey">
             <summary>
-            Khoá tài nguyên của prefab chứa HÌNH của map — thứ Resources.Load nhận. Là khoá chứ không
-            phải đường dẫn hệ thống tệp: server đọc cùng file này và nó không biết gì về bố cục thư mục
-            của project Unity. Thiếu trường thì về chuỗi rỗng — map không có hình riêng, và server thì
-            không đọc trường này bao giờ.
+            Khoá tài nguyên của prefab chứa HÌNH map, thứ Resources.Load nhận — khoá chứ không phải
+            đường dẫn hệ thống tệp, vì server đọc cùng file này mà không biết gì về bố cục thư mục
+            của project Unity. Chuỗi rỗng nghĩa là map không có hình riêng.
             </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.MapConfig.Origin">
+            <summary>
+            Ô dưới-trái của vùng đã vẽ. Cho phép null có chủ đích: file thiếu trường thì Newtonsoft để
+            null, và <see cref="M:MMORPG.Shared.World.Map.MapGridParser.Parse(System.String)"/> nói ra bằng một thông điệp đọc được thay vì để
+            NullReferenceException nổ ở đâu đó xa hơn.
+            </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.MapConfig.Spawns">
+            <summary>Các chỗ người chơi có thể xuất hiện. Map không có điểm nào thì không chơi được.</summary>
         </member>
         <member name="P:MMORPG.Shared.World.Map.MapConfig.Portals">
             <summary>
@@ -1120,6 +1280,21 @@
              Điểm đến ghi bằng TÊN chứ không phải toạ độ: file map này không được phép biết toạ độ bên trong
              map kia — vẽ lại map kia là mọi cổng trỏ tới nó phải sửa theo, mà không có gì nhắc.
              </summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.Portal.X">
+            <summary>Tâm vùng, toạ độ world.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.Portal.Y">
+            <summary>Tâm vùng, toạ độ world.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.Portal.Width">
+            <summary>Bề ngang vùng, tính cả hai phía của tâm.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.Portal.Height">
+            <summary>Bề cao vùng, tính cả hai phía của tâm.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.Map.Portal.ToMapId">
+            <summary>Map sẽ sang.</summary>
         </member>
         <member name="P:MMORPG.Shared.World.Map.Portal.ToSpawnId">
             <summary>Id điểm spawn ở map đích. Không có điểm nào mang tên này thì về điểm mặc định.</summary>
@@ -1175,15 +1350,6 @@
             thiếu một ô sàn thì hệ quả tệ nhất là rơi xuống đáy map rồi đứng đó, chứ không phải Y trôi
             ra vô cực và mọi phép tính sau đó thành vô nghĩa.
             </summary>
-        </member>
-        <member name="M:MMORPG.Shared.World.Map.MapGrid.Checksum">
-             <summary>
-             Dấu vân tay của LƯỚI (FNV-1a). Hai bên in ra cùng một số nghĩa là đang chạy đúng một map —
-             bằng chứng rẻ nhất có thể có, và là hạt giống cho phép kiểm version ở Phase 12.
-            
-             Cố ý không băm danh sách spawn: câu hỏi con số này trả lời là "hai bên có cùng hình dạng va
-             chạm không", còn điểm spawn thì chỉ server dùng.
-             </summary>
         </member>
         <member name="M:MMORPG.Shared.World.Map.MapGrid.FindDefaultSpawn(MMORPG.Shared.World.Map.SpawnPoint[])">
              <summary>
@@ -1461,6 +1627,10 @@
         </member>
         <member name="P:MMORPG.Shared.World.WorldConfig.DropThroughSeconds">
             <summary>Bỏ qua va chạm với bệ một chiều bao lâu sau khi bấm ngồi + nhảy.</summary>
+        </member>
+        <member name="P:MMORPG.Shared.World.WorldConfig.CoyoteTicks">
+            <summary>Bản tick của coyote / jump buffer / drop-through — tính lại mỗi lần đọc, đủ rẻ vì mỗi tick chỉ đọc vài lần.</summary>
+            <summary>Bản tick của ba giá trị trên — tính lại mỗi lần đọc, đủ rẻ vì mỗi tick chỉ đọc vài lần.</summary>
         </member>
     </members>
 </doc>

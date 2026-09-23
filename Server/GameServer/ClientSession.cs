@@ -1,7 +1,7 @@
 using System.Collections.Concurrent;
 using System.Net.Sockets;
 using MemoryPack;
-using MMORPG.GameServer.Handlers;
+using MMORPG.GameServer.Boot;
 using MMORPG.GameServer.Net;
 using MMORPG.GameServer.World;
 using MMORPG.ServerCore;
@@ -81,8 +81,12 @@ namespace MMORPG.GameServer
                 await Task.WhenAny(sendLoop, Task.Delay(1000, CancellationToken.None));
 
                 // Mất kết nối đột ngột cũng phải đi qua đúng đường dọn dẹp như logout chủ động.
-                if (CharacterHandler.CharacterService != null)
-                    await CharacterHandler.CharacterService.LeaveWorldAsync(this);
+                //
+                // TryGet chứ không Get: một kết nối có thể đứt trong lúc server đang tắt, và lúc đó
+                // ShutdownAsync đã dọn sổ service rồi. Get sẽ ném giữa khối finally — che mất lỗi
+                // thật đã làm vòng đọc chết.
+                if (ServerServices.TryGet(out CharacterService characterService))
+                    await characterService.LeaveWorldAsync(this);
 
                 SessionRegistry.Remove(this);
                 _tcpClient.Dispose();
@@ -168,7 +172,7 @@ namespace MMORPG.GameServer
         /// Contract khớp. Không mang theo dữ liệu gì — nó chỉ mở cửa cho các lệnh khác.
         ///
         /// Không có đường lùi: một session đã kiểm xong thì kiểm lại cũng vô nghĩa, và MarkLoggedOut
-        /// cố tình hạ về Connected chứ không về Verified — xem bên dưới.
+        /// cố tình hạ về Verified chứ không về Connected — xem bên dưới.
         /// </summary>
         public void MarkVerified()
         {

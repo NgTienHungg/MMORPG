@@ -4,55 +4,65 @@ using System.Collections.Generic;
 namespace MMORPG.Shared.World.Character
 {
     /// <summary>
-    /// Bảng tra profile theo lớp nhân vật. Bảng TĨNH nhưng NẠP ĐƯỢC: server nạp từ file lúc boot,
-    /// client nạp từ gói EnterWorld. Một bảng, hai đường vào, một hàm dựng — nên hai bên không có cửa
-    /// nào cầm hai bộ số khác nhau.
+    /// Bảng tra config theo lớp nhân vật: tĩnh nhưng NẠP ĐƯỢC, và mỗi bên nạp từ file của chính mình
+    /// — server đọc <c>Data/Config/characters.json</c>, client đọc
+    /// <c>Resources/Config/characters.json</c>, hai file sinh từ một nguồn trong repo.
     ///
-    /// Chỉ được thay bảng GIỮA HAI PHIÊN chơi. Entity đang sống giữ reference tới CharacterProfile cũ
-    /// (PlayerEntity._profile), nên thay bảng giữa chừng không kéo được người đang online sang bộ mới —
-    /// và đó là hành vi đúng, không phải thiếu sót.
+    /// Chỉ được thay bảng GIỮA HAI PHIÊN chơi. Entity đang sống giữ reference tới CharacterConfig cũ
+    /// (<c>PlayerEntity._config</c>), nên thay bảng giữa chừng không kéo người đang online sang bộ
+    /// mới — và đó là hành vi đúng, không phải thiếu sót.
     /// </summary>
     public static class CharacterConfigContainer
     {
+        /// <summary>Lớp mặc định, chỗ lùi về khi một ClassId lạ lọt vào từ DB.</summary>
         public const int DRAGON_WARRIOR = 1;
 
-        private static Dictionary<int, Character.CharacterConfig> _byClassId = new();
+        /// <summary>Bảng đang chạy. Chỉ <see cref="Load"/> được gán vào nó.</summary>
+        private static Dictionary<int, CharacterConfig> _byClassId = new();
 
-        /// <summary>Checksum của bảng đang nạp — để in log và để so hai đầu dây.</summary>
-        public static uint Checksum { get; private set; }
+        /// <summary>Số lớp trong bảng đang chạy.</summary>
+        public static int Count => _byClassId.Count;
 
-        public static Character.CharacterConfig Get(int classId)
+        /// <summary>Config của một lớp. ClassId lạ thì lùi về <see cref="DRAGON_WARRIOR"/>.</summary>
+        public static CharacterConfig Get(int classId)
         {
-            if (_byClassId.TryGetValue(classId, out Character.CharacterConfig profile))
-                return profile;
+            if (_byClassId.TryGetValue(classId, out var config))
+                return config;
 
             // Bảng rỗng (chưa nạp) thì đây là chỗ duy nhất phát hiện ra, và nó phải ném chứ không trả
             // null: null đi tiếp vài tầng rồi mới nổ ở MovementRules.Step, xa chỗ gây ra nó.
             if (_byClassId.Count == 0)
-                throw new InvalidOperationException("CharacterProfiles chưa được Load. Server nạp lúc boot, client nạp khi vào world.");
+                throw new InvalidOperationException("CharacterConfigContainer chưa được Load. Cả hai bên nạp từ file của mình lúc khởi động.");
 
             return _byClassId[DRAGON_WARRIOR];
         }
 
         /// <summary>
-        /// Thay cả bảng bằng dữ liệu vừa đọc (server) hoặc vừa nhận (client). Dựng NGUYÊN bảng mới rồi
-        /// mới gán — xem câu 4 phần tự kiểm tra.
+        /// Thay cả bảng bằng dữ liệu vừa đọc từ file.
         ///
-        /// Đây cũng là chỗ DUY NHẤT gọi Prepare(), nên không có đường nào để một profile lọt vào bảng
-        /// mà chưa quy ra tick.
+        /// Dựng NGUYÊN bảng mới rồi mới gán: nửa chừng mà ném thì bảng cũ còn nguyên, và luồng khác
+        /// đọc song song hoặc thấy trọn bảng cũ hoặc trọn bảng mới. Đây cũng là chỗ duy nhất gọi
+        /// <c>Prepare()</c>, nên không có đường nào để một config lọt vào bảng mà chưa quy ra tick.
         /// </summary>
         public static void Load(CharacterTableData table)
         {
-            var built = new Dictionary<int, Character.CharacterConfig>();
+            if (table == null)
+                throw new ArgumentNullException(nameof(table));
 
-            foreach (Character.CharacterConfig profile in table.Classes)
+            var built = new Dictionary<int, CharacterConfig>();
+
+            foreach (CharacterConfig config in table.Classes)
             {
-                profile.Prepare();
-                built[profile.ClassId] = profile;
+                // Trùng id thì không có giá trị mặc định nào để lùi về: bảng đã tự mâu thuẫn, và cái
+                // nào thắng là chuyện của thứ tự dòng trong file.
+                if (built.ContainsKey(config.ClassId))
+                    throw new InvalidOperationException($"Hai lớp cùng ClassId {config.ClassId}: \"{built[config.ClassId].Name}\" và \"{config.Name}\".");
+
+                config.Prepare();
+                built[config.ClassId] = config;
             }
 
             _byClassId = built;
-            Checksum = table.Checksum();
         }
     }
 }

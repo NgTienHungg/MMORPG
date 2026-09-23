@@ -14,10 +14,32 @@ namespace MMORPG.Client.Network.Handlers
         public event Action<EchoResponse> OnEcho;
         public event Action<ServerInfoResponse> OnServerInfo;
 
+        /// <summary>
+        /// Kết quả kiểm phiên bản contract. Lệnh ĐẦU TIÊN của mọi phiên: tới khi nó về thì session
+        /// còn ở bậc Connected và server từ chối gần như mọi lệnh khác.
+        /// </summary>
+        public event Action<VersionCheckResponse> OnVersionCheck;
+
         [NetHandler(NetCmd.Ping)]
         private void HandlePing(NetPacket packet)
         {
             OnPong?.Invoke(packet.GetData<PingResponse>());
+        }
+
+        [NetHandler(NetCmd.VersionCheck)]
+        private void HandleVersionCheck(NetPacket packet)
+        {
+            var response = packet.GetData<VersionCheckResponse>();
+
+            // Log ngay tại đây chứ không để chỗ nghe event lo: hai con số này là thứ người ta dán vào
+            // báo lỗi, và nó phải có mặt kể cả khi chưa ai đăng ký event.
+            if (response.Ok)
+                this.Log($"Contract khớp: {Contract.Hash:X8}");
+            else
+                this.LogError($"Contract LỆCH — client {Contract.Hash:X8} ≠ server {response.ServerHash:X8}. " +
+                              "Build lại Server/Shared để DLL trong Assets/Plugins/Shared/ khớp server.");
+
+            OnVersionCheck?.Invoke(response);
         }
 
         [NetHandler(NetCmd.Echo)]
