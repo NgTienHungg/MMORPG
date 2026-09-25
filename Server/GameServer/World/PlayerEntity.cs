@@ -94,6 +94,15 @@ namespace MMORPG.GameServer.World
         /// </summary>
         public HashSet<int> Visible { get; } = new();
 
+        /// <summary>
+        /// Túi đồ, sống cùng entity. Dựng rỗng ngay tại đây rồi InventoryService nạp nội dung từ DB:
+        /// nhờ vậy không có khoảnh khắc nào entity tồn tại mà Inventory còn null, và không chỗ nào
+        /// phải kiểm null trước khi chạm vào túi.
+        ///
+        /// CHỈ LUỒNG TICK đọc/ghi, như Visible.
+        /// </summary>
+        public Inventory Inventory { get; } = new();
+
         public PlayerEntity(int entityId, CharacterRow row, ClientSession owner, MapGrid map, WorldConfig world)
         {
             EntityId = entityId;

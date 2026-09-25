@@ -21,9 +21,9 @@ namespace MMORPG.Shared.World.Item
         /// hoặc item đã bị gỡ. Cách xử lý đúng cho một dòng như vậy là bỏ qua món đồ đó, không phải
         /// chặn người chơi vào game.
         /// </summary>
-        public static ItemConfig Find(int templateId)
+        public static ItemConfig? Find(int templateId)
         {
-            return _byId.TryGetValue(templateId, out ItemConfig config) ? config : null;
+            return _byId.GetValueOrDefault(templateId);
         }
 
         /// <summary>Thay cả bảng. Dựng nguyên bảng mới rồi mới gán — cùng lý do như bảng nhân vật.</summary>

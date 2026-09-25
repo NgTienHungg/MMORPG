@@ -36,6 +36,7 @@ catch (Exception ex)
 
 var config = ServerServices.Get<ConfigService>();
 var worldService = ServerServices.Get<WorldService>();
+var inventoryService = ServerServices.Get<InventoryService>();
 var gameLoop = ServerServices.Get<GameLoop>();
 
 var listener = new TcpListener(IPAddress.Any, port);
@@ -53,6 +54,10 @@ Console.CancelKeyPress += (_, e) =>
 //----------------------------------------------------------------------------------------------------
 
 #region === Console Key ===
+
+// Id của "Bình máu nhỏ" trong items.json. Hằng số CỦA PHÍM THỬ, không phải của game — ngày có quái
+// rơi đồ thì phím này biến mất cùng nó.
+const int POTION_TEMPLATE_ID = 1;
 
 // ĐẶT KHỐI NÀY TRƯỚC vòng `while (!cts.IsCancellationRequested) { ... AcceptTcpClientAsync ... }`.
 //
@@ -96,6 +101,11 @@ var console = new Thread(() =>
 
             case ConsoleKey.J:
                 worldService.EnqueueReviveAll();
+                break;
+
+            // Nguồn item DUY NHẤT của Phase 13. Quái và đồ rơi dưới đất là Phase 15.
+            case ConsoleKey.G:
+                inventoryService.EnqueueGrantAll(POTION_TEMPLATE_ID, 3);
                 break;
         }
     }

@@ -47,10 +47,13 @@ namespace MMORPG.GameServer.World
 
         private readonly ConfigService _config;
 
-        public WorldService(MapRegistry maps, ConfigService config)
+        private readonly InventoryService _inventoryService;
+
+        public WorldService(MapRegistry maps, ConfigService config, InventoryService inventoryService)
         {
             _maps = maps;
             _config = config;
+            _inventoryService = inventoryService;
 
             // Chốt MỘT LẦN lúc dựng, không đọc config.Current mỗi tick. Cùng lý do với WorldConfig
             // trong PlayerEntity — nhưng ở đây còn thêm một lý do nữa: đổi bán kính giữa chừng làm
@@ -133,6 +136,10 @@ namespace MMORPG.GameServer.World
                         entity.ForceAction(command.Action);
                 }
             }
+
+            // Vòng 0b: túi đồ. Ở đây chứ không ở GameLoop vì nó cần đúng tập entity mà sổ này giữ —
+            // "ai đang trong world" có một nguồn, và sổ thứ hai thì sớm muộn lệch với sổ thứ nhất.
+            _inventoryService.Tick(dt, _entities.Values);
 
             // Vòng 1: tích phân TẤT CẢ trước. Trộn tích phân với gửi thì người gửi trước
             // mang vị trí cũ của người tích phân sau — hai client nhìn cùng tick ra hai bức tranh.

@@ -36,7 +36,8 @@ Mỗi feature đụng tới ít nhất một loại. Nhầm loại là nguồn c
 **Loại B luôn là bộ ba** `*Config` / `*TableData` / `*ConfigContainer` — xem `CONVENTIONS.md` §2.
 
 **Loại A và loại B đi qua cùng MỘT hàm nạp** phía server (`ConfigService.LoadFile<T>`); khác biệt duy
-nhất là tham số `WhenBroken`: `game.json` hỏng thì về mặc định, bảng hỏng thì giữ nguyên bản đang chạy.
+nhất là tham số `WhenBroken`: `game.json` hỏng thì về mặc định, bảng hỏng thì giữ nguyên bản đang chạy
+— trừ **lần nạp đầu**, lúc đó chưa có bản nào để giữ nên server **chết ngay** kèm tên file.
 
 ---
 

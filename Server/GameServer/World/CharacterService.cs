@@ -5,8 +5,6 @@ using MMORPG.Shared.Db;
 using MMORPG.Shared.Dto.Character;
 using MMORPG.Shared.Dto.Db;
 using MMORPG.Shared.Net;
-using MMORPG.Shared.World.Character;
-using MMORPG.Shared.World.Item;
 
 namespace MMORPG.GameServer.World
 {
@@ -19,13 +17,16 @@ namespace MMORPG.GameServer.World
         private readonly WorldService _worldService;
         private readonly MapRegistry _maps;
         private readonly ConfigService _config;
+        private readonly InventoryService _inventoryService;
 
-        public CharacterService(DbClient dbClient, WorldService worldService, MapRegistry maps, ConfigService config)
+        public CharacterService(DbClient dbClient, WorldService worldService, MapRegistry maps,
+            ConfigService config, InventoryService inventoryService)
         {
             _dbClient = dbClient;
             _worldService = worldService;
             _maps = maps;
             _config = config;
+            _inventoryService = inventoryService;
         }
 
         public async Task<EnterWorldResponse> EnterWorldAsync(ClientSession session)
@@ -65,6 +66,12 @@ namespace MMORPG.GameServer.World
             PlayerEntity entity = _worldService.Spawn(result.Character, session);
             session.MarkInWorld(entity);
 
+            // Nạp túi SAU khi vào world: LoadAsync gửi luôn gói snapshot, và gói ấy phải tới sau
+            // EnterWorldResponse — client cần bảng item trong response đó để tra tên và icon.
+            // Không await ở đây thì snapshot có thể vượt mặt response. Await thì EnterWorld chậm thêm
+            // một lượt đi-về DB, và đó là cái giá đúng để trả: nó chỉ xảy ra một lần mỗi phiên.
+            await _inventoryService.LoadAsync(entity);
+
             return new EnterWorldResponse
             {
                 Success = true,
@@ -95,6 +102,11 @@ namespace MMORPG.GameServer.World
                 return;
 
             session.MarkLeftWorld();
+
+            // Lưu túi TRƯỚC Despawn: sau Despawn thì entity đã ra khỏi sổ, và lưu một thứ không còn
+            // ai cầm là mở đường cho "lưu nhầm bản cũ".
+            await _inventoryService.SaveAsync(entity);
+
             _worldService.Despawn(entity);
 
             try

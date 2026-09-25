@@ -14,6 +14,13 @@
 
 Format như trước: **hướng làm** hiện sẵn, **📖 Lời giải** trong foldout.
 
+> **Viết lại 2026-09-22.** Bản trước có 663 dòng và **2 khối code**: Bước 2 và Bước 3 không có foldout
+> lời giải nào, còn Bước 1 thì mở đầu bằng một comment nói *"ba kiểu bạn phải tự viết trước khi đoạn
+> dưới biên dịch được"* — tức là chính thức giao lại phần khó nhất.
+>
+> Bản này có **đủ code cho từng dòng trong bảng file dưới đây**, và toàn bộ code đã được biên dịch
+> thật (server `dotnet build`, client `csc` với DLL Shared vừa build) trước khi đưa vào doc.
+
 ---
 
 ## Ba loại số, và tại sao phải tách
@@ -43,13 +50,75 @@ luỹ*, lần này gặp trong cùng một bảng dữ liệu.
 
 ---
 
+## Danh sách file — tạo gì, sửa gì
+
+Gạch từng dòng khi xong. **Mỗi dòng ở đây có một khối code tương ứng trong foldout lời giải của bước
+đó** — thấy một dòng không có code là doc hỏng, báo lại.
+
+**Bước 1 — `StatBlock`, bảng chỉ số, pipeline**
+
+| File | Việc |
+|---|---|
+| `Server/Shared/World/Stat/StatType.cs` | 🆕 tạo (`StatType` + `StatTypes`) |
+| `Server/Shared/World/Stat/StatBlock.cs` | 🆕 tạo (`StatBlock` + `StatBonus`) |
+| `Server/Shared/World/Stat/ClassStatsTableData.cs` | 🆕 tạo (`ClassStatsConfig` + `ClassStatsTableData`) |
+| `Server/Shared/World/Stat/ClassStatsConfigContainer.cs` | 🆕 tạo |
+| `Server/Shared/World/Stat/StatCalculator.cs` | 🆕 tạo |
+| `Assets/Game/Resources/Config/class-stats.json` | 🆕 tạo (+ file `.meta`) |
+| `Server/GameServer/Config/ConfigService.cs` | ✏️ **một dòng** `LoadTable<ClassStatsTableData>` + `ValidateClassStats` |
+| *(không đụng `EnterWorldResponse`)* | bảng không đi trên dây — contract không đổi một dòng |
+| `Server/Shared/World/ConfigFiles.cs` | ✏️ thêm hằng `CLASS_STATS` |
+| `Assets/Game/Scripts/Config/ConfigService.cs` | ✏️ **một dòng** trong `LoadTables()` |
+
+**Bước 2 — điểm cộng**
+
+| File | Việc |
+|---|---|
+| `Server/DBServer/Data/Migrator.cs` | ✏️ thêm migration `(5, ...)` |
+| `Server/Shared/Dto/Db/StatDbDto.cs` | 🆕 tạo |
+| `Server/Shared/Db/DbCmd.cs` | ✏️ `CharacterStatsLoad = 1202`, `CharacterStatsSave = 1203` |
+| `Server/DBServer/Repositories/CharacterStatRepository.cs` | 🆕 tạo |
+| `Server/DBServer/Handlers/CharacterStatDbHandler.cs` | 🆕 tạo |
+| `Server/DBServer/Program.cs` | ✏️ gán `CharacterStatDbHandler.Repository` |
+| `Server/GameServer/World/PlayerEntity.cs` | ✏️ `Allocated`, `UnspentPoints`, `Stats`, `Hp`, `Mp`, `Recompute`, `LoadStats`, `SpendPoints`, `GrantPoints` |
+| `Server/GameServer/World/StatService.cs` | 🆕 tạo |
+| `Server/Shared/Net/NetCmd.cs` | ✏️ `StatsUpdate = 201` … `UnequipItem = 204` |
+| `Server/Shared/Dto/Character/StatsDto.cs` | 🆕 tạo |
+| `Server/GameServer/Handlers/StatHandler.cs` | 🆕 tạo |
+| `Server/GameServer/World/WorldService.cs` | ✏️ nhận `StatService`, gọi `Tick` |
+| `Server/GameServer/World/CharacterService.cs` | ✏️ nạp/lưu chỉ số |
+| `Server/GameServer/Boot/ServerBootstrap.cs` | ✏️ **đăng ký `StatService`** |
+| `Server/GameServer/Program.cs` | ✏️ phím `P` thưởng điểm |
+| `Assets/Game/Scripts/Stats/StatsModel.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Stats/StatsApi.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Stats/StatsPresenter.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Stats/StatsPanel.cs` | 🆕 tạo (`StatsPanel` + `StatRowView` + `EquipSlotView`) |
+| `Assets/Game/Scripts/Network/Handlers/StatsNetHandler.cs` | 🆕 tạo |
+| `Assets/Game/Scripts/Boot/GameLifetimeScope.cs` | ✏️ **đăng ký 4 thứ** |
+
+**Bước 3 — trang bị**
+
+| File | Việc |
+|---|---|
+| `Server/Shared/World/Item/EquipSlot.cs` | 🆕 tạo |
+| `Server/Shared/World/Item/ItemConfig.cs` | ✏️ thêm `EquipSlot` + `Bonuses` |
+| *(không đụng `ItemTableData`)* | vân tay băm byte tuần tự hoá — hai trường mới tự vào |
+| `Assets/Game/Resources/Config/items.json` | ✏️ thêm `EquipSlot` / `Bonuses` cho Kiếm gỗ |
+| `Server/DBServer/Data/Migrator.cs` | ✏️ thêm migration `(6, ...)` — cột + hai chỉ mục có điều kiện |
+| `Server/Shared/Dto/Db/InventoryDbDto.cs` | ✏️ `InventoryRow` thêm `EquipSlot` |
+| `Server/DBServer/Repositories/InventoryRepository.cs` | ✏️ SQL đọc/ghi thêm cột `equip_slot` |
+| `Server/GameServer/World/Inventory.cs` | ✏️ `_equipped`, `TryEquip`, `TryUnequip`, `Load`/`ToRows` |
+| `Server/GameServer/World/InventoryService.cs` | ✏️ `SendDelta` từ `private` thành `public static` |
+
+---
+
 ## Bước 1 — `StatBlock`, bảng chỉ số gốc, và pipeline tính lại
 
 ### Hướng làm
 
 **`StatType` là một enum, `StatBlock` là một mảng theo enum ấy** — không phải mười hai property rời.
 
-Lý do đã gặp hai lần rồi (gom 12 field của `MoveState` ở Phase 9, gom `WorldRules` ở Phase 12), nhưng ở
+Lý do đã gặp hai lần rồi (gom 12 field của `MoveState` ở Phase 9, gom `WorldConfig` ở Phase 12), nhưng ở
 đây nó còn mạnh hơn: mã nguồn cần **cộng hai bộ chỉ số lại với nhau** ở bốn chỗ khác nhau. Với mảng thì
 đó là một vòng `for`; với property rời thì đó là mười hai dòng, lặp lại bốn lần, và lần nào quên một
 dòng cũng **không có lỗi biên dịch** — chỉ có một chỉ số âm thầm không bao giờ tăng.
@@ -155,52 +224,120 @@ chuột vào đâu. Vì vậy `StatCalculator` đặt ở `Shared`, và luật l
 
 ### ✅ CHECKPOINT A
 
-1. Server boot in: `Bảng chỉ số: 1 lớp, checksum XXXXXXXX`.
-2. Vào world → client nhận `StatsUpdate`, log đủ 9 chỉ số.
-3. Bấm `C` → bảng thông tin mở, chia hai nhóm Gốc / Dẫn xuất, số khớp với log server.
-4. Sửa `PerLevel` của Thể lực trong file, restart server → vào lại thấy `MaxHp` đổi theo. **Không build
-   lại gì** — và không có dòng nào trong DB phải sửa, vì `MaxHp` chưa bao giờ được lưu.
-5. Gọi tạm `StatCalculator.Compute` hai lần liên tiếp với cùng đầu vào rồi `Assert` hai kết quả bằng
-   nhau. Nghe thừa; nó là thứ chặn mọi ý định lén cho trạng thái vào hàm này sau này.
+Bước này chưa có gói tin nào — `StatsUpdate` là việc của Bước 2. Kiểm bằng log server và một bài test.
+
+1. Server boot in: `Bảng class-stats: 1 dòng, version 1, vân tay XXXXXXXX`.
+2. Sửa `PerLevel` của Thể lực trong file, restart server → vân tay **đổi**.
+3. Ghi `{ "Stat": "MaxHp", "Value": 5 }` vào `Base` → server **chết ngay lúc boot** với
+   `MaxHp là chỉ số dẫn xuất, không ghi trong bảng nền được` kèm tên file — luật boot/reload của
+   Phase 12. Đây là phép kiểm bắt một lỗi mà không có nó thì dòng ấy đọc được, đi qua validate, rồi
+   bị `StatCalculator` ghi đè trong im lặng.
+4. Ghi `{ "Stat": "Strength", "Value": -5 }` → Warn về đúng trường đó, giá trị về 0.
+5. Viết một bài test gọi `StatCalculator.Compute` hai lần liên tiếp với cùng đầu vào rồi `Assert` hai
+   kết quả bằng nhau. Nghe thừa; nó là thứ chặn mọi ý định lén cho trạng thái vào hàm này sau này.
+6. Viết một bài test nữa cho **thứ tự** ở `ApplyDerived`: một `ItemConfig` cộng `+5 Vitality`, kiểm
+   `MaxHp` tăng **50** chứ không phải 5. Đây là bài test cho câu "cả hai đều chạy, chỉ khác nhau một
+   con số mà không ai kiểm".
 
 <details>
-<summary><b>📖 Lời giải — <code>StatBlock</code> và <code>StatCalculator</code></b></summary>
+<summary><b>📖 Lời giải — <code>StatType</code> và <code>StatBlock</code></b></summary>
+
+Năm file, mỗi file một chủ đề. Đặt hết ở `Server/Shared/World/Stat/` — bộ ba quen thuộc cộng
+hai kiểu hạ tầng.
+
+**`Server/Shared/World/Stat/StatType.cs`** (file mới, nguyên văn):
+
+```csharp
+namespace MMORPG.Shared.World.Stat
+{
+    /// <summary>
+    /// Mọi chỉ số của nhân vật, gốc lẫn dẫn xuất, trong MỘT enum.
+    ///
+    /// Một enum chứ không hai vì <see cref="StatBlock"/> là một mảng đánh chỉ số bằng nó — hai enum
+    /// là hai mảng, và mọi phép cộng phải làm hai lần. Phân biệt gốc/dẫn xuất bằng
+    /// <see cref="StatTypes.IsPrimary"/>, không bằng kiểu dữ liệu.
+    /// </summary>
+    public enum StatType : byte
+    {
+        // ── Gốc: cộng điểm được, trang bị cộng vào được ──────────────────────────────────────────
+        Strength = 0,
+        Agility = 1,
+        Vitality = 2,
+        Spirit = 3,
+
+        // ── Dẫn xuất: TÍNH RA từ nhóm trên, không ai cộng thẳng ─────────────────────────────────
+        //
+        // Bắt đầu từ 10 chứ không phải 4: chừa chỗ cho chỉ số gốc thứ năm mà không phải đánh số lại
+        // cái gì. Cùng luật với dải NetCmd — đánh số lại một enum đã đi vào DB là một cuộc di cư.
+        MaxHp = 10,
+        MaxMp = 11,
+        Attack = 12,
+        Defense = 13,
+        CritRate = 14,
+    }
+
+    public static class StatTypes
+    {
+        /// <summary>Dài bằng giá trị enum lớn nhất + 1. Vài ô giữa bỏ trống là cái giá của việc chừa chỗ.</summary>
+        public const int COUNT = (int)StatType.CritRate + 1;
+
+        /// <summary>
+        /// Chỉ số này có cộng điểm vào được không.
+        ///
+        /// Phải là một HÀM chứ không phải một tính chất của kiểu, vì enum không diễn đạt được nó:
+        /// <c>StatType.MaxHp</c> là một giá trị hợp lệ về mặt kiểu, và một client sửa code gửi lên
+        /// đúng giá trị đó. Đây là chỗ hiếm hoi mà "chặn bằng kiểu" không làm được — nên phải chặn
+        /// bằng câu lệnh, và phải có một bài test cho nó.
+        /// </summary>
+        public static bool IsPrimary(StatType stat)
+        {
+            return stat == StatType.Strength
+                   || stat == StatType.Agility
+                   || stat == StatType.Vitality
+                   || stat == StatType.Spirit;
+        }
+    }
+}
+```
+
+**`Server/Shared/World/Stat/StatBlock.cs`** (file mới, nguyên văn):
 
 ```csharp
 using System;
-using System.Collections.Generic;
 using MemoryPack;
 
-// Ba kiểu bạn phải tự viết trước khi đoạn dưới biên dịch được, cả ba đều theo khuôn đã quen:
-//   StatBonus      { StatType Stat; int Value; }          — một dòng bonus trong items.json
-//   ClassStats     { StatBlock Base; StatBlock PerLevel; int PointsPerLevel; }
-//   ClassStatTable — bảng tĩnh nạp được, y hệt ItemTemplates của Phase 13
-
-namespace MMORPG.Shared.World
+namespace MMORPG.Shared.World.Stat
 {
     /// <summary>
-    /// Một bộ chỉ số. MẢNG theo StatType chứ không phải mười hai property rời: mã nguồn cần CỘNG hai
-    /// bộ lại với nhau ở bốn chỗ khác nhau, và với property rời thì mỗi chỗ là mười hai dòng chép tay —
-    /// quên một dòng không có lỗi biên dịch, chỉ có một chỉ số âm thầm không bao giờ tăng.
+    /// Một bộ chỉ số. MẢNG theo <see cref="StatType"/> chứ không phải chín property rời: mã nguồn cần
+    /// CỘNG hai bộ lại với nhau ở bốn chỗ khác nhau, và với property rời thì mỗi chỗ là chín dòng chép
+    /// tay — quên một dòng không có lỗi biên dịch, chỉ có một chỉ số âm thầm không bao giờ tăng.
     /// </summary>
     [MemoryPackable]
     public sealed partial class StatBlock
     {
-        /// <summary>
-        /// Dài bằng giá trị enum lớn nhất + 1, chấp nhận vài ô trống ở giữa. Đổi lại: tra chỉ số là
-        /// một phép truy cập mảng, và thêm một StatType mới không phải đụng vào bất cứ đâu ngoài enum.
-        /// </summary>
-        public int[] Values { get; set; } = new int[(int)StatType.CritRate + 1];
+        public int[] Values { get; set; } = new int[StatTypes.COUNT];
 
+        /// <summary>
+        /// Tra theo enum. Không kiểm biên: chỉ số đến từ mạng đã phải qua <c>Enum.IsDefined</c> ở
+        /// handler, và chỉ số trong code thì là hằng.
+        /// </summary>
+        [MemoryPackIgnore]
         public int this[StatType stat]
         {
             get { return Values[(int)stat]; }
             set { Values[(int)stat] = value; }
         }
 
+        /// <summary>
+        /// Cộng dồn bộ khác vào bộ này. Chịu được mảng ngắn hơn: một gói tin từ server phiên bản cũ
+        /// có ít chỉ số hơn, và rơi vào IndexOutOfRange vì chuyện đó thì quá đắt.
+        /// </summary>
         public void Add(StatBlock other)
         {
-            for (int i = 0; i < Values.Length; i++)
+            int length = Math.Min(Values.Length, other.Values.Length);
+
+            for (int i = 0; i < length; i++)
                 Values[i] += other.Values[i];
         }
 
@@ -208,64 +345,345 @@ namespace MMORPG.Shared.World
         {
             var copy = new StatBlock();
 
-            Array.Copy(Values, copy.Values, Values.Length);
+            Array.Copy(Values, copy.Values, Math.Min(Values.Length, copy.Values.Length));
 
             return copy;
         }
     }
 
     /// <summary>
-    /// Tính bộ chỉ số đầy đủ từ NGUYÊN LIỆU. Hàm thuần: cùng đầu vào luôn cho cùng đầu ra, không đọc
-    /// thời gian, không random, không đọc biến toàn cục nào ngoài bảng tĩnh đã nạp.
-    ///
-    /// Nằm ở Shared để client chạy được — nhưng CHỈ để dự đoán cho việc hiển thị (rê chuột vào món đồ
-    /// thì hiện "42 → 55"). Con số đang có hiệu lực luôn là con số server đẩy xuống. Cùng ranh giới với
-    /// MovementRules.Step ở Phase 6.
+    /// Một dòng "chỉ số +N" — của trang bị, và sau này của buff. Struct vì nó là hai con số và đi
+    /// thành mảng.
     /// </summary>
-    public static class StatCalculator
+    [MemoryPackable]
+    public partial struct StatBonus
     {
-        /// <summary>
-        /// TÍNH LẠI TỪ ĐẦU, mọi lần. Không có phiên bản "cộng thêm khi mặc, trừ đi khi cởi" — cộng dồn
-        /// thì mỗi lần mặc-cởi là một cơ hội trôi một điểm, và sau năm mươi lần thì chỉ số sai mà không
-        /// có gì báo. Cùng lý do khiến Phase 11 dựng lại chỉ mục cột từ đầu mỗi tick.
-        /// </summary>
-        public static StatBlock Compute(int classId, int level, StatBlock allocated, IReadOnlyList<ItemTemplate> equipped)
+        /// <summary>Ghi bằng TÊN enum trong file ("Strength"), không phải số.</summary>
+        public StatType Stat;
+
+        public int Value;
+    }
+}
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — bảng chỉ số nền: <code>ClassStatsTableData</code> + <code>ClassStatsConfigContainer</code></b></summary>
+
+**`Server/Shared/World/Stat/ClassStatsTableData.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MemoryPack;
+using Newtonsoft.Json;
+
+namespace MMORPG.Shared.World.Stat
+{
+    /// <summary>
+    /// Chỉ số nền của MỘT lớp nhân vật. Tách khỏi <c>CharacterConfig</c> vì hai bảng trả lời hai câu
+    /// khác nhau: characters.json nói "nhân vật này DI CHUYỂN thế nào" (dữ liệu của mô phỏng),
+    /// class-stats.json nói "nhân vật này MẠNH thế nào" (dữ liệu của chiến đấu). Chúng đổi vì những
+    /// lý do khác nhau và do những người khác nhau chỉnh.
+    /// </summary>
+    [MemoryPackable]
+    public sealed partial class ClassStatsConfig
+    {
+        public int ClassId { get; set; }
+
+        /// <summary>Chỉ số ở cấp 1. Mảng bonus chứ không phải StatBlock: file người gõ tay chỉ ghi dòng nào có giá trị.</summary>
+        public StatBonus[] Base { get; set; } = Array.Empty<StatBonus>();
+
+        /// <summary>Cộng thêm mỗi cấp, từ cấp 2 trở đi.</summary>
+        public StatBonus[] PerLevel { get; set; } = Array.Empty<StatBonus>();
+
+        /// <summary>Số điểm tự cộng được thưởng mỗi cấp.</summary>
+        public int PointsPerLevel { get; set; } = 5;
+
+        // Dẫn xuất: dựng sẵn thành StatBlock để StatCalculator không phải duyệt mảng bonus mỗi lần
+        // gọi. Cùng lý do với ActionData.DurationTicks — Compute chạy mỗi lần mặc/cởi/cộng điểm của
+        // mọi người chơi, còn bảng thì chỉ đổi khi bấm R.
+
+        [MemoryPackIgnore] [JsonIgnore] public StatBlock BaseBlock { get; private set; } = new();
+
+        [MemoryPackIgnore] [JsonIgnore] public StatBlock PerLevelBlock { get; private set; } = new();
+
+        /// <summary>Gọi từ <see cref="ClassStatsConfigContainer.Load"/> — đúng một chỗ ở mỗi bên.</summary>
+        public void Prepare()
         {
-            ClassStats table = ClassStatTable.Get(classId);
-            var result = new StatBlock();
+            BaseBlock = ToBlock(Base);
+            PerLevelBlock = ToBlock(PerLevel);
+        }
 
-            // 1. Nền của lớp nhân vật ở cấp này.
-            result.Add(table.Base);
+        private static StatBlock ToBlock(StatBonus[] bonuses)
+        {
+            var block = new StatBlock();
 
-            for (int i = 1; i < level; i++)
-                result.Add(table.PerLevel);
+            foreach (StatBonus bonus in bonuses)
+                block[bonus.Stat] += bonus.Value;
 
-            // 2. Điểm người chơi tự cộng.
-            result.Add(allocated);
+            return block;
+        }
+    }
 
-            // 3. Trang bị. Chỉ cộng vào chỉ số GỐC ở vòng này — xem comment ở bước 4.
-            foreach (ItemTemplate item in equipped)
+    [MemoryPackable]
+    public sealed partial class ClassStatsTableData : IConfigFile
+    {
+        public int Version { get; set; } = 1;
+
+        public ClassStatsConfig[] Classes { get; set; } = Array.Empty<ClassStatsConfig>();
+
+        [MemoryPackIgnore] [JsonIgnore] public int RowCount => Classes.Length;
+    }
+}
+```
+
+**`Server/Shared/World/Stat/ClassStatsConfigContainer.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using System.Collections.Generic;
+
+namespace MMORPG.Shared.World.Stat
+{
+    /// <summary>
+    /// Bảng tra chỉ số nền theo lớp nhân vật. Bảng loại B thứ tư của dự án, và khuôn không đổi một
+    /// dòng nào so với <see cref="Character.CharacterConfigContainer"/> và
+    /// <see cref="Item.ItemConfigContainer"/>.
+    /// </summary>
+    public static class ClassStatsConfigContainer
+    {
+        private static Dictionary<int, ClassStatsConfig> _byClassId = new();
+
+        public static int Count
+        {
+            get { return _byClassId.Count; }
+        }
+
+        /// <summary>
+        /// Chỉ số nền của một lớp. Ném khi bảng chưa nạp, trả bản RỖNG khi lớp không có trong bảng —
+        /// hai cách xử lý khác nhau cho hai lỗi khác nhau: chưa nạp là lỗi lập trình (sai thứ tự
+        /// khởi động), thiếu một lớp là lỗi dữ liệu (bảng chưa điền xong).
+        /// </summary>
+        public static ClassStatsConfig Get(int classId)
+        {
+            if (_byClassId.Count == 0)
+                throw new InvalidOperationException("ClassStatsConfigContainer chưa được Load. Cả hai bên nạp từ file của mình lúc khởi động.");
+
+            return _byClassId.TryGetValue(classId, out ClassStatsConfig config) ? config : Empty;
+        }
+
+        /// <summary>
+        /// Bộ số rỗng dùng chung cho lớp không có trong bảng. Dựng MỘT LẦN: Compute gọi Get mỗi lần
+        /// tính lại, và cấp phát một object mới mỗi lần cho một trường hợp lỗi là rác không cần thiết.
+        ///
+        /// KHÔNG ai được ghi vào nó — nó là bộ số dùng chung, sửa một chỗ là sửa mọi chỗ. StatCalculator
+        /// chỉ ĐỌC từ config, nên tính chất đó được giữ bằng kỷ luật, như CharacterConfig.
+        /// </summary>
+        private static readonly ClassStatsConfig Empty = BuildEmpty();
+
+        public static void Load(ClassStatsTableData table)
+        {
+            if (table == null)
+                throw new ArgumentNullException(nameof(table));
+
+            var built = new Dictionary<int, ClassStatsConfig>();
+
+            foreach (ClassStatsConfig config in table.Classes)
             {
-                foreach (StatBonus bonus in item.Bonuses)
-                    result[bonus.Stat] += bonus.Value;
+                if (built.ContainsKey(config.ClassId))
+                    throw new InvalidOperationException($"Hai lớp cùng ClassId {config.ClassId} trong bảng chỉ số.");
+
+                config.Prepare();
+                built[config.ClassId] = config;
             }
 
-            // 4. Dẫn xuất, tính SAU CÙNG từ chỉ số gốc đã cộng đủ.
-            //
-            //    Thứ tự này không phải chuyện phong cách. Giáp cộng +5 Thể lực, công thức MaxHp =
-            //    Vitality × 10: làm đúng thứ tự thì giáp cho +50 MaxHp; cộng MaxHp của giáp vào SAU khi
-            //    đã tính thì chỉ được +5. Cả hai đều "chạy", chỉ khác nhau một con số mà không ai kiểm.
-            result[StatType.MaxHp] = 50 + result[StatType.Vitality] * 10;
-            result[StatType.MaxMp] = 20 + result[StatType.Spirit] * 5;
-            result[StatType.Attack] = result[StatType.Strength] * 2 + result[StatType.Agility];
-            result[StatType.Defense] = result[StatType.Vitality];
-            result[StatType.CritRate] = result[StatType.Agility] / 2;
+            _byClassId = built;
+        }
 
-            return result;
+        private static ClassStatsConfig BuildEmpty()
+        {
+            var config = new ClassStatsConfig { PointsPerLevel = 0 };
+            config.Prepare();
+
+            return config;
         }
     }
 }
 ```
+
+**`Config/class-stats.json`** (file mới):
+
+```json
+{
+  "Version": 1,
+  "Classes": [
+    {
+      "ClassId": 1,
+      "Base": [
+        { "Stat": "Strength", "Value": 10 },
+        { "Stat": "Agility", "Value": 8 },
+        { "Stat": "Vitality", "Value": 12 },
+        { "Stat": "Spirit", "Value": 6 }
+      ],
+      "PerLevel": [
+        { "Stat": "Strength", "Value": 2 },
+        { "Stat": "Vitality", "Value": 3 }
+      ],
+      "PointsPerLevel": 5
+    }
+  ]
+}
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — <code>StatCalculator</code> và bốn dòng nối vào đường ống</b></summary>
+
+**`Server/Shared/World/Stat/StatCalculator.cs`** (file mới, nguyên văn):
+
+```csharp
+using System.Collections.Generic;
+using MMORPG.Shared.World.Item;
+
+namespace MMORPG.Shared.World.Stat
+{
+    /// <summary>
+    /// Tính bộ chỉ số đầy đủ từ NGUYÊN LIỆU. Hàm thuần: cùng đầu vào luôn cho cùng đầu ra, không đọc
+    /// thời gian, không random, không đọc biến toàn cục nào ngoài bảng tĩnh đã nạp.
+    ///
+    /// Nằm ở Shared để client chạy được — nhưng CHỈ để dự đoán cho việc hiển thị (rê chuột vào món đồ
+    /// thì hiện "42 → 55"). Con số đang có hiệu lực luôn là con số server đẩy xuống. Cùng ranh giới
+    /// với <c>MovementRules.Step</c> ở Phase 6.
+    /// </summary>
+    public static class StatCalculator
+    {
+        /// <summary>
+        /// TÍNH LẠI TỪ ĐẦU, mọi lần. Không có phiên bản "cộng thêm khi mặc, trừ đi khi cởi" — cộng
+        /// dồn thì mỗi lần mặc-cởi là một cơ hội trôi một điểm, và sau năm mươi lần thì chỉ số sai mà
+        /// không có gì báo. Cùng lý do khiến Phase 11 dựng lại chỉ mục cột từ đầu mỗi tick.
+        /// </summary>
+        /// <param name="classId">Lớp nhân vật.</param>
+        /// <param name="level">Cấp hiện tại, tính từ 1.</param>
+        /// <param name="allocated">Điểm người chơi đã tự cộng.</param>
+        /// <param name="equipped">Món đồ đang mặc. Null hoặc rỗng đều hợp lệ.</param>
+        public static StatBlock Compute(int classId, int level, StatBlock allocated, IReadOnlyList<ItemConfig> equipped)
+        {
+            ClassStatsConfig config = ClassStatsConfigContainer.Get(classId);
+            var result = new StatBlock();
+
+            // 1. Nền của lớp nhân vật ở cấp này.
+            result.Add(config.BaseBlock);
+
+            // Nhân thay vì cộng trong vòng lặp: cấp 60 là 59 vòng cộng chín số, mỗi lần mặc/cởi đồ
+            // của mọi người chơi. Kết quả giống hệt vì PerLevel là hằng theo cấp.
+            for (int i = 0; i < StatTypes.COUNT; i++)
+                result.Values[i] += config.PerLevelBlock.Values[i] * (level - 1);
+
+            // 2. Điểm người chơi tự cộng.
+            if (allocated != null)
+                result.Add(allocated);
+
+            // 3. Trang bị. Chỉ cộng vào chỉ số GỐC ở vòng này — xem ghi chú ở bước 4.
+            if (equipped != null)
+            {
+                foreach (ItemConfig item in equipped)
+                {
+                    foreach (StatBonus bonus in item.Bonuses)
+                        result[bonus.Stat] += bonus.Value;
+                }
+            }
+
+            ApplyDerived(result);
+
+            return result;
+        }
+
+        /// <summary>
+        /// Chỉ số dẫn xuất, tính SAU CÙNG từ chỉ số gốc đã cộng đủ.
+        ///
+        /// Thứ tự này không phải chuyện phong cách. Giáp cộng +5 Thể lực, công thức
+        /// <c>MaxHp = Vitality × 10</c>: làm đúng thứ tự thì giáp cho +50 MaxHp; cộng MaxHp của giáp
+        /// vào SAU khi đã tính thì chỉ được +5. Cả hai đều "chạy", chỉ khác nhau một con số mà không
+        /// ai kiểm.
+        ///
+        /// GÁN chứ không cộng: nếu có món đồ nào ghi bonus thẳng vào MaxHp thì phép gán này xoá nó đi,
+        /// và đó là hành vi đúng — bonus thẳng vào chỉ số dẫn xuất là một lối đi vòng qua công thức.
+        /// Phase sau muốn có "áo +100 HP" thì thêm một tầng bonus RIÊNG sau dòng này, đừng gỡ phép gán.
+        /// </summary>
+        private static void ApplyDerived(StatBlock stats)
+        {
+            stats[StatType.MaxHp] = 50 + stats[StatType.Vitality] * 10;
+            stats[StatType.MaxMp] = 20 + stats[StatType.Spirit] * 5;
+            stats[StatType.Attack] = stats[StatType.Strength] * 2 + stats[StatType.Agility];
+            stats[StatType.Defense] = stats[StatType.Vitality];
+            stats[StatType.CritRate] = stats[StatType.Agility] / 2;
+        }
+    }
+}
+```
+
+**`Server/GameServer/Config/ConfigService.cs`** — bảng loại B thứ tư, và nó tốn đúng một dòng
+cộng một hàm kiểm:
+
+```csharp
+        // ... trong Load(), ngay sau hai bảng của Phase 12-13:
+        LoadTable<ClassStatsTableData>(ConfigFiles.CLASS_STATS, ValidateClassStats, ClassStatsConfigContainer.Load);
+```
+
+```csharp
+        /// Kẹp bảng chỉ số nền. Không có trần nào đến từ thuật toán ở đây (khác hẳn MoveSpeed) — chỉ
+        /// chặn số âm và chặn một con số gõ nhầm biến nhân vật cấp 1 thành bất tử.
+        /// </summary>
+        private static void ValidateClassStats(ClassStatsTableData table)
+        {
+            foreach (ClassStatsConfig config in table.Classes)
+            {
+                string tag = $"class {config.ClassId}";
+
+                config.PointsPerLevel = (int)Clamp(config.PointsPerLevel, 0f, 100f, 5f, $"{tag}.PointsPerLevel");
+
+                ClampBonuses(config.Base, $"{tag}.Base");
+                ClampBonuses(config.PerLevel, $"{tag}.PerLevel");
+            }
+        }
+
+        private static void ClampBonuses(StatBonus[] bonuses, string tag)
+        {
+            for (int i = 0; i < bonuses.Length; i++)
+            {
+                // Chỉ số GỐC mới được ghi trong bảng nền: ghi thẳng MaxHp là đi đường tắt qua công
+                // thức dẫn xuất, và StatCalculator sẽ ghi đè nó — tức là một dòng file không có tác
+                // dụng gì mà không ai biết.
+                if (!StatTypes.IsPrimary(bonuses[i].Stat))
+                    throw new InvalidOperationException($"{tag}: {bonuses[i].Stat} là chỉ số dẫn xuất, không ghi trong bảng nền được.");
+
+                bonuses[i].Value = (int)Clamp(bonuses[i].Value, 0f, 9999f, 0f, $"{tag}.{bonuses[i].Stat}");
+            }
+        }
+```
+
+**`Server/Shared/World/ConfigFiles.cs`** — một hằng nữa:
+
+```csharp
+        public const string CLASS_STATS = "class-stats";
+```
+
+**`Assets/Game/Scripts/Config/ConfigService.cs`** — ⚠️ một dòng trong `LoadTables()`:
+
+```csharp
+        private void LoadTables()
+        {
+            LoadTable<CharacterTableData>(ConfigFiles.CHARACTERS, CharacterConfigContainer.Load);
+            LoadTable<ItemTableData>(ConfigFiles.ITEMS, ItemConfigContainer.Load);
+            LoadTable<ClassStatsTableData>(ConfigFiles.CLASS_STATS, ClassStatsConfigContainer.Load);
+        }
+```
+
+**`EnterWorldResponse` không đổi một dòng nào**, và đó là điểm đáng chú ý của bảng thứ tư: bảng
+không đi trên dây, nên bảng thứ năm, thứ sáu cũng sẽ không đụng tới contract. Hai dòng ở hai
+`ConfigService`, hết.
 
 </details>
 
@@ -333,13 +751,1236 @@ gửi gói rồi **chờ** — không tự cộng, cùng lý do đã nói ở Ph
 6. Xoá dòng trong `character_stat` bằng DB Browser rồi vào lại → chỉ số về nền, **không lỗi**. (Dữ liệu
    thiếu là chuyện sẽ xảy ra; hàng rào là "không có dòng nào" phải hợp lệ như "có dòng bằng 0".)
 
+<details>
+<summary><b>📖 Lời giải — DB: migration 5, DTO, repository, handler</b></summary>
+
+**`Server/DBServer/Data/Migrator.cs`** — thêm vào cuối mảng `_migrations`:
+
+```csharp
+            (5, """
+                -- Số điểm CHƯA tiêu. Là một con số của nhân vật → thêm cột.
+                ALTER TABLE character ADD COLUMN stat_points INTEGER NOT NULL DEFAULT 0;
+
+                -- Điểm ĐÃ cộng vào từng chỉ số. Là một QUAN HỆ một-nhiều → thêm bảng.
+                -- Cái gì có thể nhiều lên thì thành HÀNG, không thành CỘT: chỉ số gốc thứ năm sẽ chỉ
+                -- là một giá trị enum mới, không phải một ALTER TABLE nữa.
+                CREATE TABLE character_stat (
+                    character_id INTEGER NOT NULL REFERENCES character(id) ON DELETE CASCADE,
+                    stat_type    INTEGER NOT NULL,
+                    points       INTEGER NOT NULL,
+                    PRIMARY KEY (character_id, stat_type)
+                );
+                """),
+```
+
+**`Server/Shared/Dto/Db/StatDbDto.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MemoryPack;
+using MMORPG.Shared.World.Stat;
+
+namespace MMORPG.Shared.Dto.Db
+{
+    /// <summary>Một dòng của bảng <c>character_stat</c>: điểm người chơi đã cộng vào một chỉ số.</summary>
+    [MemoryPackable]
+    public partial class CharacterStatRow
+    {
+        public StatType Stat { get; set; }
+
+        public int Points { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class CharacterStatsLoadRequest
+    {
+        public long CharacterId { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class CharacterStatsLoadResponse
+    {
+        public CharacterStatRow[] Stats { get; set; } = Array.Empty<CharacterStatRow>();
+
+        /// <summary>
+        /// Điểm CHƯA tiêu, đọc từ cột <c>character.stat_points</c>. Đi cùng gói này chứ không tách
+        /// một lệnh riêng: hai con số ấy luôn được đọc cùng nhau, và hai lệnh thì có một khoảng thời
+        /// gian client đã có cái này mà chưa có cái kia.
+        /// </summary>
+        public int UnspentPoints { get; set; }
+    }
+
+    /// <summary>
+    /// Ghi cả điểm đã cộng lẫn điểm chưa tiêu, trong một transaction. Cùng lý do với
+    /// <c>InventorySaveRequest</c>: hai nửa của một sự thật thì đi cùng nhau hoặc không đi.
+    /// </summary>
+    [MemoryPackable]
+    public partial class CharacterStatsSaveRequest
+    {
+        public long CharacterId { get; set; }
+
+        public CharacterStatRow[] Stats { get; set; } = Array.Empty<CharacterStatRow>();
+
+        public int UnspentPoints { get; set; }
+    }
+}
+```
+
+**`Server/Shared/Db/DbCmd.cs`** — hai giá trị vào **cuối dải Character**, không chèn giữa:
+
+```csharp
+        /// <summary>
+        /// Đọc điểm đã cộng + điểm chưa tiêu của một nhân vật.
+        /// Request: <see cref="Dto.Db.CharacterStatsLoadRequest"/> · Response: <see cref="Dto.Db.CharacterStatsLoadResponse"/>
+        /// </summary>
+        CharacterStatsLoad = 1202,
+
+        /// <summary>
+        /// Ghi cả hai nửa trong một transaction.
+        /// Request: <see cref="Dto.Db.CharacterStatsSaveRequest"/> · Response: <see cref="Dto.Db.DbOkResponse"/>
+        /// </summary>
+        CharacterStatsSave = 1203,
+```
+
+**`Server/DBServer/Repositories/CharacterStatRepository.cs`** (file mới, nguyên văn):
+
+```csharp
+using Microsoft.Data.Sqlite;
+using MMORPG.DBServer.Data;
+using MMORPG.Shared.Dto.Db;
+using MMORPG.Shared.World.Stat;
+
+namespace MMORPG.DBServer.Repositories
+{
+    /// <summary>
+    /// Điểm cộng của nhân vật: bảng <c>character_stat</c> và cột <c>character.stat_points</c>.
+    ///
+    /// Hai chỗ lưu cho một khái niệm, và đó là đúng: điểm CHƯA tiêu là một con số của nhân vật (→ cột),
+    /// điểm ĐÃ cộng là một quan hệ một-nhiều (→ bảng). Đọc và ghi luôn đi cùng nhau nên chúng dùng
+    /// chung một cặp hàm, và ghi thì trong cùng một transaction.
+    /// </summary>
+    public sealed class CharacterStatRepository
+    {
+        private readonly Database _database;
+
+        public CharacterStatRepository(Database database)
+        {
+            _database = database;
+        }
+
+        public async Task<CharacterStatsLoadResponse> LoadAsync(CharacterStatsLoadRequest request, CancellationToken ct = default)
+        {
+            await using SqliteConnection connection = await _database.OpenAsync(ct);
+
+            var rows = new List<CharacterStatRow>();
+
+            await using (SqliteCommand command = connection.CreateCommand())
+            {
+                command.CommandText = """
+                                      SELECT stat_type, points
+                                      FROM character_stat
+                                      WHERE character_id = $characterId;
+                                      """;
+                command.Parameters.AddWithValue("$characterId", request.CharacterId);
+
+                await using SqliteDataReader reader = await command.ExecuteReaderAsync(ct);
+
+                while (await reader.ReadAsync(ct))
+                {
+                    rows.Add(new CharacterStatRow
+                    {
+                        Stat = (StatType)reader.GetInt32(0),
+                        Points = reader.GetInt32(1),
+                    });
+                }
+            }
+
+            int unspent = 0;
+
+            await using (SqliteCommand command = connection.CreateCommand())
+            {
+                command.CommandText = "SELECT stat_points FROM character WHERE id = $characterId;";
+                command.Parameters.AddWithValue("$characterId", request.CharacterId);
+
+                object value = await command.ExecuteScalarAsync(ct);
+
+                // null = không có dòng nhân vật nào. Không ném: chỗ gọi vừa GetOrCreate xong nên
+                // chuyện đó gần như không xảy ra, và nếu xảy ra thì 0 điểm là hành vi an toàn.
+                if (value != null && value != System.DBNull.Value)
+                    unspent = System.Convert.ToInt32(value);
+            }
+
+            return new CharacterStatsLoadResponse { Stats = rows.ToArray(), UnspentPoints = unspent };
+        }
+
+        /// <summary>
+        /// Ghi cả hai nửa trong MỘT transaction. Nửa chừng mà chết thì người chơi hoặc mất điểm đã
+        /// cộng (bảng ghi xong, cột chưa) hoặc được nhân đôi điểm (cột ghi xong, bảng chưa) — và cái
+        /// thứ hai là một lỗ nhân bản điểm chỉ số.
+        /// </summary>
+        public async Task SaveAsync(CharacterStatsSaveRequest request, CancellationToken ct = default)
+        {
+            await using SqliteConnection connection = await _database.OpenAsync(ct);
+            await using SqliteTransaction transaction = (SqliteTransaction)await connection.BeginTransactionAsync(ct);
+
+            await using (SqliteCommand delete = connection.CreateCommand())
+            {
+                delete.Transaction = transaction;
+                delete.CommandText = "DELETE FROM character_stat WHERE character_id = $characterId;";
+                delete.Parameters.AddWithValue("$characterId", request.CharacterId);
+
+                await delete.ExecuteNonQueryAsync(ct);
+            }
+
+            await using (SqliteCommand insert = connection.CreateCommand())
+            {
+                insert.Transaction = transaction;
+                insert.CommandText = """
+                                     INSERT INTO character_stat (character_id, stat_type, points)
+                                     VALUES ($characterId, $statType, $points);
+                                     """;
+
+                insert.Parameters.AddWithValue("$characterId", request.CharacterId);
+
+                SqliteParameter statType = insert.Parameters.AddWithValue("$statType", 0);
+                SqliteParameter points = insert.Parameters.AddWithValue("$points", 0);
+
+                foreach (CharacterStatRow row in request.Stats)
+                {
+                    // Bỏ dòng 0 điểm: "không có dòng nào" và "có dòng bằng 0" phải cùng nghĩa, và
+                    // chọn cách ít dòng hơn thì bảng không phình theo số chỉ số.
+                    if (row.Points == 0)
+                        continue;
+
+                    statType.Value = (int)row.Stat;
+                    points.Value = row.Points;
+
+                    await insert.ExecuteNonQueryAsync(ct);
+                }
+            }
+
+            await using (SqliteCommand update = connection.CreateCommand())
+            {
+                update.Transaction = transaction;
+                update.CommandText = "UPDATE character SET stat_points = $points WHERE id = $characterId;";
+                update.Parameters.AddWithValue("$characterId", request.CharacterId);
+                update.Parameters.AddWithValue("$points", request.UnspentPoints);
+
+                await update.ExecuteNonQueryAsync(ct);
+            }
+
+            await transaction.CommitAsync(ct);
+        }
+    }
+}
+```
+
+**`Server/DBServer/Handlers/CharacterStatDbHandler.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.DBServer.Net;
+using MMORPG.DBServer.Repositories;
+using MMORPG.Shared.Db;
+using MMORPG.Shared.Dto.Db;
+
+namespace MMORPG.DBServer.Handlers
+{
+    public static class CharacterStatDbHandler
+    {
+        /// <summary>Gán một lần trong <c>Program.cs</c> của DBServer.</summary>
+        public static CharacterStatRepository Repository { get; set; }
+
+        [DbHandler(DbCmd.CharacterStatsLoad)]
+        public static async Task<DbResult> OnLoad(DbRequest req)
+        {
+            return DbResult.Ok(await Repository.LoadAsync(req.GetData<CharacterStatsLoadRequest>()));
+        }
+
+        [DbHandler(DbCmd.CharacterStatsSave)]
+        public static async Task<DbResult> OnSave(DbRequest req)
+        {
+            await Repository.SaveAsync(req.GetData<CharacterStatsSaveRequest>());
+
+            return DbResult.Ok(new DbOkResponse { Success = true });
+        }
+    }
+}
+```
+
+**`Server/DBServer/Program.cs`** — ⚠️ một dòng, quên là `NullReferenceException` ở query đầu:
+
+```csharp
+CharacterStatDbHandler.Repository = new CharacterStatRepository(database);
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — <code>PlayerEntity</code> và <code>StatService</code></b></summary>
+
+**`Server/GameServer/World/PlayerEntity.cs`** — thêm vào sau property `Inventory`:
+
+```csharp
+        /// <summary>
+        /// Điểm người chơi đã tự cộng. NGUYÊN LIỆU của pipeline chỉ số, và là thứ duy nhất trong ba
+        /// nguyên liệu được lưu DB (hai cái kia: cấp độ ở bảng character, trang bị ở bảng inventory).
+        /// </summary>
+        public StatBlock Allocated { get; private set; } = new();
+
+        /// <summary>Điểm chưa tiêu.</summary>
+        public int UnspentPoints { get; private set; }
+
+        /// <summary>
+        /// KẾT QUẢ của pipeline. Không bao giờ lưu DB — lưu một giá trị tính được là tạo ra bản thứ
+        /// hai của cùng một sự thật, và ngày sửa công thức thì nửa số người chơi mang con số cũ.
+        ///
+        /// Chỉ <see cref="Recompute"/> được gán vào đây.
+        /// </summary>
+        public StatBlock Stats { get; private set; } = new();
+
+        /// <summary>Sinh lực hiện tại. TRẠNG THÁI, không tính ra được — nên nó phải lưu DB.</summary>
+        public int Hp { get; private set; }
+
+        public int Mp { get; private set; }
+
+        /// <summary>
+        /// Tính lại toàn bộ chỉ số từ ba nguyên liệu. Gọi sau MỌI thay đổi của nguyên liệu: lên cấp,
+        /// cộng điểm, mặc/cởi đồ, và một lần lúc vào world.
+        ///
+        /// KẸP Hp/Mp xuống trần mới, nhưng KHÔNG đổ đầy: cởi giáp làm MaxHp tụt thì máu phải tụt theo,
+        /// còn mặc lại thì MaxHp lên mà máu GIỮ NGUYÊN. Nếu khôi phục theo tỉ lệ cho "công bằng" thì
+        /// người chơi có một nút hồi máu miễn phí — cởi ra, mặc vào, lặp lại.
+        /// </summary>
+        public void Recompute(IReadOnlyList<ItemConfig> equipped)
+        {
+            Stats = StatCalculator.Compute(ClassId, Level, Allocated, equipped);
+
+            Hp = Math.Min(Hp, Stats[StatType.MaxHp]);
+            Mp = Math.Min(Mp, Stats[StatType.MaxMp]);
+        }
+
+        /// <summary>
+        /// Nạp nguyên liệu từ DB rồi tính lần đầu. CHỈ StatService gọi, và chỉ một lần mỗi phiên.
+        /// Đổ đầy Hp/Mp ở đây là đúng — đây là lúc nhân vật bước vào world, không phải một thao tác
+        /// giữa chừng.
+        /// </summary>
+        public void LoadStats(StatBlock allocated, int unspentPoints, IReadOnlyList<ItemConfig> equipped)
+        {
+            Allocated = allocated;
+            UnspentPoints = unspentPoints;
+
+            Recompute(equipped);
+
+            Hp = Stats[StatType.MaxHp];
+            Mp = Stats[StatType.MaxMp];
+        }
+
+        /// <summary>Tiêu một số điểm vào một chỉ số. Mọi phép kiểm đã làm ở StatService.</summary>
+        public void SpendPoints(StatType stat, int amount)
+        {
+            Allocated[stat] += amount;
+            UnspentPoints -= amount;
+        }
+
+        /// <summary>Thưởng điểm. Phase 15 gọi hàm này khi lên cấp; hôm nay là phím P trên console.</summary>
+        public void GrantPoints(int amount)
+        {
+            UnspentPoints += amount;
+        }
+```
+
+Thêm ba `using`: `MMORPG.Shared.World.Item`, `MMORPG.Shared.World.Stat`, và `System`
+(cho `Math.Min`).
+
+**`Server/GameServer/World/StatService.cs`** (file mới, nguyên văn):
+
+```csharp
+using System.Collections.Concurrent;
+using MMORPG.GameServer.Db;
+using MMORPG.ServerCore;
+using MMORPG.Shared.Db;
+using MMORPG.Shared.Dto.Character;
+using MMORPG.Shared.Dto.Db;
+using MMORPG.Shared.Dto.Inventory;
+using MMORPG.Shared.Net;
+using MMORPG.Shared.World.Item;
+using MMORPG.Shared.World.Stat;
+
+namespace MMORPG.GameServer.World
+{
+    /// <summary>
+    /// Pipeline chỉ số, một chiều: nguyên liệu đổi → <c>Recompute</c> → đẩy <c>StatsUpdate</c>.
+    ///
+    /// Mọi đường làm đổi chỉ số đều phải đi qua đây, và mỗi đường kết thúc bằng đúng ba việc: tính
+    /// lại, đánh dấu dirty, gửi gói. Bỏ một trong ba là có một trạng thái mà client không biết.
+    /// </summary>
+    public sealed class StatService
+    {
+        private readonly DbClient _dbClient;
+
+        // Cùng khuôn với _grants của InventoryService: luồng đọc phím ghi, luồng tick đọc.
+        private readonly ConcurrentQueue<int> _grantPoints = new();
+
+        public StatService(DbClient dbClient)
+        {
+            _dbClient = dbClient;
+        }
+
+        /// <summary>Thưởng điểm cho mọi người trong world. Phím `P` trên console gọi hàm này.</summary>
+        public void EnqueueGrantPointsAll(int amount)
+        {
+            _grantPoints.Enqueue(amount);
+        }
+
+        /// <summary>
+        /// Nạp nguyên liệu từ DB rồi tính lần đầu. Gọi SAU <c>InventoryService.LoadAsync</c> — trang
+        /// bị là một trong ba nguyên liệu, và cái túi phải có mặt trước khi tính.
+        /// </summary>
+        public async Task LoadAsync(PlayerEntity entity)
+        {
+            var allocated = new StatBlock();
+            int unspent = 0;
+
+            try
+            {
+                var response = await _dbClient.CallAsync<CharacterStatsLoadRequest, CharacterStatsLoadResponse>(
+                    DbCmd.CharacterStatsLoad, new CharacterStatsLoadRequest { CharacterId = entity.CharacterId });
+
+                foreach (CharacterStatRow row in response.Stats)
+                {
+                    // Chỉ số không còn trong enum (bảng cũ, chỉ số bị gỡ): bỏ qua. Cùng cách xử lý
+                    // với templateId lạ trong túi — dữ liệu cũ không được chặn người chơi vào game.
+                    if (!System.Enum.IsDefined(typeof(StatType), row.Stat))
+                        continue;
+
+                    allocated[row.Stat] += row.Points;
+                }
+
+                unspent = response.UnspentPoints;
+            }
+            catch (DbUnavailableException ex)
+            {
+                // Khác túi đồ: chỉ số tính LẠI được từ bảng + cấp độ, nên mất điểm cộng là mất một
+                // phần chứ không phải mất tất cả. Vào world với điểm cộng = 0 vẫn chơi được, và lần
+                // lưu kế tiếp sẽ ghi đè — nên phải chặn autosave cho tới khi nạp lại được.
+                Log.Error($"Không nạp được chỉ số của {entity.Name.Cyan()}: {ex.Message}. Đá khỏi world.");
+                entity.Owner?.Kick("Không đọc được dữ liệu nhân vật. Thử lại sau giây lát.");
+
+                return;
+            }
+
+            entity.LoadStats(allocated, unspent, entity.Inventory.EquippedConfigs());
+
+            Log.Info($"Chỉ số {entity.Name.Cyan()}: HP {entity.Stats[StatType.MaxHp]} · " +
+                     $"ATK {entity.Stats[StatType.Attack]} · điểm chưa cộng {entity.UnspentPoints}");
+
+            Send(entity);
+        }
+
+        public async Task SaveAsync(PlayerEntity entity)
+        {
+            var rows = new List<CharacterStatRow>();
+
+            foreach (StatType stat in System.Enum.GetValues(typeof(StatType)))
+            {
+                if (!StatTypes.IsPrimary(stat) || entity.Allocated[stat] == 0)
+                    continue;
+
+                rows.Add(new CharacterStatRow { Stat = stat, Points = entity.Allocated[stat] });
+            }
+
+            try
+            {
+                await _dbClient.CallAsync<CharacterStatsSaveRequest, DbOkResponse>(
+                    DbCmd.CharacterStatsSave, new CharacterStatsSaveRequest
+                    {
+                        CharacterId = entity.CharacterId,
+                        Stats = rows.ToArray(),
+                        UnspentPoints = entity.UnspentPoints,
+                    });
+            }
+            catch (DbUnavailableException ex)
+            {
+                Log.Warn($"Không lưu được chỉ số của {entity.Name.Cyan()}: {ex.Message}");
+            }
+        }
+
+        //--------------------------------------------------------------------------------------------
+        // Ba lệnh do client xin
+        //--------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Cộng điểm vào một chỉ số gốc.
+        ///
+        /// Ba phép kiểm, và phép đầu tiên là phép duy nhất KHÔNG diễn đạt được bằng kiểu dữ liệu:
+        /// <c>StatType.MaxHp</c> là một giá trị enum hợp lệ, nên một client sửa code gửi lên đúng nó
+        /// để đi đường tắt qua công thức dẫn xuất.
+        /// </summary>
+        public void Allocate(PlayerEntity entity, StatType stat, int amount)
+        {
+            if (!StatTypes.IsPrimary(stat))
+            {
+                Log.Warn($"{entity.Name} xin cộng điểm vào {stat.ToString().Red()} — không phải chỉ số gốc.");
+                return;
+            }
+
+            if (amount <= 0 || amount > entity.UnspentPoints)
+            {
+                Log.Warn($"{entity.Name} xin cộng {amount} điểm nhưng chỉ có {entity.UnspentPoints}.");
+                return;
+            }
+
+            entity.SpendPoints(stat, amount);
+            entity.Recompute(entity.Inventory.EquippedConfigs());
+
+            Send(entity);
+        }
+
+        /// <summary>
+        /// Mặc món ở một ô túi. Hai gói đi ra: <c>InventoryDelta</c> (ô túi vừa đổi) và
+        /// <c>StatsUpdate</c> — hai model, một thao tác.
+        /// </summary>
+        public void Equip(PlayerEntity entity, int slot)
+        {
+            IReadOnlyList<int> changed = entity.Inventory.TryEquip(slot);
+
+            if (changed.Count == 0)
+                return;
+
+            AfterEquipChange(entity, changed);
+        }
+
+        public void Unequip(PlayerEntity entity, EquipSlot equipSlot)
+        {
+            IReadOnlyList<int> changed = entity.Inventory.TryUnequip(equipSlot);
+
+            if (changed.Count == 0)
+                return;
+
+            AfterEquipChange(entity, changed);
+        }
+
+        /// <summary>
+        /// Thứ tự ba việc này là bắt buộc: tính lại TRƯỚC khi gửi (nếu không thì client nhận bộ số
+        /// cũ), và gửi cả hai gói (nếu không thì một trong hai model sai cho tới thao tác kế tiếp).
+        /// </summary>
+        private void AfterEquipChange(PlayerEntity entity, IReadOnlyList<int> changedSlots)
+        {
+            entity.Recompute(entity.Inventory.EquippedConfigs());
+
+            InventoryService.SendDelta(entity, changedSlots);
+
+            Send(entity);
+        }
+
+        //--------------------------------------------------------------------------------------------
+
+        /// <summary>
+        /// Đẩy TOÀN BỘ bộ chỉ số, không phải delta — ngược hẳn túi đồ, và có lý do:
+        ///
+        /// Chỉ số phụ thuộc lẫn nhau. Cộng một điểm Sức mạnh thì Sát thương đổi; cộng Thể lực thì cả
+        /// MaxHp lẫn Phòng thủ đổi. "Cái gì vừa đổi" gần như luôn là "gần hết". Tệ hơn: một NỬA bộ
+        /// chỉ số là một object vô nghĩa — Sát thương của bộ cũ ghép với Phòng thủ của bộ mới không
+        /// mô tả nhân vật nào cả.
+        ///
+        /// Túi đồ thì ngược lại: 30 ô độc lập. Đó mới là điều kiện để delta có nghĩa.
+        /// </summary>
+        public static void Send(PlayerEntity entity)
+        {
+            var equipped = new List<EquippedSlotDto>();
+
+            foreach (EquipSlot equipSlot in System.Enum.GetValues(typeof(EquipSlot)))
+            {
+                if (equipSlot == EquipSlot.None)
+                    continue;
+
+                ItemStack stack = entity.Inventory.GetEquipped(equipSlot);
+
+                if (stack.IsEmpty)
+                    continue;
+
+                equipped.Add(new EquippedSlotDto { EquipSlot = equipSlot, TemplateId = stack.TemplateId });
+            }
+
+            entity.Owner?.SendData(NetCmd.StatsUpdate, new StatsUpdateNotice
+            {
+                Stats = entity.Stats,
+                UnspentPoints = entity.UnspentPoints,
+                Hp = entity.Hp,
+                Mp = entity.Mp,
+                Equipped = equipped.ToArray(),
+            });
+        }
+
+        /// <summary>Gọi mỗi tick từ <c>WorldService.Tick</c>, ngay sau <c>InventoryService.Tick</c>.</summary>
+        public void Tick(ICollection<PlayerEntity> entities)
+        {
+            while (_grantPoints.TryDequeue(out int amount))
+            {
+                foreach (PlayerEntity entity in entities)
+                {
+                    entity.GrantPoints(amount);
+                    Send(entity);
+                }
+
+                Log.Info($"Thưởng {amount.ToString().Green()} điểm cho {entities.Count} người.");
+            }
+        }
+    }
+}
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — contract và <code>StatHandler</code></b></summary>
+
+**`Server/Shared/Net/NetCmd.cs`** — bốn giá trị vào **cuối dải Character (200–299)**:
+
+```csharp
+        /// <summary>
+        /// Toàn bộ chỉ số + điểm chưa cộng + trang bị đang mặc. Server đẩy mỗi lần có gì đó đổi.
+        /// Payload: <see cref="Dto.Character.StatsUpdateNotice"/>
+        /// </summary>
+        StatsUpdate = 201,
+
+        /// <summary>
+        /// Cộng điểm vào một chỉ số gốc. Kết quả đi bằng StatsUpdate.
+        /// Payload: <see cref="Dto.Character.StatAllocateRequest"/>
+        /// </summary>
+        StatAllocate = 202,
+
+        /// <summary>
+        /// Mặc món ở một ô túi. Kết quả đi bằng InventoryDelta + StatsUpdate.
+        /// Payload: <see cref="Dto.Character.EquipItemRequest"/>
+        /// </summary>
+        EquipItem = 203,
+
+        /// <summary>
+        /// Cởi món ở một ô trang bị về túi.
+        /// Payload: <see cref="Dto.Character.UnequipItemRequest"/>
+        /// </summary>
+        UnequipItem = 204,
+```
+
+**`Server/Shared/Dto/Character/StatsDto.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MemoryPack;
+using MMORPG.Shared.World.Item;
+using MMORPG.Shared.World.Stat;
+
+namespace MMORPG.Shared.Dto.Character
+{
+    /// <summary>Một ô trang bị đang có đồ. Chỉ TemplateId — client tra bảng item để lấy tên và icon.</summary>
+    [MemoryPackable]
+    public partial struct EquippedSlotDto
+    {
+        public EquipSlot EquipSlot;
+
+        public int TemplateId;
+    }
+
+    /// <summary>
+    /// TOÀN BỘ trạng thái chỉ số, gửi lại mỗi lần có gì đó đổi. Snapshot chứ không delta — xem ghi
+    /// chú ở <c>StatService.Send</c>: một nửa bộ chỉ số là một object vô nghĩa.
+    /// </summary>
+    [MemoryPackable]
+    public partial class StatsUpdateNotice
+    {
+        public StatBlock Stats { get; set; }
+
+        public int UnspentPoints { get; set; }
+
+        /// <summary>Sinh lực / nội lực HIỆN TẠI. Trạng thái, không tính ra được từ Stats.</summary>
+        public int Hp { get; set; }
+
+        public int Mp { get; set; }
+
+        public EquippedSlotDto[] Equipped { get; set; } = Array.Empty<EquippedSlotDto>();
+    }
+
+    [MemoryPackable]
+    public partial class StatAllocateRequest
+    {
+        public StatType Stat { get; set; }
+
+        public int Amount { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class EquipItemRequest
+    {
+        /// <summary>Ô TÚI chứa món muốn mặc. Server tự tra EquipSlot từ bảng item.</summary>
+        public int Slot { get; set; }
+    }
+
+    [MemoryPackable]
+    public partial class UnequipItemRequest
+    {
+        public EquipSlot EquipSlot { get; set; }
+    }
+}
+```
+
+**`Server/GameServer/Handlers/StatHandler.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.GameServer.Boot;
+using MMORPG.GameServer.Net;
+using MMORPG.GameServer.World;
+using MMORPG.Shared.Dto.Character;
+using MMORPG.Shared.Net;
+using MMORPG.Shared.World.Item;
+using MMORPG.Shared.World.Stat;
+
+namespace MMORPG.GameServer.Handlers
+{
+    public static class StatHandler
+    {
+        private static StatService StatService => ServerServices.Get<StatService>();
+
+        [TcpHandler(NetCmd.StatAllocate, MinState = SessionState.InWorld)]
+        public static Task<NetResult> OnAllocate(NetRequest req)
+        {
+            PlayerEntity entity = req.Session.Entity;
+
+            if (entity == null)
+                return Task.FromResult(NetResult.None);
+
+            var request = req.GetData<StatAllocateRequest>();
+
+            // Enum trên dây chỉ là một byte do MÁY KHÁC gửi: (StatType)77 hợp lệ hoàn toàn với C#.
+            // Kiểu dữ liệu bảo vệ code khỏi chính mình; kiểm miền giá trị mới là thứ bảo vệ server
+            // khỏi người khác. Phép kiểm "có phải chỉ số GỐC không" thì nằm trong StatService.
+            if (!Enum.IsDefined(typeof(StatType), request.Stat))
+                return Task.FromResult(NetResult.None);
+
+            StatService.Allocate(entity, request.Stat, request.Amount);
+
+            return Task.FromResult(NetResult.None);
+        }
+
+        [TcpHandler(NetCmd.EquipItem, MinState = SessionState.InWorld)]
+        public static Task<NetResult> OnEquip(NetRequest req)
+        {
+            PlayerEntity entity = req.Session.Entity;
+
+            if (entity == null)
+                return Task.FromResult(NetResult.None);
+
+            StatService.Equip(entity, req.GetData<EquipItemRequest>().Slot);
+
+            return Task.FromResult(NetResult.None);
+        }
+
+        [TcpHandler(NetCmd.UnequipItem, MinState = SessionState.InWorld)]
+        public static Task<NetResult> OnUnequip(NetRequest req)
+        {
+            PlayerEntity entity = req.Session.Entity;
+
+            if (entity == null)
+                return Task.FromResult(NetResult.None);
+
+            var request = req.GetData<UnequipItemRequest>();
+
+            if (!Enum.IsDefined(typeof(EquipSlot), request.EquipSlot))
+                return Task.FromResult(NetResult.None);
+
+            StatService.Unequip(entity, request.EquipSlot);
+
+            return Task.FromResult(NetResult.None);
+        }
+    }
+}
+```
+
+**`Server/GameServer/Boot/ServerBootstrap.cs`** — ⚠️ đăng ký, **trước** `WorldService`:
+
+```csharp
+            var inventoryService = ServerServices.Register(new InventoryService(dbClient));
+
+            var statService = ServerServices.Register(new StatService(dbClient));
+
+            var worldService = ServerServices.Register(new WorldService(maps, config, inventoryService, statService));
+
+            ServerServices.Register(new AuthService(dbClient, new LoginRateLimiter()));
+            ServerServices.Register(new CharacterService(dbClient, worldService, maps, config, inventoryService, statService));
+```
+
+**`Server/GameServer/World/WorldService.cs`** — nhận thêm một service và gọi thêm một Tick:
+
+```csharp
+        private readonly StatService _statService;
+
+        public WorldService(MapRegistry maps, ConfigService config, InventoryService inventoryService,
+            StatService statService)
+        {
+            _maps = maps;
+            _config = config;
+            _inventoryService = inventoryService;
+            _statService = statService;
+```
+
+```csharp
+            _inventoryService.Tick(dt, _entities.Values);
+            _statService.Tick(_entities.Values);
+```
+
+**`Server/GameServer/World/CharacterService.cs`** — nạp SAU túi, lưu cùng lúc với túi:
+
+```csharp
+            await _inventoryService.LoadAsync(entity);
+
+            // SAU túi: trang bị là một trong ba nguyên liệu của pipeline chỉ số, và cái túi phải có
+            // mặt trước khi tính.
+            await _statService.LoadAsync(entity);
+```
+
+```csharp
+            await _inventoryService.SaveAsync(entity);
+            await _statService.SaveAsync(entity);
+```
+
+**`Server/GameServer/Program.cs`** — phím `P`:
+
+```csharp
+var statService = ServerServices.Get<StatService>();
+
+// ... trong switch của luồng đọc phím:
+            // Nguồn điểm cộng của Phase 14. Phase 15 thay nó bằng đường lên cấp thật.
+            case ConsoleKey.P:
+                statService.EnqueueGrantPointsAll(5);
+                break;
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — client: model, api, handler, presenter, panel</b></summary>
+
+**`Assets/Game/Scripts/Network/Handlers/StatsNetHandler.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MMORPG.Shared.Dto.Character;
+using MMORPG.Shared.Net;
+
+namespace MMORPG.Client.Network.Handlers
+{
+    /// <summary>
+    /// Nhận nhóm lệnh chỉ số. Một lệnh duy nhất, và đó là điểm đáng chú ý: chỉ số chỉ có SNAPSHOT,
+    /// không có delta — xem lý do ở <c>StatService.Send</c> phía server.
+    /// </summary>
+    public sealed class StatsNetHandler : INetHandlerGroup
+    {
+        public event Action<StatsUpdateNotice> OnStatsUpdate;
+
+        [NetHandler(NetCmd.StatsUpdate)]
+        private void HandleStatsUpdate(NetPacket packet)
+        {
+            OnStatsUpdate?.Invoke(packet.GetData<StatsUpdateNotice>());
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Stats/StatsModel.cs`** (file mới, nguyên văn):
+
+```csharp
+using System;
+using MMORPG.Shared.Dto.Character;
+using MMORPG.Shared.World.Item;
+using MMORPG.Shared.World.Stat;
+
+namespace MMORPG.Client.Stats
+{
+    /// <summary>
+    /// Bản sao bộ chỉ số của chính mình, do server gửi xuống. Cùng luật với <c>LocalPlayer</c> và
+    /// <c>InventoryModel</c>: cache chỉ-đọc, không có setter công khai.
+    ///
+    /// Không có dòng nào ở đây CỘNG một chỉ số vào chỉ số khác. Client được phép chạy
+    /// <see cref="StatCalculator"/> để DỰ ĐOÁN cho việc hiển thị (rê chuột vào món đồ thì hiện
+    /// "42 → 55"), nhưng con số đang có hiệu lực luôn là con số trong model này.
+    /// </summary>
+    public sealed class StatsModel
+    {
+        /// <summary>
+        /// Bộ chỉ số hiện hành. Thay NGUYÊN object mỗi lần nhận gói, không sửa từng ô — cùng lý do
+        /// với ConfigService.Current ở server: nửa bộ chỉ số là một object vô nghĩa.
+        /// </summary>
+        public StatBlock Stats { get; private set; } = new();
+
+        public int UnspentPoints { get; private set; }
+
+        public int Hp { get; private set; }
+
+        public int Mp { get; private set; }
+
+        /// <summary>Trang bị đang mặc, tra theo ô. Rỗng = ô đó đang trống.</summary>
+        public EquippedSlotDto[] Equipped { get; private set; } = Array.Empty<EquippedSlotDto>();
+
+        /// <summary>Bắn sau MỖI lần nhận gói. Không có tham số "cái gì đổi" — snapshot thì mọi thứ đều có thể đã đổi.</summary>
+        public event Action OnChanged;
+
+        public void Apply(StatsUpdateNotice notice)
+        {
+            // Gói thiếu Stats nghĩa là server và client chạy hai bản Shared khác nhau; giữ bộ cũ còn
+            // hơn thay bằng null và để mọi chỗ đọc chỉ số nổ.
+            if (notice.Stats == null)
+                return;
+
+            Stats = notice.Stats;
+            UnspentPoints = notice.UnspentPoints;
+            Hp = notice.Hp;
+            Mp = notice.Mp;
+            Equipped = notice.Equipped ?? Array.Empty<EquippedSlotDto>();
+
+            OnChanged?.Invoke();
+        }
+
+        /// <summary>TemplateId đang mặc ở một ô, hoặc 0.</summary>
+        public int EquippedTemplate(EquipSlot equipSlot)
+        {
+            foreach (EquippedSlotDto slot in Equipped)
+            {
+                if (slot.EquipSlot == equipSlot)
+                    return slot.TemplateId;
+            }
+
+            return 0;
+        }
+
+        public void Clear()
+        {
+            Stats = new StatBlock();
+            UnspentPoints = 0;
+            Hp = 0;
+            Mp = 0;
+            Equipped = Array.Empty<EquippedSlotDto>();
+
+            OnChanged?.Invoke();
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Stats/StatsApi.cs`** (file mới, nguyên văn):
+
+```csharp
+using MMORPG.Client.Network;
+using MMORPG.Shared.Dto.Character;
+using MMORPG.Shared.Net;
+using MMORPG.Shared.World.Item;
+using MMORPG.Shared.World.Stat;
+
+namespace MMORPG.Client.Stats
+{
+    /// <summary>
+    /// Gom mọi lệnh chỉ số / trang bị mà client GỬI ĐI. Không đụng StatsModel một dòng nào: bấm `+`
+    /// thì gửi gói rồi chờ, cùng luật với InventoryApi.
+    /// </summary>
+    public sealed class StatsApi
+    {
+        private readonly NetService _netService;
+
+        public StatsApi(NetService netService)
+        {
+            _netService = netService;
+        }
+
+        public void Allocate(StatType stat, int amount)
+        {
+            _netService.Send(NetCmd.StatAllocate, new StatAllocateRequest { Stat = stat, Amount = amount });
+        }
+
+        public void Equip(int slot)
+        {
+            _netService.Send(NetCmd.EquipItem, new EquipItemRequest { Slot = slot });
+        }
+
+        public void Unequip(EquipSlot equipSlot)
+        {
+            _netService.Send(NetCmd.UnequipItem, new UnequipItemRequest { EquipSlot = equipSlot });
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Stats/StatsPresenter.cs`** (file mới, nguyên văn):
+
+```csharp
+using HungNT;
+using MMORPG.Client.Network.Handlers;
+using MMORPG.Shared.Dto.Character;
+using MMORPG.Shared.World.Stat;
+using UnityEngine;
+using VContainer;
+
+namespace MMORPG.Client.Stats
+{
+    /// <summary>
+    /// Nối mạng với <see cref="StatsModel"/>. MonoBehaviour cắm sẵn trong scene, không phải panel —
+    /// cùng lý do với InventoryPresenter: gói StatsUpdate vẫn tới khi bảng thông tin đang đóng.
+    /// </summary>
+    public sealed class StatsPresenter : MonoBehaviour
+    {
+        private StatsNetHandler _statsNetHandler;
+        private StatsModel _statsModel;
+
+        [Inject]
+        public void Construct(StatsNetHandler statsNetHandler, StatsModel statsModel)
+        {
+            _statsNetHandler = statsNetHandler;
+            _statsModel = statsModel;
+        }
+
+        private void Start()
+        {
+            _statsNetHandler.OnStatsUpdate += OnStatsUpdate;
+        }
+
+        private void OnDestroy()
+        {
+            if (_statsNetHandler == null)
+                return;
+
+            _statsNetHandler.OnStatsUpdate -= OnStatsUpdate;
+        }
+
+        private void OnStatsUpdate(StatsUpdateNotice notice)
+        {
+            _statsModel.Apply(notice);
+
+            this.Log($"Chỉ số: HP {_statsModel.Hp}/{_statsModel.Stats[StatType.MaxHp]} · " +
+                     $"ATK {_statsModel.Stats[StatType.Attack]} · điểm chưa cộng {_statsModel.UnspentPoints}");
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Stats/StatsPanel.cs`** (file mới, nguyên văn) — ba class trong một file
+vì hai class sau là *view con* của class đầu, không dùng được ở đâu khác:
+
+```csharp
+using System.Collections.Generic;
+using HungNT.UI.Panel;
+using MMORPG.Client.Inventory;
+using MMORPG.Shared.World.Item;
+using MMORPG.Shared.World.Stat;
+using TMPro;
+using UnityEngine;
+using UnityEngine.UI;
+using VContainer;
+
+namespace MMORPG.Client.Stats
+{
+    /// <summary>
+    /// Bảng thông tin: chỉ số gốc (có nút +), chỉ số dẫn xuất (chỉ đọc), điểm chưa cộng, và các ô
+    /// trang bị.
+    ///
+    /// Không một dòng nào ở đây tính chỉ số. Bấm `+` thì gửi gói rồi chờ — số trên màn hình chỉ đổi
+    /// khi <see cref="StatsModel"/> nhận được gói từ server.
+    /// </summary>
+    public sealed class StatsPanel : UIPanelBase
+    {
+        [SerializeField] private TMP_Text _unspentText;
+        [SerializeField] private StatRowView[] _primaryRows;
+        [SerializeField] private StatRowView[] _derivedRows;
+        [SerializeField] private EquipSlotView[] _equipSlots;
+
+        private StatsModel _statsModel;
+        private StatsApi _statsApi;
+
+        [Inject]
+        public void Construct(StatsModel statsModel, StatsApi statsApi)
+        {
+            _statsModel = statsModel;
+            _statsApi = statsApi;
+        }
+
+        private void OnEnable()
+        {
+            if (_statsModel == null)
+                return;
+
+            _statsModel.OnChanged += Render;
+
+            // Vẽ ngay khi mở: trong lúc panel đóng, model vẫn nhận gói. Không vẽ lại thì bảng hiển
+            // thị trạng thái của lần đóng trước. Cùng bẫy với InventoryPanel.
+            Render();
+        }
+
+        private void OnDisable()
+        {
+            if (_statsModel == null)
+                return;
+
+            _statsModel.OnChanged -= Render;
+        }
+
+        /// <summary>Nút `+` gọi hàm này. Gửi rồi thôi — không tự cộng một điểm nào lên màn hình.</summary>
+        public void RequestAllocate(StatType stat)
+        {
+            _statsApi.Allocate(stat, 1);
+        }
+
+        public void RequestUnequip(EquipSlot equipSlot)
+        {
+            _statsApi.Unequip(equipSlot);
+        }
+
+        /// <summary>
+        /// Vẽ lại TOÀN BỘ, không có phiên bản "vẽ lại phần vừa đổi".
+        ///
+        /// Ngược hẳn InventoryPanel, và đúng vì cùng lý do khiến chỉ số đi bằng snapshot: các chỉ số
+        /// phụ thuộc lẫn nhau, nên "cái gì vừa đổi" gần như luôn là "gần hết". Chín dòng text thì vẽ
+        /// lại hết rẻ hơn hẳn việc giữ một danh sách ô bẩn.
+        /// </summary>
+        private void Render()
+        {
+            _unspentText.text = _statsModel.UnspentPoints.ToString();
+
+            foreach (StatRowView row in _primaryRows)
+                row.Render(_statsModel.Stats[row.Stat], _statsModel.UnspentPoints > 0);
+
+            foreach (StatRowView row in _derivedRows)
+                row.Render(_statsModel.Stats[row.Stat], canAllocate: false);
+
+            foreach (EquipSlotView slot in _equipSlots)
+                slot.Render(_statsModel.EquippedTemplate(slot.EquipSlot));
+        }
+
+        /// <summary>
+        /// Chỉ số sẽ thành bao nhiêu NẾU mặc món này — cho tooltip "Sát thương 42 → 55".
+        ///
+        /// Đây là chỗ quyết định "đặt StatCalculator ở Shared" trả tiền. Và cũng là chỗ phải nhớ lại
+        /// ranh giới: con số trả về đây chỉ là một NHÃN trên màn hình. Nó không bao giờ được ghi vào
+        /// StatsModel — con số có hiệu lực là con số server gửi sau khi thật sự mặc.
+        /// </summary>
+        public StatBlock Preview(int classId, int level, ItemConfig candidate)
+        {
+            var equipped = new List<ItemConfig>();
+
+            foreach (EquipSlot equipSlot in System.Enum.GetValues(typeof(EquipSlot)))
+            {
+                if (equipSlot == EquipSlot.None || equipSlot == candidate.EquipSlot)
+                    continue;
+
+                ItemConfig config = ItemConfigContainer.Find(_statsModel.EquippedTemplate(equipSlot));
+
+                if (config != null)
+                    equipped.Add(config);
+            }
+
+            equipped.Add(candidate);
+
+            return StatCalculator.Compute(classId, level, _statsModel.Stats, equipped);
+        }
+    }
+
+    /// <summary>Một dòng "Tên chỉ số — giá trị — nút +". Chỉ vẽ và báo bấm.</summary>
+    public sealed class StatRowView : MonoBehaviour
+    {
+        [SerializeField] private StatsPanel _panel;
+        [SerializeField] private StatType _stat;
+        [SerializeField] private TMP_Text _valueText;
+        [SerializeField] private Button _plusButton;
+
+        public StatType Stat
+        {
+            get { return _stat; }
+        }
+
+        private void Awake()
+        {
+            // Nút + chỉ tồn tại trên dòng chỉ số gốc; dòng dẫn xuất để trống ô này trong prefab.
+            if (_plusButton != null)
+                _plusButton.onClick.AddListener(OnClickPlus);
+        }
+
+        private void OnDestroy()
+        {
+            if (_plusButton != null)
+                _plusButton.onClick.RemoveListener(OnClickPlus);
+        }
+
+        public void Render(int value, bool canAllocate)
+        {
+            _valueText.text = value.ToString();
+
+            if (_plusButton != null)
+                _plusButton.gameObject.SetActive(canAllocate);
+        }
+
+        private void OnClickPlus()
+        {
+            _panel.RequestAllocate(_stat);
+        }
+    }
+
+    /// <summary>Một ô trang bị. Click = cởi ra.</summary>
+    public sealed class EquipSlotView : MonoBehaviour
+    {
+        [SerializeField] private StatsPanel _panel;
+        [SerializeField] private EquipSlot _equipSlot;
+        [SerializeField] private Image _icon;
+        [SerializeField] private Button _button;
+
+        public EquipSlot EquipSlot
+        {
+            get { return _equipSlot; }
+        }
+
+        private void Awake()
+        {
+            _button.onClick.AddListener(OnClick);
+        }
+
+        private void OnDestroy()
+        {
+            _button.onClick.RemoveListener(OnClick);
+        }
+
+        public void Render(int templateId)
+        {
+            ItemConfig config = templateId == 0 ? null : ItemConfigContainer.Find(templateId);
+
+            _icon.enabled = config != null;
+
+            if (config != null)
+                _icon.sprite = Resources.Load<Sprite>(config.IconKey);
+        }
+
+        private void OnClick()
+        {
+            _panel.RequestUnequip(_equipSlot);
+        }
+    }
+}
+```
+
+**`Assets/Game/Scripts/Boot/GameLifetimeScope.cs`** — ⚠️ bốn dòng:
+
+```csharp
+            // Chỉ số. Cùng bộ bốn dòng như túi đồ ở Phase 13 — và thiếu dòng nào cũng KHÔNG có
+            // lỗi biên dịch.
+            builder.Register<StatsNetHandler>(Lifetime.Singleton).AsSelf().As<INetHandlerGroup>();
+            builder.Register<StatsModel>(Lifetime.Singleton);
+            builder.Register<StatsApi>(Lifetime.Singleton);
+            builder.RegisterComponentInHierarchy<StatsPresenter>();
+```
+
+</details>
+
 ---
 
 ## Bước 3 — Trang bị: nối cái túi vào pipeline
 
 ### Hướng làm
 
-**Mở rộng bảng item, không đổi format.** `ItemTemplate` thêm hai trường **tuỳ chọn**:
+**Mở rộng bảng item, không đổi format.** `ItemConfig` thêm hai trường **tuỳ chọn**:
 
 ```json
 {
@@ -356,8 +1997,9 @@ Trường tuỳ chọn **thêm vào** thì `Version` giữ nguyên — đúng lu
 (Phase 10) và đã dùng một lần cho `Portals` (Phase 11). File cũ không có hai trường này vẫn đọc được,
 `EquipSlot` về `None`, `Bonuses` về mảng rỗng. Ba lần áp dụng cùng một luật là lúc nó thành phản xạ.
 
-Nhưng `Checksum()` thì **phải** băm thêm hai trường mới — chúng đổi hành vi. Số vân tay đổi, và đó là
-đúng: một server chạy bảng có bonus và một client chạy bảng không có là hai thế giới khác nhau.
+Vân tay **tự động** đổi theo hai trường mới — `ConfigFingerprint` băm byte đã tuần tự hoá nên không
+phải nhớ thêm gì. Và đổi là đúng: một server chạy bảng có bonus và một client chạy bảng không có là
+hai thế giới khác nhau.
 
 **① DB — migration 6.**
 
@@ -392,20 +2034,40 @@ này.
 
 **④ Logic — hai lệnh, và một chuỗi thao tác phải trọn vẹn.**
 
-`EquipItem(slot)`:
+`Inventory.TryEquip(slot)` — và nó ngắn hơn bạn nghĩ, nhờ một quan sát:
 
-1. Ô `slot` có đồ không; template có `Kind == Equipment` và `EquipSlot != None` không.
+1. Ô `slot` có đồ không; config có `Kind == Equipment` và `EquipSlot != None` không.
 2. (Phase sau: kiểm cấp độ, kiểm lớp nhân vật.)
-3. Nếu ô trang bị ấy **đang có món khác** → cởi món cũ về túi **trước**. Túi đầy? → **từ chối cả thao
-   tác**, không cởi gì cả. (All-or-nothing, đúng như `TryAdd` ở Phase 13.)
-4. Chuyển món mới: `slot = -1`, `equip_slot = X`.
-5. `Recompute()`.
-6. **Kẹp sinh lực hiện tại về `MaxHp` mới.**
-7. Đẩy `InventoryDelta` (ô túi vừa đổi) **và** `StatsUpdate`. Hai gói, hai model, một thao tác.
+3. **Hoán đổi một-đổi-một**: món cũ ở ô trang bị về đúng ô túi mà món mới vừa rời khỏi.
 
-**Bước 6 là chỗ có một cái bẫy đáng tiền.** Cởi giáp làm `MaxHp` tụt từ 200 xuống 150 trong khi máu hiện
-tại đang là 180 — phải kẹp xuống 150. Đến đây ai cũng đồng ý. Câu hỏi thật là chiều ngược lại: **mặc lại
-giáp thì máu có lên lại 180 không?**
+Bước 3 là chỗ đáng dừng lại. Cách viết tự nhiên là: *"cởi món cũ về túi trước; túi đầy thì từ chối cả
+thao tác"* — đúng tinh thần all-or-nothing của `TryAdd`, nhưng **thừa một phép kiểm**. Ô túi vừa nhấc
+món mới ra đang **trống**, nên món cũ luôn có sẵn ít nhất chỗ đó để về. Không phải tìm ô trống, không
+có nhánh thất bại nào:
+
+```csharp
+ItemStack incoming = _slots[slot];
+ItemStack outgoing = GetEquipped(config.EquipSlot);   // rỗng nếu chưa mặc gì
+
+_slots[slot] = outgoing;
+_equipped[config.EquipSlot] = incoming;
+```
+
+> Bài học chung: **trước khi viết một phép kiểm, hỏi xem cách sắp xếp thao tác có làm nó thành thừa
+> không.** Một nhánh lỗi không tồn tại thì không có gì để test và không có gì để sai.
+
+Chiều ngược lại (`TryUnequip`) thì **vẫn cần** phép kiểm ấy: cởi ra là thêm một món vào túi mà không
+lấy món nào ra, nên túi đầy thì từ chối trọn.
+
+Sau khi túi đã đổi, `StatService.AfterEquipChange` làm nốt ba việc, và **thứ tự là bắt buộc**:
+
+1. `entity.Recompute(...)` — tính lại chỉ số, và **kẹp `Hp`/`Mp` về trần mới**.
+2. `InventoryService.SendDelta(...)` — ô túi vừa đổi.
+3. `StatService.Send(...)` — bộ chỉ số mới.
+
+**Bước kẹp `Hp` là chỗ có một cái bẫy đáng tiền.** Cởi giáp làm `MaxHp` tụt từ 200 xuống 150 trong khi
+máu hiện tại đang là 180 — phải kẹp xuống 150. Đến đây ai cũng đồng ý. Câu hỏi thật là chiều ngược
+lại: **mặc lại giáp thì máu có lên lại 180 không?**
 
 Đáp án là **không**. Máu giữ nguyên 150, chỉ `MaxHp` lên 200. Vì nếu bạn khôi phục theo tỉ lệ cho "công
 bằng" thì người chơi có một cái nút hồi máu miễn phí: cởi ra, mặc vào, lặp lại. Mọi hệ thống hồi phục
@@ -431,13 +2093,361 @@ cho tới khi server gửi `StatsUpdate` thật.
 3. Cởi ra → về đúng 42, và kiếm về ô túi trống đầu tiên.
 4. **Mặc-cởi năm mươi lần** (giữ phím), rồi so Sát thương với lúc đầu → **đúng bằng 42**. Đây là bài
    kiểm tra cho "tính lại từ đầu"; bản cộng-dồn sẽ trôi và bạn sẽ thấy nó ngay.
-5. Túi đầy 30 ô, đang mặc kiếm A, mặc kiếm B từ ô cuối → **từ chối trọn**, A vẫn trên người, B vẫn trong
-   túi, không có ô nào đổi.
+5. Túi đầy 30 ô, đang mặc kiếm A, mặc kiếm B từ ô cuối → **vẫn mặc được**, và A về đúng ô B vừa rời.
+   Đây là phép hoán đổi một-đổi-một: nó không có nhánh thất bại. Rồi thử chiều ngược lại — túi đầy
+   30 ô mà bấm CỞI → **không có gì xảy ra**, đúng chủ đích: cởi ra là thêm một món mà không lấy món
+   nào ra.
 6. Giả lập mất máu (phím trên console), cởi giáp → máu bị kẹp xuống `MaxHp` mới. Mặc lại → `MaxHp` lên,
    **máu không lên**.
 7. Logout, vào lại → vẫn đang mặc đúng món đó, chỉ số khớp, máu đúng.
 8. Sửa tạm client gửi `EquipItem` lên một ô trống, rồi lên một Bình máu → server từ chối cả hai, log
    Warn, không tick nào chết.
+
+
+<details>
+<summary><b>📖 Lời giải — mở rộng bảng item: <code>EquipSlot</code> + <code>Bonuses</code></b></summary>
+
+**`Server/Shared/World/Item/EquipSlot.cs`** (file mới, nguyên văn):
+
+```csharp
+namespace MMORPG.Shared.World.Item
+{
+    /// <summary>
+    /// Ô trang bị trên người. <c>None = 0</c> để <c>default</c> đúng nghĩa "không mặc được" — cùng
+    /// quy ước với <c>TemplateId = 0</c> nghĩa là ô túi trống.
+    ///
+    /// Giá trị này cũng đi thẳng vào cột <c>inventory_item.equip_slot</c>, nên nó là một phần của
+    /// LƯỢC ĐỒ DB: đánh số lại nó là một cuộc di cư, không phải một thao tác Rename.
+    /// </summary>
+    public enum EquipSlot : byte
+    {
+        None = 0,
+        Weapon = 1,
+        Armor = 2,
+        Helmet = 3,
+        Boots = 4,
+    }
+}
+```
+
+**`Server/Shared/World/Item/ItemConfig.cs`** — hai property TUỲ CHỌN, thêm vào cuối class:
+
+```csharp
+        /// <summary>
+        /// Mặc vào ô nào. None = không mặc được. Trường TUỲ CHỌN thêm ở Phase 14: file cũ không có
+        /// nó vẫn đọc được và về None, nên Version của bảng giữ nguyên — đúng luật đã chốt ở
+        /// MapGridParser.FORMAT_VERSION.
+        /// </summary>
+        public EquipSlot EquipSlot { get; set; }
+
+        /// <summary>Chỉ số món đồ cộng thêm khi ĐANG MẶC. Nằm trong túi thì không cộng gì.</summary>
+        public StatBonus[] Bonuses { get; set; } = Array.Empty<StatBonus>();
+```
+
+Thêm hai `using`: `System` và `MMORPG.Shared.World.Stat`.
+
+**`ItemTableData` không đổi một dòng nào**, và đó là phần thưởng của việc bỏ `Checksum()` viết tay ở
+Phase 12: `ConfigFingerprint` băm byte đã tuần tự hoá, nên hai trường mới **tự** vào vân tay ngay khi
+chúng có `[MemoryPackable]`. Không có chỗ nào để quên.
+
+> Với bản cũ (băm tay từng trường) thì đây đúng là chỗ hỏng câm điển hình: thêm `Bonuses` vào
+> `ItemConfig` mà quên thêm hai dòng `Fnv1a.Mix` thì vân tay vẫn tính ra bình thường — chỉ là nó
+> không còn phát hiện được thay đổi ở bonus nữa. Một server có bonus và một client không có sẽ báo
+> "khớp".
+
+**`Assets/Game/Resources/Config/items.json`** — Kiếm gỗ giờ mặc được:
+
+```json
+{
+  "Version": 1,
+  "Items": [
+    {
+      "TemplateId": 1,
+      "Name": "Bình máu nhỏ",
+      "Description": "Hồi 50 sinh lực.",
+      "IconKey": "Items/potion_small",
+      "Kind": "Consumable",
+      "MaxStack": 20
+    },
+    {
+      "TemplateId": 100,
+      "Name": "Kiếm gỗ",
+      "Description": "Vũ khí tập luyện.",
+      "IconKey": "Items/sword_wood",
+      "Kind": "Equipment",
+      "MaxStack": 1
+    }
+  ]
+}
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — DB: migration 6 và cột <code>equip_slot</code></b></summary>
+
+**`Server/DBServer/Data/Migrator.cs`**:
+
+```csharp
+            (6, """
+                -- 0 = đang nằm trong túi; > 0 = đang mặc ở ô trang bị đó.
+                ALTER TABLE inventory_item ADD COLUMN equip_slot INTEGER NOT NULL DEFAULT 0;
+
+                -- Món đang mặc RỜI KHỎI ô túi (slot = -1), nên chỉ mục cũ phải thành chỉ mục CÓ ĐIỀU
+                -- KIỆN — nếu không thì hai món đang mặc cùng có slot = -1 và vi phạm UNIQUE.
+                DROP INDEX idx_inventory_slot;
+
+                CREATE UNIQUE INDEX idx_inventory_slot ON inventory_item (character_id, slot) WHERE slot >= 0;
+                CREATE UNIQUE INDEX idx_inventory_equip ON inventory_item (character_id, equip_slot) WHERE equip_slot > 0;
+                """),
+```
+
+**`Server/Shared/Dto/Db/InventoryDbDto.cs`** — `InventoryRow` thêm một trường và đổi nghĩa
+một trường:
+
+```csharp
+        /// <summary>Ô túi. -1 khi món đồ ĐANG MẶC — nó rời khỏi lưới túi và sống ở ô trang bị.</summary>
+        public int Slot { get; set; }
+
+        /// <summary>None = đang trong túi. Khác None = đang mặc ở ô đó.</summary>
+        public EquipSlot EquipSlot { get; set; }
+```
+
+**`Server/DBServer/Repositories/InventoryRepository.cs`** — bốn chỗ, tất cả là SQL:
+
+```csharp
+            // LoadAsync: thêm cột vào SELECT và vào phép dựng InventoryRow
+            command.CommandText = """
+                                  SELECT id, template_id, quantity, slot, equip_slot
+                                  FROM inventory_item
+                                  WHERE character_id = $characterId
+                                  ORDER BY slot;
+                                  """;
+
+                    EquipSlot = (EquipSlot)reader.GetInt32(4),
+```
+
+```csharp
+            // SaveAsync: thêm cột vào INSERT và một tham số nữa
+                insert.CommandText = """
+                                     INSERT INTO inventory_item (character_id, template_id, quantity, slot, equip_slot)
+                                     VALUES ($characterId, $templateId, $quantity, $slot, $equipSlot);
+                                     """;
+
+                SqliteParameter equipSlot = insert.Parameters.AddWithValue("$equipSlot", 0);
+
+                    equipSlot.Value = (int)row.EquipSlot;
+```
+
+</details>
+
+<details>
+<summary><b>📖 Lời giải — <code>Inventory</code>: mặc và cởi</b></summary>
+
+**`Server/GameServer/World/Inventory.cs`** — `Load` và `ToRows` phải biết đến món đang mặc:
+
+```csharp
+        /// <summary>Nạp từ DB. Bỏ qua dòng hỏng thay vì ném — xem ghi chú trong thân hàm.</summary>
+        public void Load(InventoryRow[] rows)
+        {
+            System.Array.Clear(_slots, 0, _slots.Length);
+            _equipped.Clear();
+
+            foreach (InventoryRow row in rows)
+            {
+                // Hai loại dòng hỏng, và cả hai đều BỎ QUA chứ không ném: template không còn trong
+                // bảng (item bị gỡ), số lượng vô nghĩa. Ném ở đây nghĩa là một dòng DB rác chặn hẳn
+                // người chơi vào game — và người chơi thì không sửa được dòng đó.
+                if (row.Quantity <= 0 || ItemConfigContainer.Find(row.TemplateId) == null)
+                    continue;
+
+                // Món ĐANG MẶC không có ô túi — nó đi vào _equipped, còn Slot của nó trong DB là -1.
+                if (row.EquipSlot != EquipSlot.None)
+                {
+                    _equipped[row.EquipSlot] = ToStack(row);
+                    continue;
+                }
+
+                // Ô ngoài phạm vi: túi từng rộng hơn rồi bị thu lại. Cũng bỏ qua.
+                if (row.Slot < 0 || row.Slot >= SLOT_COUNT)
+                    continue;
+
+                _slots[row.Slot] = ToStack(row);
+            }
+
+            // Vừa nạp từ DB thì RAM và DB đang khớp nhau — nếu để dirty thì autosave đầu tiên ghi lại
+            // đúng thứ vừa đọc lên, 30 lượt ghi không có lý do.
+            IsDirty = false;
+        }
+```
+
+```csharp
+        private static ItemStack ToStack(InventoryRow row)
+        {
+            return new ItemStack
+            {
+                ItemId = row.ItemId,
+                TemplateId = row.TemplateId,
+                Quantity = row.Quantity,
+            };
+        }
+```
+
+```csharp
+        /// <summary>
+        /// Kết xuất để ghi DB: ô túi có đồ, CỘNG các món đang mặc. Ô trống không cần một dòng để nói
+        /// rằng nó trống.
+        ///
+        /// Món đang mặc ghi <c>Slot = -1</c> — đó là điều kiện của chỉ mục
+        /// <c>idx_inventory_slot ... WHERE slot >= 0</c>: nhiều món cùng có -1 thì không vi phạm gì.
+        /// </summary>
+        public InventoryRow[] ToRows()
+        {
+            var rows = new List<InventoryRow>(UsedSlots + _equipped.Count);
+
+            for (int slot = 0; slot < _slots.Length; slot++)
+            {
+                if (_slots[slot].IsEmpty)
+                    continue;
+
+                rows.Add(new InventoryRow
+                {
+                    ItemId = _slots[slot].ItemId,
+                    TemplateId = _slots[slot].TemplateId,
+                    Quantity = _slots[slot].Quantity,
+                    Slot = slot,
+                    EquipSlot = EquipSlot.None,
+                });
+            }
+
+            foreach (KeyValuePair<EquipSlot, ItemStack> pair in _equipped)
+            {
+                rows.Add(new InventoryRow
+                {
+                    ItemId = pair.Value.ItemId,
+                    TemplateId = pair.Value.TemplateId,
+                    Quantity = pair.Value.Quantity,
+                    Slot = -1,
+                    EquipSlot = pair.Key,
+                });
+            }
+
+            return rows.ToArray();
+        }
+```
+
+Và khối trang bị, thêm vào cuối class (trước `IsValidSlot`):
+
+```csharp
+        //--------------------------------------------------------------------------------------------
+        // Trang bị (Phase 14). Món đang mặc RỜI KHỎI lưới túi: nó nằm trong _equipped, không nằm
+        // trong _slots. Một món đồ ở đúng một chỗ tại một thời điểm — hai chỗ là hai nguồn sự thật.
+        //--------------------------------------------------------------------------------------------
+
+        private readonly Dictionary<EquipSlot, ItemStack> _equipped = new();
+
+        /// <summary>Món đang mặc ở một ô, hoặc ô rỗng.</summary>
+        public ItemStack GetEquipped(EquipSlot equipSlot)
+        {
+            return _equipped.TryGetValue(equipSlot, out ItemStack stack) ? stack : default;
+        }
+
+        /// <summary>
+        /// Danh sách config của mọi món đang mặc — thứ <c>StatCalculator.Compute</c> nhận vào.
+        ///
+        /// Dựng mới mỗi lần thay vì giữ một danh sách đồng bộ: danh sách thứ hai là thứ phải nhớ cập
+        /// nhật ở mọi đường vào/ra, và quên một đường thì chỉ số sai mà không có triệu chứng. Cùng lý
+        /// do khiến Phase 11 dựng lại chỉ mục cột từ đầu mỗi tick.
+        /// </summary>
+        public List<ItemConfig> EquippedConfigs()
+        {
+            var list = new List<ItemConfig>(_equipped.Count);
+
+            foreach (ItemStack stack in _equipped.Values)
+            {
+                ItemConfig config = ItemConfigContainer.Find(stack.TemplateId);
+
+                if (config != null)
+                    list.Add(config);
+            }
+
+            return list;
+        }
+
+        /// <summary>
+        /// Mặc món ở ô túi <paramref name="slot"/>. Trả danh sách ô túi vừa đổi; RỖNG = không làm gì.
+        ///
+        /// HOẶC TRỌN HOẶC KHÔNG: nếu ô trang bị đang có món khác thì món cũ phải về được túi trước.
+        /// Túi đầy thì từ chối cả thao tác — cởi ra rồi không có chỗ cất là làm bốc hơi món đồ.
+        /// </summary>
+        public IReadOnlyList<int> TryEquip(int slot)
+        {
+            if (!IsValidSlot(slot) || _slots[slot].IsEmpty)
+                return System.Array.Empty<int>();
+
+            ItemConfig config = ItemConfigContainer.Find(_slots[slot].TemplateId);
+
+            if (config == null || config.Kind != ItemKind.Equipment || config.EquipSlot == EquipSlot.None)
+                return System.Array.Empty<int>();
+
+            ItemStack incoming = _slots[slot];
+            ItemStack outgoing = GetEquipped(config.EquipSlot);
+
+            // Ô túi vừa nhấc món mới ra đang TRỐNG, nên món cũ luôn có ít nhất chỗ này để về. Đặt nó
+            // vào đúng ô ấy là phép hoán đổi một-đổi-một: không cần tìm ô trống, không thể thất bại.
+            _slots[slot] = outgoing;
+            _equipped[config.EquipSlot] = incoming;
+
+            IsDirty = true;
+
+            return new[] { slot };
+        }
+
+        /// <summary>
+        /// Cởi món ở một ô trang bị về túi. Túi đầy thì TỪ CHỐI — không có chỗ cất thì không cởi.
+        /// </summary>
+        public IReadOnlyList<int> TryUnequip(EquipSlot equipSlot)
+        {
+            ItemStack stack = GetEquipped(equipSlot);
+
+            if (stack.IsEmpty)
+                return System.Array.Empty<int>();
+
+            int free = FirstEmptySlot();
+
+            if (free < 0)
+                return System.Array.Empty<int>();
+
+            _slots[free] = stack;
+            _equipped.Remove(equipSlot);
+
+            IsDirty = true;
+
+            return new[] { free };
+        }
+
+        private int FirstEmptySlot()
+        {
+            for (int slot = 0; slot < _slots.Length; slot++)
+            {
+                if (_slots[slot].IsEmpty)
+                    return slot;
+            }
+
+            return -1;
+        }
+```
+
+Thêm `using MMORPG.Shared.World.Item;` nếu chưa có.
+
+**`Server/GameServer/World/InventoryService.cs`** — `SendDelta` đổi từ `private static`
+thành `public static`: `StatService.AfterEquipChange` cần gửi delta túi sau khi mặc/cởi.
+
+```csharp
+        public static void SendDelta(PlayerEntity entity, IReadOnlyList<int> changedSlots)
+```
+
+</details>
 
 ---
 
@@ -476,15 +2486,15 @@ mang bảng cũ: hai bên hiển thị hai bộ chỉ số, và không có gì b
 
 | Triệu chứng | Nguyên nhân thường gặp | Chỗ sửa |
 |---|---|---|
-| Chỉ số trôi dần sau nhiều lần mặc-cởi | đang cộng dồn thay vì tính lại từ đầu | `StatService` — mọi đường đổi nguyên liệu phải kết thúc bằng `Recompute()` |
+| Chỉ số trôi dần sau nhiều lần mặc-cởi | đang cộng dồn thay vì tính lại từ đầu | `StatService` — mọi đường đổi nguyên liệu phải kết thúc bằng `entity.Recompute(...)` |
 | Giáp +5 Thể lực mà `MaxHp` chỉ tăng 5 | cộng trang bị **sau** khi đã tính dẫn xuất | thứ tự bốn bước trong `StatCalculator.Compute` |
-| `MaxHp` đúng nhưng máu hiện tại vượt trần | thiếu bước kẹp sau `Recompute` | `StatService.Recompute` |
+| `MaxHp` đúng nhưng máu hiện tại vượt trần | thiếu hai dòng `Math.Min` | `PlayerEntity.Recompute` |
 | Mặc lại giáp thì máu đầy lại | đang khôi phục theo tỉ lệ — đó là một nút hồi máu miễn phí | bỏ hẳn; xem Bước 3 |
 | Cộng điểm được vào `MaxHp` | thiếu phép kiểm "phải là chỉ số gốc" | `StatService.Allocate` |
 | Chỉ số về 0 sau khi relog | `character_stat` chưa được lưu, hoặc lưu sau khi entity đã bị `Despawn` | `LeaveWorldAsync` — lưu **trước** khi bỏ entity |
 | `UNIQUE constraint failed: inventory_item.equip_slot` | chỉ mục chưa có `WHERE equip_slot > 0`, nên mọi món trong túi (`equip_slot = 0`) đụng nhau | migration 6 |
-| Món đồ biến mất khi mặc | `slot = -1` nhưng UI vẫn vẽ theo `slot`, và `-1` rơi ngoài mảng | `InventoryModel.ApplyDelta` phải coi `slot < 0` là "rời túi" |
-| Túi đầy thì mặc đồ làm mất món đang mặc | thiếu all-or-nothing ở bước 3 của `EquipItem` | kiểm chỗ trống **trước** khi động vào món nào |
+| Món đồ biến mất khi mặc | `Inventory.ToRows` chưa xuất `_equipped`, nên lần lưu kế tiếp xoá sạch món đang mặc | `Inventory.ToRows` — phải duyệt CẢ `_slots` lẫn `_equipped` |
+| Túi đầy thì cởi đồ không có tác dụng gì | đúng chủ đích — `TryUnequip` trả rỗng khi `FirstEmptySlot()` = -1 | không phải bug; vứt bớt một món rồi cởi |
 | Bảng thông tin không tự cập nhật | quên `builder.Register<StatsNetHandler>()...As<INetHandlerGroup>()` | `GameLifetimeScope` |
 | Preview khi rê chuột lệch với số thật sau khi mặc | client đang tính bằng bảng cũ, hoặc quên loại món đang mặc ra khỏi danh sách giả định | `StatsPanel` — dựng danh sách "sau khi mặc" đúng: bỏ món cũ ở ô đó ra rồi mới thêm món mới |
 
@@ -615,7 +2625,7 @@ lúc nhận buff thì không được đổ đầy.
 </details>
 
 **Câu 8.** Thêm `EquipSlot` và `Bonuses` vào `items.json` nhưng **không** tăng `Version`, trong khi
-`Checksum` thì đổi. Hai quyết định ấy có nhất quán không?
+dấu vân tay thì đổi. Hai quyết định ấy có nhất quán không?
 <details>
 <summary><b>📖 Đáp án câu 8</b></summary>
 
@@ -625,12 +2635,16 @@ Có, vì chúng trả lời hai câu hỏi khác nhau.
 trường tuỳ chọn thì đọc vẫn nổi ở cả hai chiều — file cũ thiếu trường thì về mặc định, code cũ gặp trường
 lạ thì bỏ qua. Nên giữ nguyên. (Đúng luật đã ghi ở `MapFile.FORMAT_VERSION` và đã dùng cho `Portals`.)
 
-`Checksum` là dấu vân tay của **NỘI DUNG**: nó trả lời "hai bên có đang cầm cùng dữ liệu không". Bonus
+Dấu **vân tay** là của NỘI DUNG: nó trả lời "hai bên có đang cầm cùng dữ liệu không". Bonus
 đổi hành vi, nên nó phải vào vân tay — một server chạy bảng có bonus và một client chạy bảng không có là
 hai thế giới khác nhau, và người chơi sẽ thấy một con số khác nhau ở hai bên.
 
 Phép thử để phân loại một trường: *thiếu nó thì file có đọc được không* (→ `Version`) và *đổi nó thì hành
-vi có đổi không* (→ `Checksum`).
+vi có đổi không* (→ vân tay).
+
+Chú ý là bạn không phải *làm* gì để vân tay đổi: `ConfigFingerprint` băm byte đã tuần tự hoá, nên
+một trường `[MemoryPackable]` mới tự vào. Đó chính là lý do bỏ `Checksum()` viết tay — ở bản cũ,
+câu hỏi này sẽ có thêm một vế: "và bạn có nhớ thêm hai dòng `Fnv1a.Mix` không?"
 
 </details>
 
@@ -642,7 +2656,7 @@ vi có đổi không* (→ `Checksum`).
   là `Recompute()` phải chạy từ vòng tick chứ không chỉ từ các lệnh người chơi. Chỗ cắm đã sẵn: thêm một
   tham số vào `Compute`.
 - **Chỉ số ảnh hưởng tới di chuyển** (giày +tốc chạy). Đây là chỗ hai hệ thống đụng nhau: `MoveSpeed` nằm
-  trong `CharacterProfile` và đi thẳng vào `MovementRules.Step`, mà `Step` thì **client cũng chạy**. Đổi
+  trong `CharacterConfig` và đi thẳng vào `MovementRules.Step`, mà `Step` thì **client cũng chạy**. Đổi
   nó giữa phiên là mở lại đúng vấn đề "hợp đồng phiên chơi" của Phase 12 — phải đẩy số mới xuống client
   trong cùng một tick, và phải xử lý đống input đang treo. Đừng làm kèm phase này.
 - **Giới hạn cộng điểm** (tối đa theo cấp, reset điểm bằng vật phẩm). Toàn bộ nằm trong `StatService.Allocate`.

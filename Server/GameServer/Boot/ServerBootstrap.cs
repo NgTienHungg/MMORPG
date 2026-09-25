@@ -30,10 +30,11 @@ namespace MMORPG.GameServer.Boot
             var config = ServerServices.Register(new ConfigService());
 
             var maps = ServerServices.Register(new MapRegistry(config));
-            var worldService = ServerServices.Register(new WorldService(maps, config));
+            var inventoryService = ServerServices.Register(new InventoryService(dbClient));
+            var worldService = ServerServices.Register(new WorldService(maps, config, inventoryService));
 
             ServerServices.Register(new AuthService(dbClient, new LoginRateLimiter()));
-            ServerServices.Register(new CharacterService(dbClient, worldService, maps, config));
+            ServerServices.Register(new CharacterService(dbClient, worldService, maps, config, inventoryService));
 
             // GameLoop không phải service ai đó gọi tới, nhưng vẫn đăng ký: Program.cs cần nó, và
             // "mọi thứ sống lâu bằng process đều nằm trong một sổ" là luật dễ theo hơn "trừ cái này".

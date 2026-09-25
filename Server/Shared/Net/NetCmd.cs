@@ -135,5 +135,38 @@ namespace MMORPG.Shared.Net
         MapChanged = 305,
 
         #endregion
+
+        #region Inventory / Item (400–499)
+
+        /// <summary>
+        /// Toàn bộ túi. Server đẩy MỘT LẦN ngay sau EnterWorld.
+        /// Payload: <see cref="Dto.Inventory.InventorySnapshotNotice"/>
+        /// </summary>
+        InventorySnapshot = 400,
+
+        /// <summary>
+        /// Những ô vừa đổi. Server đẩy sau mỗi thao tác thành công.
+        /// Payload: <see cref="Dto.Inventory.InventoryDeltaNotice"/>
+        /// </summary>
+        InventoryDelta = 401,
+
+        /// <summary>
+        /// Dùng đồ ở một ô. Response đi bằng InventoryDelta chứ không có gói riêng — thứ client cần
+        /// sau khi dùng đúng là "ô nào vừa đổi".
+        /// Payload: <see cref="Dto.Inventory.ItemUseRequest"/>
+        /// </summary>
+        ItemUse = 402,
+
+        /// <summary>
+        /// Vứt bớt số lượng ở một ô. Payload: <see cref="Dto.Inventory.ItemDropRequest"/>
+        /// </summary>
+        ItemDrop = 403,
+
+        /// <summary>
+        /// Kéo ô này sang ô kia. Payload: <see cref="Dto.Inventory.ItemMoveRequest"/>
+        /// </summary>
+        ItemMove = 404,
+
+        #endregion
     }
 }
